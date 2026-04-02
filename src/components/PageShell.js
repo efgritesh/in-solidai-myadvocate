@@ -8,6 +8,7 @@ const PageShell = ({ title, subtitle, actions, children, showBack = false, navIt
   return (
     <div className="app-shell">
       <div className="page-frame">
+        {showNav ? <BottomNav items={navItems} /> : null}
         <header className="screen-header">
           <div className="screen-header__content">
             {showBack ? (
@@ -25,7 +26,6 @@ const PageShell = ({ title, subtitle, actions, children, showBack = false, navIt
         </header>
         <main className="stack">{children}</main>
       </div>
-      {showNav ? <BottomNav items={navItems} /> : null}
     </div>
   );
 };

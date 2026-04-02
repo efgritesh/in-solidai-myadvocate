@@ -19,10 +19,8 @@ service cloud.firestore {
       return signedIn() && (request.auth.uid == advocateId || isAdmin());
     }
 
-    function hasClientAccess(resourceData) {
-      return resourceData.client_access_enabled == true
-        && resourceData.status != 'Closed'
-        && resourceData.client_access_token is string;
+    function hasPublicToken(resourceData) {
+      return resourceData.client_access_token is string;
     }
 
     function hasClientAccessToken(data) {
@@ -44,7 +42,7 @@ service cloud.firestore {
         && request.resource.data.advocate_id == request.auth.uid;
 
       allow read: if ownsAdvocateRecord(resource.data.advocate_id)
-        || hasClientAccess(resource.data);
+        || hasPublicToken(resource.data);
 
       allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
     }

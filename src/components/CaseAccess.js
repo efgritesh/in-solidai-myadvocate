@@ -14,34 +14,41 @@ const CaseAccess = () => {
   const [comment, setComment] = useState('');
   const [paymentForm, setPaymentForm] = useState({ amount: '', description: '' });
   const [status, setStatus] = useState('loading');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const loadCase = useCallback(async () => {
     if (!token) return;
+    setErrorMessage('');
 
-    const caseSnap = await getDocs(query(collection(db, 'cases'), where('client_access_token', '==', token)));
-    if (caseSnap.empty) {
-      setStatus('not_found');
-      return;
-    }
+    try {
+      const caseSnap = await getDocs(query(collection(db, 'cases'), where('client_access_token', '==', token)));
+      if (caseSnap.empty) {
+        setStatus('not_found');
+        return;
+      }
 
-    const nextCase = { id: caseSnap.docs[0].id, ...caseSnap.docs[0].data() };
-    if (!nextCase.client_access_enabled || nextCase.status === 'Closed') {
+      const nextCase = { id: caseSnap.docs[0].id, ...caseSnap.docs[0].data() };
+      if (!nextCase.client_access_enabled || nextCase.status === 'Closed') {
+        setCaseRecord(nextCase);
+        setStatus('closed');
+        return;
+      }
+
+      const [paymentsSnap, documentsSnap, commentsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'payments'), where('client_access_token', '==', token))),
+        getDocs(query(collection(db, 'documents'), where('client_access_token', '==', token))),
+        getDocs(query(collection(db, 'comments'), where('client_access_token', '==', token))),
+      ]);
+
       setCaseRecord(nextCase);
-      setStatus('closed');
-      return;
+      setPayments(paymentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      setDocuments(documentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      setComments(commentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      setStatus('ready');
+    } catch (error) {
+      setStatus('not_found');
+      setErrorMessage(error.message || 'Unable to load this case right now.');
     }
-
-    const [paymentsSnap, documentsSnap, commentsSnap] = await Promise.all([
-      getDocs(query(collection(db, 'payments'), where('client_access_token', '==', token))),
-      getDocs(query(collection(db, 'documents'), where('client_access_token', '==', token))),
-      getDocs(query(collection(db, 'comments'), where('client_access_token', '==', token))),
-    ]);
-
-    setCaseRecord(nextCase);
-    setPayments(paymentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-    setDocuments(documentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-    setComments(commentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-    setStatus('ready');
   }, [token]);
 
   useEffect(() => {
@@ -131,7 +138,9 @@ const CaseAccess = () => {
       <div className="auth-screen">
         <div className="auth-card">
           <h1>Link not found</h1>
-          <p className="auth-subtitle">This client access link is invalid or no longer exists.</p>
+          <p className="auth-subtitle">
+            {errorMessage || 'This client access link is invalid or no longer exists.'}
+          </p>
         </div>
       </div>
     );

@@ -33,7 +33,7 @@ a {
 .page-frame {
   max-width: 860px;
   margin: 0 auto;
-  padding: 20px 16px 104px;
+  padding: 16px 16px 40px;
 }
 
 .page-frame--public {
@@ -47,7 +47,7 @@ a {
 
 .screen-header {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   margin-bottom: 18px;
 }
 
@@ -103,7 +103,7 @@ a {
 }
 
 .panel {
-  padding: 18px;
+  padding: 16px;
 }
 
 .section-heading {
@@ -398,36 +398,63 @@ a {
   color: var(--muted);
 }
 
-.bottom-nav {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 10px;
-  border-radius: 24px;
-  background: rgba(28, 27, 23, 0.9);
-  box-shadow: 0 18px 38px rgba(31, 27, 22, 0.24);
-  z-index: 10;
+.top-nav {
+  position: sticky;
+  top: 12px;
+  z-index: 12;
+  margin-bottom: 18px;
+  border: 1px solid var(--card-border);
+  border-radius: 22px;
+  background: rgba(255, 251, 245, 0.94);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
 }
 
-.bottom-nav__link {
+.top-nav__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.top-nav__title {
+  display: block;
+}
+
+.top-nav__toggle {
+  border: 1px solid rgba(31, 107, 92, 0.18);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: white;
+  color: var(--primary-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.top-nav__menu {
+  display: none;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.top-nav__menu.open {
   display: grid;
-  gap: 2px;
-  padding: 10px 8px;
+}
+
+.top-nav__link {
+  padding: 12px 14px;
   border-radius: 16px;
-  color: rgba(255, 248, 241, 0.68);
-  text-align: center;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--muted);
   text-decoration: none;
-  font-size: 0.82rem;
   font-weight: 700;
 }
 
-.bottom-nav__link.active {
-  background: rgba(255, 248, 241, 0.14);
-  color: #fffaf4;
+.top-nav__link.active {
+  background: rgba(31, 107, 92, 0.1);
+  color: var(--primary-dark);
 }
 
 .auth-screen {
@@ -495,13 +522,15 @@ a {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .bottom-nav {
-    position: sticky;
-    inset: auto;
-    bottom: 0;
-    max-width: 860px;
-    margin: 0 auto 24px;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+  .top-nav__toggle {
+    display: none;
+  }
+
+  .top-nav__menu,
+  .top-nav__menu.open {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 0 16px 16px;
   }
 }
 
