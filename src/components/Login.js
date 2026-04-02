@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { auth, db } from '../firebase';
+import { getRouteForRole, loginWithEmail, loginWithGoogle } from '../utils/auth';
 
 const Login = () => {
   const { t } = useTranslation();
@@ -12,28 +10,28 @@ const Login = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const completeLogin = (profile) => {
+    navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      const { profile } = await loginWithEmail(email, password);
+      completeLogin(profile);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
+  const handleGoogleLogin = async () => {
+    setError('');
 
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
-          role: 'advocate',
-          createdAt: new Date().toISOString(),
-          profileComplete: false,
-        });
-        navigate('/profile-setup');
-      } else {
-        const userData = userSnap.data();
-        navigate(userData.profileComplete ? '/dashboard' : '/profile-setup');
-      }
+    try {
+      const { profile } = await loginWithGoogle('advocate');
+      completeLogin(profile);
     } catch (err) {
       setError(err.message);
     }
@@ -45,8 +43,9 @@ const Login = () => {
         <p className="eyebrow">Secure access</p>
         <h1>{t('login')}</h1>
         <p className="auth-subtitle">
-          Sign in to review your matters, hearings, and payment updates.
+          Sign in with email or Google and we will route you to the correct dashboard.
         </p>
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>{t('email')}:</label>
@@ -67,8 +66,16 @@ const Login = () => {
             />
           </div>
           <button type="submit" className="button">{t('submit')}</button>
-          {error ? <p style={{ color: 'red' }}>{error}</p> : null}
         </form>
+
+        <button type="button" className="button secondary auth-secondary-button" onClick={handleGoogleLogin}>
+          Continue with Google
+        </button>
+
+        <p className="helper-text auth-footer">
+          Need a test account? <Link className="text-link" to="/signup">Create one</Link>
+        </p>
+        {error ? <p className="error-text">{error}</p> : null}
       </div>
     </div>
   );

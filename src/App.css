@@ -36,6 +36,10 @@ a {
   padding: 20px 16px 104px;
 }
 
+.page-frame--public {
+  padding-bottom: 32px;
+}
+
 .stack {
   display: grid;
   gap: 16px;
@@ -110,6 +114,11 @@ a {
   margin-bottom: 14px;
 }
 
+.screen-actions {
+  display: flex;
+  align-items: center;
+}
+
 .button,
 .ghost-button,
 .inline-link {
@@ -164,6 +173,10 @@ a {
   gap: 12px;
 }
 
+.full-span {
+  grid-column: 1 / -1;
+}
+
 .form-group {
   margin-bottom: 14px;
 }
@@ -212,6 +225,17 @@ a {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(94, 62, 33, 0.08);
+}
+
+.record-item--stack {
+  flex-direction: column;
+}
+
+.case-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
 }
 
 .record-item strong,
@@ -303,6 +327,77 @@ a {
   font-weight: 700;
 }
 
+.case-link-panel {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.case-link-panel input {
+  width: 100%;
+  border: 1px solid rgba(94, 62, 33, 0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lifecycle-editor,
+.lifecycle-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.lifecycle-row {
+  display: grid;
+  gap: 8px;
+}
+
+.lifecycle-row span {
+  font-size: 0.92rem;
+}
+
+.lifecycle-row select {
+  width: 100%;
+  border: 1px solid rgba(94, 62, 33, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.lifecycle-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: rgba(94, 62, 33, 0.08);
+  color: var(--text);
+}
+
+.lifecycle-chip--done {
+  background: rgba(31, 107, 92, 0.14);
+  color: var(--primary-dark);
+}
+
+.lifecycle-chip--in_progress {
+  background: rgba(201, 141, 74, 0.18);
+  color: #7b4d18;
+}
+
+.lifecycle-chip--pending {
+  background: rgba(94, 62, 33, 0.08);
+  color: var(--muted);
+}
+
 .bottom-nav {
   position: fixed;
   left: 12px;
@@ -351,6 +446,28 @@ a {
   margin-top: 10px;
 }
 
+.auth-secondary-button {
+  margin-top: 8px;
+}
+
+.auth-footer {
+  margin-top: 14px;
+}
+
+.text-link {
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.error-text {
+  color: var(--danger);
+  margin-top: 12px;
+}
+
+.top-space {
+  margin-top: 16px;
+}
+
 @media (min-width: 768px) {
   .page-frame {
     padding: 28px 24px 32px;
@@ -363,6 +480,11 @@ a {
 
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lifecycle-row {
+    grid-template-columns: minmax(0, 1fr) 160px;
+    align-items: center;
   }
 
   .stats-grid {

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from '../firebase';
+import { getRouteForRole } from '../utils/auth';
 
 const ProfileSetup = () => {
   const { t } = useTranslation();
@@ -39,7 +40,9 @@ const ProfileSetup = () => {
         profileComplete: true,
       });
 
-      navigate('/dashboard');
+      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      const role = userSnap.data()?.role || 'advocate';
+      navigate(getRouteForRole(role));
     } catch (err) {
       setError(err.message);
     }

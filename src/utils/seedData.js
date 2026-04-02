@@ -1,5 +1,6 @@
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
+import { createCaseAccessToken } from './caseAccess';
 
 const formatDate = (date) => date.toISOString().split('T')[0];
 
@@ -9,52 +10,66 @@ const dateAfter = (days) => {
   return formatDate(nextDate);
 };
 
-const sampleClients = (advocateId) => [
-  {
-    advocate_id: advocateId,
-    name: 'Aarav Mehta',
-    phone: '9876543210',
-    email: 'aarav.mehta@example.com',
-  },
-  {
-    advocate_id: advocateId,
-    name: 'Neha Sharma',
-    phone: '9822012345',
-    email: 'neha.sharma@example.com',
-  },
-  {
-    advocate_id: advocateId,
-    name: 'Rohan Iyer',
-    phone: '9811198111',
-    email: 'rohan.iyer@example.com',
-  },
+const buildLifecycle = (overrides = {}) => [
+  { id: 'consultation', title: 'Initial consultation', status: overrides.consultation || 'done' },
+  { id: 'drafting', title: 'Draft petition and evidence set', status: overrides.drafting || 'in_progress' },
+  { id: 'filing', title: 'File before court', status: overrides.filing || 'pending' },
+  { id: 'hearing', title: 'Attend hearing and next directions', status: overrides.hearing || 'pending' },
+  { id: 'closure', title: 'Order follow-up and closure', status: overrides.closure || 'pending' },
 ];
 
-const sampleCases = (advocateId) => [
+const advocateClients = (advocateId) => [
+  { advocate_id: advocateId, name: 'Aarav Mehta', phone: '9876543210', email: 'aarav.mehta@example.com' },
+  { advocate_id: advocateId, name: 'Neha Sharma', phone: '9822012345', email: 'neha.sharma@example.com' },
+  { advocate_id: advocateId, name: 'Rohan Iyer', phone: '9811198111', email: 'rohan.iyer@example.com' },
+];
+
+const advocateCases = (advocateId) => [
   {
     advocate_id: advocateId,
     case_number: 'DEL-CIV-204/2026',
     client_name: 'Aarav Mehta',
+    client_email: 'aarav.mehta@example.com',
+    client_phone: '9876543210',
     status: 'Open',
     court: 'Delhi District Court',
+    summary: 'Civil recovery matter involving unpaid commercial dues and interim relief.',
+    next_step: 'File reply bundle and supporting invoice set.',
+    lifecycle: buildLifecycle({ consultation: 'done', drafting: 'done', filing: 'in_progress' }),
+    client_access_token: createCaseAccessToken('DEL-CIV-204/2026'),
+    client_access_enabled: true,
   },
   {
     advocate_id: advocateId,
     case_number: 'BLR-FAM-118/2026',
     client_name: 'Neha Sharma',
+    client_email: 'neha.sharma@example.com',
+    client_phone: '9822012345',
     status: 'Pending',
     court: 'Family Court Bengaluru',
+    summary: 'Family matter currently at counselling and settlement review stage.',
+    next_step: 'Collect counselling note and update filing pack.',
+    lifecycle: buildLifecycle({ consultation: 'done', drafting: 'in_progress' }),
+    client_access_token: createCaseAccessToken('BLR-FAM-118/2026'),
+    client_access_enabled: true,
   },
   {
     advocate_id: advocateId,
     case_number: 'MUM-COM-077/2026',
     client_name: 'Rohan Iyer',
+    client_email: 'rohan.iyer@example.com',
+    client_phone: '9811198111',
     status: 'Open',
     court: 'Commercial Court Mumbai',
+    summary: 'Commercial dispute with current hearing preparation underway.',
+    next_step: 'Prepare final argument note and chronology.',
+    lifecycle: buildLifecycle({ consultation: 'done', drafting: 'done', filing: 'done', hearing: 'in_progress' }),
+    client_access_token: createCaseAccessToken('MUM-COM-077/2026'),
+    client_access_enabled: true,
   },
 ];
 
-const sampleHearings = (advocateId) => [
+const advocateHearings = (advocateId) => [
   {
     advocate_id: advocateId,
     case_id: 'DEL-CIV-204/2026',
@@ -75,13 +90,17 @@ const sampleHearings = (advocateId) => [
   },
 ];
 
-const samplePayments = (advocateId) => [
+const advocatePayments = (advocateId, cases) => [
   {
     advocate_id: advocateId,
     case_id: 'DEL-CIV-204/2026',
     amount: 25000,
     date: dateAfter(-5),
     description: 'Drafting and filing fee',
+    stage: 'Filing',
+    status: 'Paid',
+    requested_from_client: true,
+    client_access_token: cases[0].client_access_token,
   },
   {
     advocate_id: advocateId,
@@ -89,39 +108,133 @@ const samplePayments = (advocateId) => [
     amount: 12000,
     date: dateAfter(-2),
     description: 'Consultation and appearance',
+    stage: 'Consultation',
+    status: 'Paid',
+    requested_from_client: true,
+    client_access_token: cases[1].client_access_token,
   },
   {
     advocate_id: advocateId,
     case_id: 'MUM-COM-077/2026',
     amount: 18000,
-    date: dateAfter(-1),
-    description: 'Research and preparation',
+    date: dateAfter(2),
+    description: 'Arguments preparation milestone',
+    stage: 'Arguments',
+    status: 'Requested',
+    requested_from_client: true,
+    client_access_token: cases[2].client_access_token,
   },
 ];
 
-const collectionsToSeed = (advocateId) => [
-  { name: 'clients', records: sampleClients(advocateId) },
-  { name: 'cases', records: sampleCases(advocateId) },
-  { name: 'hearings', records: sampleHearings(advocateId) },
-  { name: 'payments', records: samplePayments(advocateId) },
+const advocateDocuments = (advocateId, cases) => [
+  {
+    advocate_id: advocateId,
+    case_id: 'DEL-CIV-204/2026',
+    type: 'Affidavit',
+    url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    name: 'draft-affidavit.pdf',
+    uploaded_by_role: 'advocate',
+    client_access_token: cases[0].client_access_token,
+  },
+  {
+    advocate_id: advocateId,
+    case_id: 'BLR-FAM-118/2026',
+    type: 'Client ID Proof',
+    url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    name: 'id-proof.pdf',
+    uploaded_by_role: 'advocate',
+    client_access_token: cases[1].client_access_token,
+  },
 ];
+
+const advocateComments = (advocateId, cases) => [
+  {
+    advocate_id: advocateId,
+    case_id: 'DEL-CIV-204/2026',
+    author_role: 'advocate',
+    author_name: 'Advocate',
+    message: 'Please review the draft affidavit shared in the documents section.',
+    created_at: `${dateAfter(-1)}T10:00:00.000Z`,
+    client_access_token: cases[0].client_access_token,
+  },
+  {
+    advocate_id: advocateId,
+    case_id: 'MUM-COM-077/2026',
+    author_role: 'advocate',
+    author_name: 'Advocate',
+    message: 'Filing is complete. We are preparing the next hearing brief.',
+    created_at: `${dateAfter(0)}T11:00:00.000Z`,
+    client_access_token: cases[2].client_access_token,
+  },
+];
+
+const adminAlerts = (adminId) => [
+  {
+    admin_id: adminId,
+    title: 'Storage review due',
+    detail: 'Document storage crossed 68 percent of the current quota.',
+    severity: 'Medium',
+  },
+  {
+    admin_id: adminId,
+    title: 'Auth provider check',
+    detail: 'Google sign-in enabled for testing accounts.',
+    severity: 'Info',
+  },
+];
+
+const seedCollectionIfEmpty = async (collectionName, fieldName, fieldValue, records) => {
+  const collectionRef = collection(db, collectionName);
+  const snapshot = await getDocs(query(collectionRef, where(fieldName, '==', fieldValue)));
+
+  if (snapshot.empty) {
+    for (const record of records) {
+      await addDoc(collectionRef, record);
+    }
+  }
+};
 
 export const seedAdvocateData = async (advocateId) => {
   if (!advocateId) return;
 
-  const seedKey = `seeded_${advocateId}_v2`;
+  const seedKey = `seeded_${advocateId}_advocate_v4`;
   if (localStorage.getItem(seedKey) === 'true') return;
 
-  for (const entry of collectionsToSeed(advocateId)) {
-    const collectionRef = collection(db, entry.name);
-    const snapshot = await getDocs(query(collectionRef, where('advocate_id', '==', advocateId)));
-
-    if (snapshot.empty) {
-      for (const record of entry.records) {
-        await addDoc(collectionRef, record);
-      }
-    }
-  }
+  const cases = advocateCases(advocateId);
+  await seedCollectionIfEmpty('clients', 'advocate_id', advocateId, advocateClients(advocateId));
+  await seedCollectionIfEmpty('cases', 'advocate_id', advocateId, cases);
+  await seedCollectionIfEmpty('hearings', 'advocate_id', advocateId, advocateHearings(advocateId));
+  await seedCollectionIfEmpty('payments', 'advocate_id', advocateId, advocatePayments(advocateId, cases));
+  await seedCollectionIfEmpty('documents', 'advocate_id', advocateId, advocateDocuments(advocateId, cases));
+  await seedCollectionIfEmpty('comments', 'advocate_id', advocateId, advocateComments(advocateId, cases));
 
   localStorage.setItem(seedKey, 'true');
+};
+
+export const seedAdminData = async (adminId) => {
+  if (!adminId) return;
+
+  const seedKey = `seeded_${adminId}_admin_v1`;
+  if (localStorage.getItem(seedKey) === 'true') return;
+
+  await seedCollectionIfEmpty('system_alerts', 'admin_id', adminId, adminAlerts(adminId));
+  localStorage.setItem(seedKey, 'true');
+};
+
+export const ensureAdminUserDoc = async (adminUser) => {
+  if (!adminUser?.uid) return;
+
+  const userRef = doc(db, 'users', adminUser.uid);
+  const snapshot = await getDoc(userRef);
+
+  if (!snapshot.exists()) {
+    await setDoc(userRef, {
+      uid: adminUser.uid,
+      email: adminUser.email || '',
+      role: 'admin',
+      name: adminUser.displayName || 'System Admin',
+      createdAt: new Date().toISOString(),
+      profileComplete: true,
+    });
+  }
 };

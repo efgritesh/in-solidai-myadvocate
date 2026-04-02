@@ -3,14 +3,17 @@ import './App.css';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LanguageSelection from './components/LanguageSelection';
 import Login from './components/Login';
+import SignUp from './components/SignUp';
 import ProfileSetup from './components/ProfileSetup';
 import Dashboard from './components/Dashboard';
+import AdminDashboard from './components/AdminDashboard';
 import Cases from './components/Cases';
 import Clients from './components/Clients';
 import Hearings from './components/Hearings';
 import Payments from './components/Payments';
 import Documents from './components/Documents';
 import Invite from './components/Invite';
+import CaseAccess from './components/CaseAccess';
 
 function App() {
   return (
@@ -18,8 +21,11 @@ function App() {
       <Routes>
         <Route path="/" element={<LanguageSelection />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<SignUp />} />
         <Route path="/profile-setup" element={<ProfileSetup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/case-access/:token" element={<CaseAccess />} />
         <Route path="/cases" element={<Cases />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/hearings" element={<Hearings />} />

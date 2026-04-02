@@ -16,6 +16,7 @@ const Payments = () => {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
+  const [requestedFromClient, setRequestedFromClient] = useState(true);
 
   const fetchPayments = async () => {
     const advocateId = auth.currentUser?.uid;
@@ -32,6 +33,14 @@ const Payments = () => {
     e.preventDefault();
     const advocateId = auth.currentUser?.uid;
     if (!advocateId) return;
+    const caseSnapshot = await getDocs(
+      query(
+        collection(db, 'cases'),
+        where('advocate_id', '==', advocateId),
+        where('case_number', '==', caseId)
+      )
+    );
+    const caseRecord = caseSnapshot.docs[0]?.data();
 
     await addDoc(collection(db, 'payments'), {
       advocate_id: advocateId,
@@ -39,12 +48,16 @@ const Payments = () => {
       amount: parseFloat(amount),
       date,
       description,
+      status: requestedFromClient ? 'Requested' : 'Paid',
+      requested_from_client: requestedFromClient,
+      client_access_token: caseRecord?.client_access_token || '',
     });
 
     setCaseId('');
     setAmount('');
     setDate('');
     setDescription('');
+    setRequestedFromClient(true);
     await fetchPayments();
   };
 
@@ -101,6 +114,13 @@ const Payments = () => {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
+            <div className="form-group">
+              <label>Client action:</label>
+              <select value={requestedFromClient ? 'request' : 'recorded'} onChange={(e) => setRequestedFromClient(e.target.value === 'request')}>
+                <option value="request">Request client payment</option>
+                <option value="recorded">Record received payment</option>
+              </select>
+            </div>
           </div>
           <button type="submit" className="button">Add Payment</button>
         </form>
@@ -123,7 +143,7 @@ const Payments = () => {
                   <strong>{payment.case_id}</strong>
                   <p>{payment.description || 'No description added'}</p>
                 </div>
-                <span className="badge">{formatCurrency(payment.amount)}</span>
+                <span className="badge">{formatCurrency(payment.amount)} • {payment.status || 'Paid'}</span>
               </article>
             ))}
           </div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from './BottomNav';
 
-const PageShell = ({ title, subtitle, actions, children, showBack = false }) => {
+const PageShell = ({ title, subtitle, actions, children, showBack = false, navItems, showNav = true }) => {
   const navigate = useNavigate();
 
   return (
@@ -25,7 +25,7 @@ const PageShell = ({ title, subtitle, actions, children, showBack = false }) => 
         </header>
         <main className="stack">{children}</main>
       </div>
-      <BottomNav />
+      {showNav ? <BottomNav items={navItems} /> : null}
     </div>
   );
 };

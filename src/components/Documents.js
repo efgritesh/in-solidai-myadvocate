@@ -28,6 +28,14 @@ const Documents = () => {
       alert('Add a case ID and document type before uploading.');
       return;
     }
+    const caseSnapshot = await getDocs(
+      query(
+        collection(db, 'cases'),
+        where('advocate_id', '==', advocateId),
+        where('case_number', '==', caseId)
+      )
+    );
+    const caseRecord = caseSnapshot.docs[0]?.data();
 
     for (const file of acceptedFiles) {
       const storageRef = ref(storage, `documents/${advocateId}/${Date.now()}-${file.name}`);
@@ -40,6 +48,8 @@ const Documents = () => {
         type,
         url,
         name: file.name,
+        uploaded_by_role: 'advocate',
+        client_access_token: caseRecord?.client_access_token || '',
       });
     }
 

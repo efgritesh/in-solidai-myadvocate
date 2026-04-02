@@ -1,0 +1,317 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { useDropzone } from 'react-dropzone';
+import { useParams } from 'react-router-dom';
+import { db, storage } from '../firebase';
+
+const CaseAccess = () => {
+  const { token } = useParams();
+  const [caseRecord, setCaseRecord] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [comment, setComment] = useState('');
+  const [paymentForm, setPaymentForm] = useState({ amount: '', description: '' });
+  const [status, setStatus] = useState('loading');
+
+  const loadCase = useCallback(async () => {
+    if (!token) return;
+
+    const caseSnap = await getDocs(query(collection(db, 'cases'), where('client_access_token', '==', token)));
+    if (caseSnap.empty) {
+      setStatus('not_found');
+      return;
+    }
+
+    const nextCase = { id: caseSnap.docs[0].id, ...caseSnap.docs[0].data() };
+    if (!nextCase.client_access_enabled || nextCase.status === 'Closed') {
+      setCaseRecord(nextCase);
+      setStatus('closed');
+      return;
+    }
+
+    const [paymentsSnap, documentsSnap, commentsSnap] = await Promise.all([
+      getDocs(query(collection(db, 'payments'), where('client_access_token', '==', token))),
+      getDocs(query(collection(db, 'documents'), where('client_access_token', '==', token))),
+      getDocs(query(collection(db, 'comments'), where('client_access_token', '==', token))),
+    ]);
+
+    setCaseRecord(nextCase);
+    setPayments(paymentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+    setDocuments(documentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+    setComments(commentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+    setStatus('ready');
+  }, [token]);
+
+  useEffect(() => {
+    loadCase();
+  }, [loadCase]);
+
+  const requestedPayments = useMemo(
+    () => payments.filter((payment) => payment.requested_from_client || payment.status === 'Requested' || payment.status === 'Paid'),
+    [payments]
+  );
+
+  const onDrop = async (acceptedFiles) => {
+    if (!caseRecord) return;
+
+    for (const file of acceptedFiles) {
+      const storageRef = ref(storage, `case-access/${caseRecord.case_number}/${Date.now()}-${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      await addDoc(collection(db, 'documents'), {
+        advocate_id: caseRecord.advocate_id,
+        case_id: caseRecord.case_number,
+        type: 'Client Upload',
+        url,
+        name: file.name,
+        uploaded_by_role: 'client',
+        client_access_token: token,
+      });
+    }
+
+    await loadCase();
+  };
+
+  const { getRootProps, getInputProps } = useDropzone({ onDrop });
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!caseRecord || !comment.trim()) return;
+
+    await addDoc(collection(db, 'comments'), {
+      advocate_id: caseRecord.advocate_id,
+      case_id: caseRecord.case_number,
+      author_role: 'client',
+      author_name: caseRecord.client_name || 'Client',
+      message: comment.trim(),
+      created_at: new Date().toISOString(),
+      client_access_token: token,
+    });
+
+    setComment('');
+    await loadCase();
+  };
+
+  const handlePaymentSubmit = async (e) => {
+    e.preventDefault();
+    if (!caseRecord) return;
+
+    await addDoc(collection(db, 'payments'), {
+      advocate_id: caseRecord.advocate_id,
+      case_id: caseRecord.case_number,
+      amount: parseFloat(paymentForm.amount),
+      date: new Date().toISOString().split('T')[0],
+      description: paymentForm.description || 'Client marked payment as submitted',
+      stage: 'Client submission',
+      status: 'Client Submitted',
+      requested_from_client: false,
+      client_access_token: token,
+    });
+
+    setPaymentForm({ amount: '', description: '' });
+    await loadCase();
+  };
+
+  if (status === 'loading') {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <h1>Loading case access</h1>
+          <p className="auth-subtitle">Opening the client view for this case link.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'not_found') {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <h1>Link not found</h1>
+          <p className="auth-subtitle">This client access link is invalid or no longer exists.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'closed') {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <h1>Case access closed</h1>
+          <p className="auth-subtitle">
+            This link is no longer active because the case has been concluded or client access was disabled.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell">
+      <div className="page-frame page-frame--public">
+        <header className="screen-header">
+          <div className="screen-header__content">
+            <div>
+              <p className="eyebrow">Client case access</p>
+              <h1>{caseRecord.case_number}</h1>
+              <p className="screen-subtitle">
+                Shared by your advocate for reviewing progress, payments, documents, and updates relevant to your matter.
+              </p>
+            </div>
+          </div>
+        </header>
+
+        <main className="stack">
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Case summary</p>
+                <h2>{caseRecord.client_name}</h2>
+              </div>
+              <span className="badge">{caseRecord.status}</span>
+            </div>
+            <div className="record-list">
+              <article className="record-item">
+                <div>
+                  <strong>Court</strong>
+                  <p>{caseRecord.court || 'Not added'}</p>
+                </div>
+              </article>
+              <article className="record-item">
+                <div>
+                  <strong>Summary</strong>
+                  <p>{caseRecord.summary || 'No summary added yet.'}</p>
+                </div>
+              </article>
+              <article className="record-item">
+                <div>
+                  <strong>Next step</strong>
+                  <p>{caseRecord.next_step || 'Your advocate will update the next step shortly.'}</p>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Progress tracker</p>
+                <h2>Case lifecycle</h2>
+              </div>
+            </div>
+            <div className="lifecycle-list">
+              {(caseRecord.lifecycle || []).map((step) => (
+                <span key={step.id} className={`lifecycle-chip lifecycle-chip--${step.status}`}>
+                  {step.title}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Fees</p>
+                <h2>Requested and submitted payments</h2>
+              </div>
+            </div>
+            <div className="record-list">
+              {requestedPayments.map((payment) => (
+                <article key={payment.id} className="record-item">
+                  <div>
+                    <strong>{payment.description}</strong>
+                    <p>{payment.stage || 'Case fee'} • {payment.date}</p>
+                  </div>
+                  <span className="badge">{payment.status}</span>
+                </article>
+              ))}
+            </div>
+            <form onSubmit={handlePaymentSubmit} className="top-space">
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Amount paid:</label>
+                  <input
+                    type="number"
+                    value={paymentForm.amount}
+                    onChange={(e) => setPaymentForm((current) => ({ ...current, amount: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Payment note:</label>
+                  <input
+                    type="text"
+                    placeholder="Reference, UPI note, or stage"
+                    value={paymentForm.description}
+                    onChange={(e) => setPaymentForm((current) => ({ ...current, description: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <button type="submit" className="button">Submit payment update</button>
+            </form>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Documents</p>
+                <h2>Shared files and uploads</h2>
+              </div>
+            </div>
+            <div className="record-list">
+              {documents.map((docItem) => (
+                <article key={docItem.id} className="record-item">
+                  <div>
+                    <strong>{docItem.name}</strong>
+                    <p>{docItem.type} • {docItem.uploaded_by_role || 'shared'}</p>
+                  </div>
+                  <a className="inline-link" href={docItem.url} target="_blank" rel="noopener noreferrer">
+                    Open
+                  </a>
+                </article>
+              ))}
+            </div>
+            <div className="dropzone top-space" {...getRootProps()}>
+              <input {...getInputProps()} />
+              <p>Tap to upload a document or image for this case</p>
+              <small>Your advocate will be able to review this upload inside the case records.</small>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Comments</p>
+                <h2>Updates and questions</h2>
+              </div>
+            </div>
+            <div className="record-list">
+              {comments.map((commentItem) => (
+                <article key={commentItem.id} className="record-item record-item--stack">
+                  <div>
+                    <strong>{commentItem.author_name || commentItem.author_role}</strong>
+                    <p>{commentItem.message}</p>
+                  </div>
+                  <span className="badge">{commentItem.author_role}</span>
+                </article>
+              ))}
+            </div>
+            <form onSubmit={handleCommentSubmit} className="top-space">
+              <div className="form-group">
+                <label>Add a message for your advocate:</label>
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} required />
+              </div>
+              <button type="submit" className="button">Send message</button>
+            </form>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default CaseAccess;
