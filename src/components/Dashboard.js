@@ -1,0 +1,178 @@
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
+import { auth, db } from '../firebase';
+import PageShell from './PageShell';
+import { seedAdvocateData } from '../utils/seedData';
+
+const Dashboard = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [hearings, setHearings] = useState([]);
+  const [reminders, setReminders] = useState([]);
+  const [stats, setStats] = useState({
+    cases: 0,
+    clients: 0,
+    hearings: 0,
+    payments: 0,
+  });
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      const advocateId = auth.currentUser?.uid;
+      if (!advocateId) return;
+
+      await seedAdvocateData(advocateId);
+
+      const [hearingsSnap, casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'hearings'), where('advocate_id', '==', advocateId))),
+        getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
+        getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
+        getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
+      ]);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const nextSevenDays = new Date(today);
+      nextSevenDays.setDate(today.getDate() + 7);
+
+      const hearingRecords = hearingsSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const upcoming = hearingRecords.filter((hearing) => {
+        const hearingDate = new Date(hearing.date);
+        return hearingDate >= today && hearingDate <= nextSevenDays;
+      });
+
+      setHearings(upcoming.slice(0, 4));
+      setReminders(upcoming.slice(0, 2));
+      setStats({
+        hearings: hearingRecords.length,
+        cases: casesSnap.size,
+        clients: clientsSnap.size,
+        payments: paymentsSnap.size,
+      });
+    };
+
+    loadDashboard();
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate('/login');
+  };
+
+  return (
+    <PageShell
+      title="Practice dashboard"
+      subtitle="A clean daily view for hearings, clients, and case follow-ups."
+      actions={(
+        <button className="button danger" onClick={handleLogout}>
+          Logout
+        </button>
+      )}
+    >
+      <section className="hero-card">
+        <div>
+          <p className="eyebrow">Today at a glance</p>
+          <h2>Everything important is one thumb away.</h2>
+          <p>
+            Use the tabs below to update matter details quickly during hearings,
+            calls, and client meetings.
+          </p>
+        </div>
+        <Link className="button secondary" to="/invite">
+          {t('inviteAdvocates')}
+        </Link>
+      </section>
+
+      <section className="stats-grid">
+        <article className="stat-card">
+          <strong>{stats.cases}</strong>
+          <span>Active matters</span>
+        </article>
+        <article className="stat-card">
+          <strong>{stats.clients}</strong>
+          <span>Clients</span>
+        </article>
+        <article className="stat-card">
+          <strong>{stats.hearings}</strong>
+          <span>Hearings</span>
+        </article>
+        <article className="stat-card">
+          <strong>{stats.payments}</strong>
+          <span>Payments</span>
+        </article>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Immediate focus</p>
+            <h2>Reminders</h2>
+          </div>
+        </div>
+        {reminders.length === 0 ? (
+          <p className="empty-state">No urgent reminders. Your next hearing window is clear.</p>
+        ) : (
+          <div className="record-list">
+            {reminders.map((reminder) => (
+              <article key={reminder.id} className="record-item">
+                <div>
+                  <strong>{reminder.case_id}</strong>
+                  <p>{reminder.description}</p>
+                </div>
+                <span className="badge">{reminder.date}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Next seven days</p>
+            <h2>Upcoming hearings</h2>
+          </div>
+        </div>
+        {hearings.length === 0 ? (
+          <p className="empty-state">No hearings scheduled in the coming week.</p>
+        ) : (
+          <div className="record-list">
+            {hearings.map((hearing) => (
+              <article key={hearing.id} className="record-item">
+                <div>
+                  <strong>{hearing.case_id}</strong>
+                  <p>{hearing.description}</p>
+                </div>
+                <span className="badge">{hearing.date}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="cta-grid">
+        <Link className="action-tile" to="/cases">
+          <strong>{t('cases')}</strong>
+          <span>Track status and client mapping.</span>
+        </Link>
+        <Link className="action-tile" to="/clients">
+          <strong>{t('clients')}</strong>
+          <span>Keep contact details accessible during court visits.</span>
+        </Link>
+        <Link className="action-tile" to="/payments">
+          <strong>{t('payments')}</strong>
+          <span>Review fees received and pending billing.</span>
+        </Link>
+      </section>
+    </PageShell>
+  );
+};
+
+export default Dashboard;
