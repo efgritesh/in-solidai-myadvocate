@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "cases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "advocate_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "case_number",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

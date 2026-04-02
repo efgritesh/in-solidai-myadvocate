@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(userDocPath(request.auth.uid))
+        && get(userDocPath(request.auth.uid)).data.role == 'admin';
+    }
+
+    function ownsAdvocateRecord(advocateId) {
+      return signedIn() && (request.auth.uid == advocateId || isAdmin());
+    }
+
+    function hasClientAccess(resourceData) {
+      return resourceData.client_access_enabled == true
+        && resourceData.status != 'Closed'
+        && resourceData.client_access_token is string;
+    }
+
+    function hasClientAccessToken(data) {
+      return data.client_access_token is string
+        && data.case_id is string;
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.role in ['admin', 'advocate'];
+
+      allow read, update: if signedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /cases/{caseId} {
+      allow create: if signedIn()
+        && request.resource.data.advocate_id == request.auth.uid;
+
+      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
+        || hasClientAccess(resource.data);
+
+      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+    }
+
+    match /clients/{clientId} {
+      allow read, create, update, delete: if ownsAdvocateRecord(
+        request.method == 'create' ? request.resource.data.advocate_id : resource.data.advocate_id
+      );
+    }
+
+    match /hearings/{hearingId} {
+      allow read, create, update, delete: if ownsAdvocateRecord(
+        request.method == 'create' ? request.resource.data.advocate_id : resource.data.advocate_id
+      );
+    }
+
+    match /payments/{paymentId} {
+      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
+        || hasClientAccessToken(resource.data);
+
+      allow create: if (signedIn() && request.resource.data.advocate_id == request.auth.uid)
+        || (!signedIn() && hasClientAccessToken(request.resource.data));
+
+      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+    }
+
+    match /documents/{documentId} {
+      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
+        || hasClientAccessToken(resource.data);
+
+      allow create: if (signedIn() && request.resource.data.advocate_id == request.auth.uid)
+        || (!signedIn() && hasClientAccessToken(request.resource.data));
+
+      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+    }
+
+    match /comments/{commentId} {
+      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
+        || hasClientAccessToken(resource.data);
+
+      allow create: if (signedIn() && request.resource.data.advocate_id == request.auth.uid)
+        || (!signedIn() && hasClientAccessToken(request.resource.data));
+
+      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+    }
+
+    match /system_alerts/{alertId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+  }
+}
