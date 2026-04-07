@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { seedAdvocateData } from '../utils/seedData';
+import { DocumentsIcon, HearingsIcon, PaymentsIcon, ShareIcon } from './AppIcons';
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -69,7 +70,7 @@ const Dashboard = () => {
   return (
     <PageShell
       title="Practice dashboard"
-      subtitle="A clean daily view for hearings, clients, and case follow-ups."
+      subtitle="Your practice summary with quick access to matters, clients, and active follow-ups."
       actions={(
         <button className="button danger" onClick={handleLogout}>
           Logout
@@ -80,10 +81,7 @@ const Dashboard = () => {
         <div>
           <p className="eyebrow">Today at a glance</p>
           <h2>Everything important is one thumb away.</h2>
-          <p>
-            Use the tabs below to update matter details quickly during hearings,
-            calls, and client meetings.
-          </p>
+          <p>Open cases or clients to handle hearing notes, payment follow-ups, documents, and client links in context.</p>
         </div>
         <Link className="button secondary" to="/invite">
           {t('inviteAdvocates')}
@@ -166,10 +164,16 @@ const Dashboard = () => {
           <strong>{t('clients')}</strong>
           <span>Keep contact details accessible during court visits.</span>
         </Link>
-        <Link className="action-tile" to="/payments">
-          <strong>{t('payments')}</strong>
-          <span>Review fees received and pending billing.</span>
-        </Link>
+        <article className="action-tile action-tile--dense">
+          <div className="action-tile__icons">
+            <HearingsIcon className="app-icon" />
+            <PaymentsIcon className="app-icon" />
+            <DocumentsIcon className="app-icon" />
+            <ShareIcon className="app-icon" />
+          </div>
+          <strong>Case-led workflow</strong>
+          <span>Hearings, payments, documents, and sharing now sit under each matter instead of the top nav.</span>
+        </article>
       </section>
     </PageShell>
   );

@@ -17,8 +17,7 @@ const PageShell = ({ title, subtitle, actions, children, showBack = false, navIt
                 <ArrowLeftIcon className="app-icon" />
               </button>
             ) : null}
-            <div>
-              <p className="eyebrow">Advocate desk</p>
+            <div className="screen-header__copy">
               <h1>{title}</h1>
               {subtitle ? <p className="screen-subtitle">{subtitle}</p> : null}
             </div>

@@ -6,21 +6,13 @@ import {
   ClientsIcon,
   CloseIcon,
   DashboardIcon,
-  DocumentsIcon,
-  HearingsIcon,
   MenuIcon,
-  PaymentsIcon,
-  ShareIcon,
 } from './AppIcons';
 
 const defaultIcons = {
   '/dashboard': DashboardIcon,
   '/cases': CasesIcon,
   '/clients': ClientsIcon,
-  '/hearings': HearingsIcon,
-  '/payments': PaymentsIcon,
-  '/documents': DocumentsIcon,
-  '/invite': ShareIcon,
 };
 
 const BottomNav = ({ items }) => {
@@ -33,10 +25,6 @@ const BottomNav = ({ items }) => {
         { to: '/dashboard', label: t('dashboard') },
         { to: '/cases', label: t('cases') },
         { to: '/clients', label: t('clients') },
-        { to: '/hearings', label: t('hearings') },
-        { to: '/payments', label: t('payments') },
-        { to: '/documents', label: t('documents') },
-        { to: '/invite', label: t('inviteAdvocates') },
       ],
     [items, t]
   );
