@@ -1,19 +1,20 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "iAdvocate",
+  "name": "iAdvocate Legal Workspace",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "logo192.png",
+      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Emblem_of_India.svg/376px-Emblem_of_India.svg.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Emblem_of_India.svg/642px-Emblem_of_India.svg.png",
       "type": "image/png",
       "sizes": "512x512"
     }
