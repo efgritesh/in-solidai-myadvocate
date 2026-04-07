@@ -61,14 +61,18 @@ const SignUp = () => {
           <div className="auth-hero__topbar">
             <LanguageSelector className="auth-language-selector" variant="icon" />
           </div>
-          <img
-            className="auth-hero__logo"
-            src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
-            alt="Supreme Court of India emblem"
-          />
-          <p className="eyebrow">{t('roleBasedAccess')}</p>
-          <h1>{t('createAccount')}</h1>
-          <p className="auth-subtitle">{t('signupSubtitle')}</p>
+          <div className="auth-hero__body">
+            <img
+              className="auth-hero__logo"
+              src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
+              alt="Supreme Court of India emblem"
+            />
+            <div className="auth-hero__copy">
+              <p className="eyebrow">{t('roleBasedAccess')}</p>
+              <h1>{t('createAccount')}</h1>
+              <p className="auth-subtitle">{t('signupSubtitle')}</p>
+            </div>
+          </div>
         </section>
         <div className="auth-card">
           <form onSubmit={handleSubmit}>
