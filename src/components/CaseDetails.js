@@ -4,7 +4,16 @@ import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink } from '../utils/caseAccess';
-import { CloseIcon, CopyIcon, LockIcon, PaymentsIcon, PlusIcon, ShareIcon, UnlockIcon } from './AppIcons';
+import {
+  CloseIcon,
+  EyeIcon,
+  LockIcon,
+  MessageIcon,
+  PaymentsIcon,
+  PlusIcon,
+  UnlockIcon,
+  WhatsAppIcon,
+} from './AppIcons';
 
 const lifecyclePresets = [
   'Initial consultation',
@@ -32,6 +41,17 @@ const emptyPaymentForm = {
   stage: '',
   requestedFromClient: true,
 };
+
+const buildShareMessage = (caseRecord) =>
+  `iAdvocate has shared your case updates for ${caseRecord.case_number}. Open your case link here: ${buildCaseAccessLink(
+    caseRecord.client_access_token
+  )}`;
+
+const buildWhatsAppShareLink = (caseRecord) =>
+  `https://wa.me/?text=${encodeURIComponent(buildShareMessage(caseRecord))}`;
+
+const buildSmsShareLink = (caseRecord) =>
+  `sms:?&body=${encodeURIComponent(buildShareMessage(caseRecord))}`;
 
 const CaseDetails = () => {
   const { caseId } = useParams();
@@ -121,12 +141,6 @@ const CaseDetails = () => {
     await loadCase();
   };
 
-  const copyCaseLink = async () => {
-    if (!caseRecord?.client_access_token) return;
-    await navigator.clipboard.writeText(buildCaseAccessLink(caseRecord.client_access_token));
-    alert('Client case link copied.');
-  };
-
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     if (!caseRecord) return;
@@ -164,9 +178,34 @@ const CaseDetails = () => {
       showBack
       actions={
         <div className="header-icon-group">
-          <button type="button" className="icon-button" aria-label="Copy case link" onClick={copyCaseLink}>
-            <CopyIcon className="app-icon" title="Copy case link" />
-          </button>
+          <a
+            className="icon-button"
+            href={buildWhatsAppShareLink(caseRecord)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Share on WhatsApp"
+            title="Share on WhatsApp"
+          >
+            <WhatsAppIcon className="app-icon" />
+          </a>
+          <a
+            className="icon-button"
+            href={buildSmsShareLink(caseRecord)}
+            aria-label="Share by SMS"
+            title="Share by SMS"
+          >
+            <MessageIcon className="app-icon" />
+          </a>
+          <a
+            className="icon-button"
+            href={buildCaseAccessLink(caseRecord.client_access_token)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Preview client case view"
+            title="Preview client case view"
+          >
+            <EyeIcon className="app-icon" />
+          </a>
           <button
             type="button"
             className={`icon-button${caseRecord.client_access_enabled ? '' : ' icon-button--danger'}`}
@@ -221,10 +260,10 @@ const CaseDetails = () => {
               href={buildCaseAccessLink(caseRecord.client_access_token)}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Open client view"
-              title="Open client view"
+              aria-label="Preview client case view"
+              title="Preview client case view"
             >
-              <ShareIcon className="app-icon" />
+              <EyeIcon className="app-icon" />
             </a>
           </article>
         </div>

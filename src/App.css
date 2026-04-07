@@ -760,6 +760,10 @@ textarea {
   cursor: pointer;
 }
 
+.top-nav__logout--desktop {
+  display: none;
+}
+
 .top-nav__logout--mobile {
   width: 100%;
   justify-content: flex-start;
@@ -1010,6 +1014,11 @@ textarea {
 
   .top-nav__link {
     padding: 10px 14px;
+  }
+
+  .top-nav__logout--desktop {
+    display: inline-flex;
+    align-items: center;
   }
 
   .auth-layout {

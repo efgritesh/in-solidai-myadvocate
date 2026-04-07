@@ -56,16 +56,14 @@ const SignUp = () => {
             src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
             alt="Supreme Court of India emblem"
           />
-          <p className="eyebrow">Role-based access</p>
-          <h1>Create your account</h1>
-          <p className="auth-subtitle">
-            Create an advocate or admin account. Clients continue through secure case links only.
-          </p>
+          <p className="eyebrow">{t('roleBasedAccess')}</p>
+          <h1>{t('createAccount')}</h1>
+          <p className="auth-subtitle">{t('signupSubtitle')}</p>
         </section>
         <div className="auth-card">
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label>Role:</label>
+              <label>{t('role')}:</label>
               <select value={form.role} onChange={(e) => updateField('role', e.target.value)}>
                 <option value="admin">Admin</option>
                 <option value="advocate">Advocate</option>
@@ -99,7 +97,7 @@ const SignUp = () => {
               />
             </div>
             <div className="form-group">
-              <label>Confirm Password:</label>
+              <label>{t('confirmPassword')}:</label>
               <input
                 type="password"
                 value={form.confirmPassword}
@@ -108,17 +106,17 @@ const SignUp = () => {
               />
             </div>
 
-            <button type="submit" className="button">Create account</button>
+            <button type="submit" className="button">{t('createAccountButton')}</button>
           </form>
 
           <div className="auth-divider"><span>or</span></div>
 
           <button type="button" className="button secondary auth-secondary-button" onClick={handleGoogleSignup}>
-            Continue with Google
+            {t('continueWithGoogle')}
           </button>
 
           <p className="helper-text auth-footer">
-            Already have an account? <Link className="text-link" to="/login">Sign in</Link>
+            {t('alreadyHaveAccount')} <Link className="text-link" to="/login">{t('signIn')}</Link>
           </p>
           {error ? <p className="error-text">{error}</p> : null}
         </div>

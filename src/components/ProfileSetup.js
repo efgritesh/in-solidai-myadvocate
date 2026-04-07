@@ -57,11 +57,9 @@ const ProfileSetup = () => {
             src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
             alt="Supreme Court of India emblem"
           />
-          <p className="eyebrow">First-time setup</p>
+          <p className="eyebrow">{t('firstTimeSetup')}</p>
           <h1>{t('profileSetup')}</h1>
-          <p className="auth-subtitle">
-            Complete your profile so your legal workspace is ready to use on mobile, tablet, and desktop.
-          </p>
+          <p className="auth-subtitle">{t('profileSubtitle')}</p>
         </section>
         <div className="auth-card">
           <form onSubmit={handleSubmit}>

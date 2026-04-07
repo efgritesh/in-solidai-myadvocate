@@ -69,8 +69,12 @@ const BottomNav = ({ items }) => {
                 );
               })}
             </div>
-            <button type="button" className="top-nav__logout" onClick={handleLogout}>
-              Logout
+            <button
+              type="button"
+              className="top-nav__logout top-nav__logout--desktop"
+              onClick={handleLogout}
+            >
+              {t('logout')}
             </button>
             <button
               type="button"
@@ -99,7 +103,7 @@ const BottomNav = ({ items }) => {
             );
           })}
           <button type="button" className="top-nav__logout top-nav__logout--mobile" onClick={handleLogout}>
-            Logout
+            {t('logout')}
           </button>
         </div>
       </div>

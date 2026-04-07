@@ -21,17 +21,15 @@ const LanguageSelection = () => {
             src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
             alt="Supreme Court of India emblem"
           />
-          <p className="eyebrow">iAdvocate</p>
+          <p className="eyebrow">{t('appName')}</p>
           <h1>{t('chooseLanguage')}</h1>
-          <p className="auth-subtitle">
-            A simple legal workspace for advocates, case updates, client links, and payments.
-          </p>
+          <p className="auth-subtitle">{t('languageSubtitle')}</p>
         </section>
         <div className="auth-card">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Continue</p>
-              <h2>Select language</h2>
+              <p className="eyebrow">{t('continueLabel')}</p>
+              <h2>{t('selectLanguage')}</h2>
             </div>
           </div>
           <div className="auth-action-stack">

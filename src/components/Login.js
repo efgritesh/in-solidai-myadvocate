@@ -46,11 +46,9 @@ const Login = () => {
             src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
             alt="Supreme Court of India emblem"
           />
-          <p className="eyebrow">Secure access</p>
+          <p className="eyebrow">{t('secureAccess')}</p>
           <h1>{t('login')}</h1>
-          <p className="auth-subtitle">
-            Sign in and continue to your advocate or admin workspace.
-          </p>
+          <p className="auth-subtitle">{t('loginSubtitle')}</p>
         </section>
         <div className="auth-card">
           <form onSubmit={handleSubmit}>
@@ -78,11 +76,11 @@ const Login = () => {
           <div className="auth-divider"><span>or</span></div>
 
           <button type="button" className="button secondary auth-secondary-button" onClick={handleGoogleLogin}>
-            Continue with Google
+            {t('continueWithGoogle')}
           </button>
 
           <p className="helper-text auth-footer">
-            Need a test account? <Link className="text-link" to="/signup">Create one</Link>
+            {t('needTestAccount')} <Link className="text-link" to="/signup">{t('createOne')}</Link>
           </p>
           {error ? <p className="error-text">{error}</p> : null}
         </div>

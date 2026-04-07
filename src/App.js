@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import './App.css';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import LanguageSelection from './components/LanguageSelection';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
@@ -17,6 +18,13 @@ import Invite from './components/Invite';
 import CaseAccess from './components/CaseAccess';
 
 function App() {
+  const { t, i18n } = useTranslation();
+
+  useEffect(() => {
+    document.title = t('appName');
+    document.documentElement.lang = i18n.language || 'en';
+  }, [i18n.language, t]);
+
   return (
     <Router>
       <Routes>

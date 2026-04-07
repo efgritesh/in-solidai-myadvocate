@@ -6,6 +6,17 @@ import { useParams } from 'react-router-dom';
 import { db, storage } from '../firebase';
 import { DocumentsIcon, PaymentsIcon, ShareIcon } from './AppIcons';
 
+const formatTimelineMonth = (value) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}$/.test(value)) {
+    const [year, month] = value.split('-');
+    return new Intl.DateTimeFormat('en-IN', { month: 'short', year: 'numeric' }).format(
+      new Date(Number(year), Number(month) - 1, 1)
+    );
+  }
+  return value;
+};
+
 const CaseAccess = () => {
   const { token } = useParams();
   const [caseRecord, setCaseRecord] = useState(null);
@@ -246,8 +257,8 @@ const CaseAccess = () => {
                     <strong>{step.title}</strong>
                     <span className="timeline-step__eta">
                       {step.status === 'done'
-                        ? `Recorded ${step.eta || 'timeline reached'}`
-                        : `Tentative ${step.eta || 'date to be updated'}`}
+                        ? `Recorded ${formatTimelineMonth(step.eta) || 'timeline reached'}`
+                        : `Tentative ${formatTimelineMonth(step.eta) || 'date to be updated'}`}
                     </span>
                     <p>
                       {step.status === 'done'

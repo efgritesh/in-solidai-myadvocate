@@ -92,6 +92,21 @@ export const ShareIcon = createIcon(
   </>
 );
 
+export const MessageIcon = createIcon(
+  <>
+    <path d="M5 6h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H10l-5 4v-4H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
+    <path d="M8 10h8" />
+    <path d="M8 13h5" />
+  </>
+);
+
+export const WhatsAppIcon = createIcon(
+  <>
+    <path d="M20 11.5A8.5 8.5 0 0 1 7.5 19L4 20l1.1-3.2A8.5 8.5 0 1 1 20 11.5Z" />
+    <path d="M9.6 8.8c.3-.5.6-.5.8-.5h.6c.2 0 .4 0 .6.5.2.6.8 1.9.8 2s.1.3 0 .5c-.1.1-.2.3-.4.4l-.5.4c-.1.1-.3.2-.1.5.2.3.8 1.2 1.8 2 .9.8 1.7 1.1 2 .2.2-.4.4-.3.7-.2l1.7.8c.2.1.4.2.4.4s-.1 1-.7 1.5c-.6.5-1.3.5-1.7.4-.4-.1-2.8-1.1-4.7-3.7-1.9-2.6-1.8-4.6-1.3-5.2Z" />
+  </>
+);
+
 export const ArrowRightIcon = createIcon(<path d="M5 12h14m-6-6 6 6-6 6" />);
 export const ArrowLeftIcon = createIcon(<path d="M19 12H5m6-6-6 6 6 6" />);
 export const PlusIcon = createIcon(

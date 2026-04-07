@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink, createCaseAccessToken } from '../utils/caseAccess';
-import { ArrowRightIcon, CloseIcon, CopyIcon, EyeIcon, PlusIcon } from './AppIcons';
+import { ArrowRightIcon, CloseIcon, EyeIcon, MessageIcon, PlusIcon, WhatsAppIcon } from './AppIcons';
 
 const defaultLifecycle = [
   { title: 'Initial consultation', eta: 'Apr 2026' },
@@ -34,6 +34,28 @@ const createLifecycle = (customSteps) => {
     eta: step.eta || '',
     status: index === 0 ? 'in_progress' : 'pending',
   }));
+};
+
+const buildShareMessage = (caseItem) =>
+  `iAdvocate has shared your case updates for ${caseItem.case_number}. Open your case link here: ${buildCaseAccessLink(
+    caseItem.client_access_token
+  )}`;
+
+const buildWhatsAppShareLink = (caseItem) =>
+  `https://wa.me/?text=${encodeURIComponent(buildShareMessage(caseItem))}`;
+
+const buildSmsShareLink = (caseItem) =>
+  `sms:?&body=${encodeURIComponent(buildShareMessage(caseItem))}`;
+
+const formatTimelineMonth = (value) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}$/.test(value)) {
+    const [year, month] = value.split('-');
+    return new Intl.DateTimeFormat('en-IN', { month: 'short', year: 'numeric' }).format(
+      new Date(Number(year), Number(month) - 1, 1)
+    );
+  }
+  return value;
 };
 
 const Cases = () => {
@@ -134,11 +156,6 @@ const Cases = () => {
     setLifecycleSteps(defaultLifecycle);
     setShowForm(false);
     await fetchCases();
-  };
-
-  const copyCaseLink = async (token) => {
-    await navigator.clipboard.writeText(buildCaseAccessLink(token));
-    alert('Client case link copied.');
   };
 
   return (
@@ -306,29 +323,38 @@ const Cases = () => {
                 </div>
                 <div className="matter-row__meta">
                   <span>{caseItem.next_step || 'No next step added yet.'}</span>
-                  <span>{caseItem.activeMilestone?.title || 'No lifecycle planned'}{caseItem.activeMilestone?.eta ? ` | ${caseItem.activeMilestone.eta}` : ''}</span>
+                  <span>{caseItem.activeMilestone?.title || 'No lifecycle planned'}{caseItem.activeMilestone?.eta ? ` | ${formatTimelineMonth(caseItem.activeMilestone.eta)}` : ''}</span>
                 </div>
                 <div className="progress-strip matter-row__progress">
                   <span>{caseItem.completedSteps}/{caseItem.totalSteps} milestones complete</span>
                   <span>{caseItem.client_access_enabled ? 'Client link live' : 'Client link paused'}</span>
                 </div>
                 <div className="matter-row__actions">
-                  <button
-                    type="button"
+                  <a
                     className="icon-button"
-                    aria-label="Copy client case link"
-                    title="Copy client case link"
-                    onClick={() => copyCaseLink(caseItem.client_access_token)}
+                    href={buildWhatsAppShareLink(caseItem)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Share on WhatsApp"
+                    title="Share on WhatsApp"
                   >
-                    <CopyIcon className="app-icon" />
-                  </button>
+                    <WhatsAppIcon className="app-icon" />
+                  </a>
+                  <a
+                    className="icon-button"
+                    href={buildSmsShareLink(caseItem)}
+                    aria-label="Share by SMS"
+                    title="Share by SMS"
+                  >
+                    <MessageIcon className="app-icon" />
+                  </a>
                   <a
                     className="icon-button"
                     href={buildCaseAccessLink(caseItem.client_access_token)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="Open client case view"
-                    title="Open client case view"
+                    aria-label="Preview client case view"
+                    title="Preview client case view"
                   >
                     <EyeIcon className="app-icon" />
                   </a>
