@@ -667,6 +667,7 @@ textarea {
   align-items: center;
   gap: 12px;
   color: #ffffff;
+  flex: 0 1 auto;
 }
 
 .top-nav__brand .eyebrow {
@@ -680,6 +681,22 @@ textarea {
   font-size: 0.95rem;
 }
 
+.top-nav__logo {
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.top-nav__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+  min-width: 0;
+}
+
 .top-nav__toggle {
   background: #ffffff;
   border-color: #ffffff;
@@ -690,6 +707,11 @@ textarea {
 .top-nav__menu {
   display: none;
   padding: 0 0 10px;
+}
+
+.top-nav__menu--desktop {
+  display: none;
+  padding: 0;
 }
 
 .top-nav__menu.open {
@@ -718,6 +740,23 @@ textarea {
   font-size: 0.82rem;
   text-align: left;
   word-break: break-word;
+}
+
+.top-nav__logout {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 8px 4px;
+  cursor: pointer;
+}
+
+.top-nav__logout--mobile {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 12px 2px 4px;
 }
 
 .top-nav__link.active {
@@ -886,12 +925,17 @@ textarea {
     display: none;
   }
 
-  .top-nav__menu,
-  .top-nav__menu.open {
+  .top-nav__menu--desktop,
+  .top-nav__menu--desktop.open {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    padding: 0 0 8px;
+    padding: 0;
+    justify-content: flex-end;
+  }
+
+  .top-nav__menu--mobile {
+    display: none !important;
   }
 
   .top-nav__link {

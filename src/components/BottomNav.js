@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { signOut } from 'firebase/auth';
 import {
   CasesIcon,
   ClientsIcon,
@@ -8,6 +9,7 @@ import {
   DashboardIcon,
   MenuIcon,
 } from './AppIcons';
+import { auth } from '../firebase';
 
 const defaultIcons = {
   '/dashboard': DashboardIcon,
@@ -17,6 +19,7 @@ const defaultIcons = {
 
 const BottomNav = ({ items }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const navItems = useMemo(
@@ -28,6 +31,11 @@ const BottomNav = ({ items }) => {
       ],
     [items, t]
   );
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate('/login');
+  };
 
   return (
     <nav className="top-nav" aria-label="Primary">
@@ -44,17 +52,38 @@ const BottomNav = ({ items }) => {
               <strong className="top-nav__title">My Advocate</strong>
             </div>
           </div>
-          <button
-            type="button"
-            className="icon-button top-nav__toggle"
-            aria-expanded={open}
-            aria-label="Toggle navigation"
-            onClick={() => setOpen((current) => !current)}
-          >
-            {open ? <CloseIcon className="app-icon" /> : <MenuIcon className="app-icon" />}
-          </button>
+          <div className="top-nav__actions">
+            <div className="top-nav__menu top-nav__menu--desktop">
+              {navItems.map((item) => {
+                const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) => `top-nav__link${isActive ? ' active' : ''}`}
+                    onClick={() => setOpen(false)}
+                  >
+                    <Icon className="app-icon" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+            <button type="button" className="top-nav__logout" onClick={handleLogout}>
+              Logout
+            </button>
+            <button
+              type="button"
+              className="icon-button top-nav__toggle"
+              aria-expanded={open}
+              aria-label="Toggle navigation"
+              onClick={() => setOpen((current) => !current)}
+            >
+              {open ? <CloseIcon className="app-icon" /> : <MenuIcon className="app-icon" />}
+            </button>
+          </div>
         </div>
-        <div className={`top-nav__menu${open ? ' open' : ''}`}>
+        <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`}>
           {navItems.map((item) => {
             const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
             return (
@@ -69,6 +98,9 @@ const BottomNav = ({ items }) => {
               </NavLink>
             );
           })}
+          <button type="button" className="top-nav__logout top-nav__logout--mobile" onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </div>
     </nav>

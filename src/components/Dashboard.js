@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
+import { Link } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
@@ -10,7 +9,6 @@ import { DocumentsIcon, HearingsIcon, PaymentsIcon, ShareIcon } from './AppIcons
 
 const Dashboard = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [hearings, setHearings] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [stats, setStats] = useState({
@@ -62,20 +60,10 @@ const Dashboard = () => {
     loadDashboard();
   }, []);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    navigate('/login');
-  };
-
   return (
     <PageShell
       title="Practice dashboard"
       subtitle="Your practice summary with quick access to matters, clients, and active follow-ups."
-      actions={(
-        <button className="button danger" onClick={handleLogout}>
-          Logout
-        </button>
-      )}
     >
       <section className="hero-card">
         <div>
