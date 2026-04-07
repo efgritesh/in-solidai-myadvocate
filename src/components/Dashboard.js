@@ -61,14 +61,14 @@ const Dashboard = () => {
 
   return (
     <PageShell
-      title="Practice dashboard"
-      subtitle="Your practice summary with quick access to matters, clients, and active follow-ups."
+      title={t('practiceDashboard')}
+      subtitle={t('practiceDashboardSubtitle')}
     >
       <section className="hero-card">
         <div>
-          <p className="eyebrow">Today at a glance</p>
-          <h2>Everything important is one thumb away.</h2>
-          <p>Open cases or clients to handle hearing notes, payment follow-ups, documents, and client links in context.</p>
+          <p className="eyebrow">{t('todayAtAGlance')}</p>
+          <h2>{t('dashboardHeroTitle')}</h2>
+          <p>{t('dashboardHeroSubtitle')}</p>
         </div>
         <Link className="button secondary" to="/invite">
           {t('inviteAdvocates')}
@@ -78,7 +78,7 @@ const Dashboard = () => {
       <section className="stats-grid">
         <article className="stat-card">
           <strong>{stats.cases}</strong>
-          <span>Active matters</span>
+          <span>{t('activeMatters')}</span>
         </article>
         <article className="stat-card">
           <strong>{stats.clients}</strong>
@@ -97,12 +97,12 @@ const Dashboard = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Immediate focus</p>
-            <h2>Reminders</h2>
+            <p className="eyebrow">{t('immediateFocus')}</p>
+            <h2>{t('reminders')}</h2>
           </div>
         </div>
         {reminders.length === 0 ? (
-          <p className="empty-state">No urgent reminders. Your next hearing window is clear.</p>
+          <p className="empty-state">{t('noUrgentReminders')}</p>
         ) : (
           <div className="record-list">
             {reminders.map((reminder) => (
@@ -121,12 +121,12 @@ const Dashboard = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Next seven days</p>
-            <h2>Upcoming hearings</h2>
+            <p className="eyebrow">{t('nextSevenDays')}</p>
+            <h2>{t('upcomingHearings')}</h2>
           </div>
         </div>
         {hearings.length === 0 ? (
-          <p className="empty-state">No hearings scheduled in the coming week.</p>
+          <p className="empty-state">{t('noHearingsWeek')}</p>
         ) : (
           <div className="record-list">
             {hearings.map((hearing) => (
@@ -145,15 +145,15 @@ const Dashboard = () => {
       <section className="cta-grid">
         <Link className="action-tile" to="/cases">
           <strong>{t('cases')}</strong>
-          <span>Track status and client mapping.</span>
+          <span>{t('trackStatusClientMapping')}</span>
         </Link>
         <Link className="action-tile" to="/clients">
           <strong>{t('clients')}</strong>
-          <span>Keep contact details accessible during court visits.</span>
+          <span>{t('keepContactsAccessible')}</span>
         </Link>
         <Link className="action-tile" to="/invite">
-          <strong>Client links</strong>
-          <span>Copy and share secure access links directly with clients.</span>
+          <strong>{t('clientLinks')}</strong>
+          <span>{t('shareSecureClientLinks')}</span>
         </Link>
       </section>
     </PageShell>
