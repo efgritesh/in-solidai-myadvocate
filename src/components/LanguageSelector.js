@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { GlobeIcon } from './AppIcons';
 import {
   languageOptions,
   setStoredClientLanguage,
@@ -7,8 +8,8 @@ import {
   saveCurrentUserLanguage,
 } from '../utils/language';
 
-const LanguageSelector = ({ token = '', mode = 'user', className = '' }) => {
-  const { i18n } = useTranslation();
+const LanguageSelector = ({ token = '', mode = 'user', className = '', variant = 'inline' }) => {
+  const { i18n, t } = useTranslation();
 
   const handleChange = async (event) => {
     const nextLanguage = event.target.value;
@@ -24,8 +25,9 @@ const LanguageSelector = ({ token = '', mode = 'user', className = '' }) => {
   };
 
   return (
-    <label className={`language-selector ${className}`.trim()}>
-      <span className="sr-only">Language</span>
+    <label className={`language-selector language-selector--${variant} ${className}`.trim()}>
+      <span className="sr-only">{t('selectLanguage')}</span>
+      {variant === 'icon' ? <GlobeIcon className="app-icon language-selector__icon" /> : null}
       <select value={i18n.language || 'en'} onChange={handleChange} aria-label="Language">
         {languageOptions.map((option) => (
           <option key={option.value} value={option.value}>

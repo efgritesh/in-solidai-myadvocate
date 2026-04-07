@@ -16,6 +16,7 @@ import Payments from './components/Payments';
 import Documents from './components/Documents';
 import Invite from './components/Invite';
 import CaseAccess from './components/CaseAccess';
+import About from './components/About';
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -42,6 +43,7 @@ function App() {
         <Route path="/payments" element={<Payments />} />
         <Route path="/documents" element={<Documents />} />
         <Route path="/invite" element={<Invite />} />
+        <Route path="/about" element={<About />} />
       </Routes>
     </Router>
   );

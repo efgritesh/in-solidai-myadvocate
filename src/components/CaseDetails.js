@@ -181,7 +181,7 @@ const CaseDetails = () => {
       actions={
         <div className="header-icon-group">
           <a
-            className="icon-button"
+            className="icon-button icon-button--whatsapp"
             href={buildWhatsAppShareLink(caseRecord)}
             target="_blank"
             rel="noopener noreferrer"

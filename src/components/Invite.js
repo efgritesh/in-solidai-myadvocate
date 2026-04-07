@@ -47,7 +47,7 @@ const Invite = () => {
                 </div>
                 <div className="inline-actions">
                   <a
-                    className="icon-button"
+                    className="icon-button icon-button--whatsapp"
                     href={`https://wa.me/?text=${encodeURIComponent(buildShareMessage(caseItem))}`}
                     target="_blank"
                     rel="noopener noreferrer"

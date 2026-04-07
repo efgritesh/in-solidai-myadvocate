@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getRouteForRole, loginWithGoogle, signupWithEmail } from '../utils/auth';
+import LanguageSelector from './LanguageSelector';
 
 const SignUp = () => {
   const { t, i18n } = useTranslation();
@@ -57,6 +58,9 @@ const SignUp = () => {
     <div className="auth-screen">
       <div className="auth-layout">
         <section className="auth-hero auth-hero--dark">
+          <div className="auth-hero__topbar">
+            <LanguageSelector className="auth-language-selector" variant="icon" />
+          </div>
           <img
             className="auth-hero__logo"
             src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
@@ -123,6 +127,13 @@ const SignUp = () => {
 
           <p className="helper-text auth-footer">
             {t('alreadyHaveAccount')} <Link className="text-link" to="/login">{t('signIn')}</Link>
+          </p>
+          <p className="helper-text auth-footer">
+            <Link className="text-link" to="/about#privacy">{t('privacyPolicy')}</Link> {' | '}
+            <Link className="text-link" to="/about#consent">{t('consent')}</Link>
+          </p>
+          <p className="helper-text auth-footer">
+            {t('supportEmailLabel')} <a className="text-link" href="mailto:ritesh.chaturvedi@solidai.in">ritesh.chaturvedi@solidai.in</a>
           </p>
           {error ? <p className="error-text">{error}</p> : null}
         </div>

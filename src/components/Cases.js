@@ -344,7 +344,7 @@ const Cases = () => {
                 </div>
                 <div className="matter-row__actions">
                   <a
-                    className="icon-button"
+                    className="icon-button icon-button--whatsapp"
                     href={buildWhatsAppShareLink(caseItem)}
                     target="_blank"
                     rel="noopener noreferrer"

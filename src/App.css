@@ -259,6 +259,12 @@ textarea {
   background: #fff8f7;
 }
 
+.icon-button--whatsapp {
+  background: #25d366;
+  border-color: #25d366;
+  color: #ffffff;
+}
+
 .button:hover,
 .ghost-button:hover,
 .inline-link:hover,
@@ -676,6 +682,11 @@ textarea {
   gap: 12px;
   color: #ffffff;
   flex: 0 1 auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
 }
 
 .top-nav__brand .eyebrow {
@@ -809,9 +820,23 @@ textarea {
   border-color: #000000;
 }
 
+.auth-hero__topbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
 .auth-hero--dark .eyebrow,
 .auth-hero--dark .auth-subtitle {
   color: rgba(255, 255, 255, 0.74);
+}
+
+.auth-hero__logo {
+  display: inline-flex;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px;
+  margin-bottom: 16px;
 }
 
 .auth-card {
@@ -923,6 +948,53 @@ textarea {
 
 .public-language-selector {
   margin-left: auto;
+}
+
+.language-selector--icon {
+  position: relative;
+}
+
+.language-selector--icon .language-selector__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.language-selector--icon select {
+  width: 52px;
+  padding: 0 8px 0 34px;
+  border-radius: 999px;
+  appearance: none;
+}
+
+.auth-language-selector select {
+  background: #111111;
+  color: #ffffff;
+  border-color: #1f1f1f;
+}
+
+.app-footer {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 20px 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.app-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.app-footer__copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .App {
@@ -1060,6 +1132,10 @@ textarea {
   .top-nav__logout--desktop {
     display: inline-flex;
     align-items: center;
+  }
+
+  .app-footer__links {
+    justify-content: flex-start;
   }
 
   .auth-layout {

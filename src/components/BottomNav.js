@@ -7,6 +7,7 @@ import {
   ClientsIcon,
   CloseIcon,
   DashboardIcon,
+  InfoIcon,
   MenuIcon,
 } from './AppIcons';
 import { auth } from '../firebase';
@@ -29,9 +30,14 @@ const BottomNav = ({ items }) => {
         { to: '/dashboard', label: t('dashboard') },
         { to: '/cases', label: t('cases') },
         { to: '/clients', label: t('clients') },
+        { to: '/about', label: t('about'), icon: InfoIcon },
       ],
     [items, t]
   );
+
+  const mobileOnlyItems = [
+    { to: '/invite', label: t('clientLinks') },
+  ];
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -42,7 +48,7 @@ const BottomNav = ({ items }) => {
     <nav className="top-nav" aria-label="Primary">
       <div className="top-nav__inner">
         <div className="top-nav__bar">
-          <div className="top-nav__brand">
+          <button type="button" className="top-nav__brand" onClick={() => navigate('/dashboard')}>
             <img
               className="top-nav__logo"
               src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
@@ -52,10 +58,10 @@ const BottomNav = ({ items }) => {
               <p className="eyebrow">Legal workspace</p>
               <strong className="top-nav__title">iAdvocate</strong>
             </div>
-          </div>
+          </button>
           <div className="top-nav__actions">
             <div className="top-nav__menu top-nav__menu--desktop">
-              <LanguageSelector className="top-nav__language" />
+              <LanguageSelector className="top-nav__language" variant="icon" />
               {navItems.map((item) => {
                 const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
                 return (
@@ -90,7 +96,7 @@ const BottomNav = ({ items }) => {
           </div>
         </div>
         <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`}>
-          <LanguageSelector className="top-nav__language top-nav__language--mobile" />
+          <LanguageSelector className="top-nav__language top-nav__language--mobile" variant="icon" />
           {navItems.map((item) => {
             const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
             return (
@@ -105,6 +111,16 @@ const BottomNav = ({ items }) => {
               </NavLink>
             );
           })}
+          {mobileOnlyItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => `top-nav__link${isActive ? ' active' : ''}`}
+              onClick={() => setOpen(false)}
+            >
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
           <button type="button" className="top-nav__logout top-nav__logout--mobile" onClick={handleLogout}>
             {t('logout')}
           </button>

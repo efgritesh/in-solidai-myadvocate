@@ -70,9 +70,6 @@ const Dashboard = () => {
           <h2>{t('dashboardHeroTitle')}</h2>
           <p>{t('dashboardHeroSubtitle')}</p>
         </div>
-        <Link className="button secondary" to="/invite">
-          {t('inviteAdvocates')}
-        </Link>
       </section>
 
       <section className="stats-grid">

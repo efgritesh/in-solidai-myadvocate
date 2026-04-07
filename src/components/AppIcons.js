@@ -107,6 +107,23 @@ export const WhatsAppIcon = createIcon(
   </>
 );
 
+export const GlobeIcon = createIcon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18" />
+    <path d="M12 3a15 15 0 0 1 0 18" />
+    <path d="M12 3a15 15 0 0 0 0 18" />
+  </>
+);
+
+export const InfoIcon = createIcon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 10v6" />
+    <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
+  </>
+);
+
 export const ArrowRightIcon = createIcon(<path d="M5 12h14m-6-6 6 6-6 6" />);
 export const ArrowLeftIcon = createIcon(<path d="M19 12H5m6-6-6 6 6 6" />);
 export const PlusIcon = createIcon(

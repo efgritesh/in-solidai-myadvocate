@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from './BottomNav';
+import FooterBar from './FooterBar';
 import { ArrowLeftIcon } from './AppIcons';
 
 const PageShell = ({ title, subtitle, actions, children, showBack = false, navItems, showNav = true }) => {
@@ -25,6 +26,7 @@ const PageShell = ({ title, subtitle, actions, children, showBack = false, navIt
           {actions ? <div className="screen-actions">{actions}</div> : null}
         </header>
         <main className="stack">{children}</main>
+        <FooterBar />
       </div>
     </div>
   );
