@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink } from '../utils/caseAccess';
-import { CopyIcon, LockIcon, PaymentsIcon, PlusIcon, ShareIcon, UnlockIcon } from './AppIcons';
+import { CloseIcon, CopyIcon, LockIcon, PaymentsIcon, PlusIcon, ShareIcon, UnlockIcon } from './AppIcons';
 
 const lifecyclePresets = [
   'Initial consultation',
@@ -39,6 +39,8 @@ const CaseDetails = () => {
   const [payments, setPayments] = useState([]);
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
   const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
+  const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   const loadCase = useCallback(async () => {
     if (!caseId) return;
@@ -92,16 +94,22 @@ const CaseDetails = () => {
 
   const addLifecycleStep = async () => {
     if (!caseRecord) return;
+    const currentLifecycle = caseRecord.lifecycle || [];
+    const firstPendingIndex = currentLifecycle.findIndex((step) => step.status === 'pending');
+    const insertAt = firstPendingIndex === -1 ? currentLifecycle.length : firstPendingIndex;
+    const nextStep = {
+      id: `step-${Date.now()}`,
+      title: selectedLifecyclePreset,
+      eta: selectedLifecycleEta,
+      status: 'pending',
+    };
     const lifecycle = [
-      ...(caseRecord.lifecycle || []),
-      {
-        id: `step-${(caseRecord.lifecycle || []).length + 1}`,
-        title: selectedLifecyclePreset,
-        eta: '',
-        status: 'pending',
-      },
+      ...currentLifecycle.slice(0, insertAt),
+      nextStep,
+      ...currentLifecycle.slice(insertAt),
     ];
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
+    setSelectedLifecycleEta('');
     await loadCase();
   };
 
@@ -157,12 +165,13 @@ const CaseDetails = () => {
       actions={
         <div className="header-icon-group">
           <button type="button" className="icon-button" aria-label="Copy case link" onClick={copyCaseLink}>
-            <CopyIcon className="app-icon" />
+            <CopyIcon className="app-icon" title="Copy case link" />
           </button>
           <button
             type="button"
             className={`icon-button${caseRecord.client_access_enabled ? '' : ' icon-button--danger'}`}
             aria-label={caseRecord.client_access_enabled ? 'Pause client access' : 'Enable client access'}
+            title={caseRecord.client_access_enabled ? 'Pause client access' : 'Enable client access'}
             onClick={toggleClientAccess}
           >
             {caseRecord.client_access_enabled ? <UnlockIcon className="app-icon" /> : <LockIcon className="app-icon" />}
@@ -213,6 +222,7 @@ const CaseDetails = () => {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open client view"
+              title="Open client view"
             >
               <ShareIcon className="app-icon" />
             </a>
@@ -226,17 +236,27 @@ const CaseDetails = () => {
             <p className="eyebrow">Lifecycle</p>
             <h2>Progress control</h2>
           </div>
-          <button type="button" className="icon-button icon-button--accent" aria-label="Add lifecycle step" onClick={addLifecycleStep}>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label="Add lifecycle step"
+            title="Add lifecycle step"
+            onClick={addLifecycleStep}
+          >
             <PlusIcon className="app-icon" />
           </button>
         </div>
-        <div className="form-group">
-          <label>Add preset step:</label>
+        <div className="planning-row">
           <select value={selectedLifecyclePreset} onChange={(e) => setSelectedLifecyclePreset(e.target.value)}>
             {lifecyclePresets.map((preset) => (
               <option key={preset} value={preset}>{preset}</option>
             ))}
           </select>
+          <input
+            type="month"
+            value={selectedLifecycleEta}
+            onChange={(e) => setSelectedLifecycleEta(e.target.value)}
+          />
         </div>
         <div className="lifecycle-editor">
           {(caseRecord.lifecycle || []).map((step, index) => (
@@ -252,10 +272,9 @@ const CaseDetails = () => {
                   placeholder="Step title"
                 />
                 <input
-                  type="text"
+                  type="month"
                   value={step.eta || ''}
                   onChange={(e) => updateLifecycleField(step.id, 'eta', e.target.value)}
-                  placeholder="Tentative month-year"
                 />
               </div>
               <select value={step.status} onChange={(e) => updateLifecycleStatus(step.id, e.target.value)}>
@@ -274,8 +293,20 @@ const CaseDetails = () => {
             <p className="eyebrow">Payments</p>
             <h2>Request or record fees</h2>
           </div>
-          <PaymentsIcon className="app-icon section-icon" />
+          <div className="header-icon-group">
+            <PaymentsIcon className="app-icon section-icon" />
+            <button
+              type="button"
+              className="icon-button icon-button--accent"
+              aria-label={showPaymentForm ? 'Close payment form' : 'Open payment form'}
+              title={showPaymentForm ? 'Close payment form' : 'Open payment form'}
+              onClick={() => setShowPaymentForm((current) => !current)}
+            >
+              {showPaymentForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+            </button>
+          </div>
         </div>
+        {showPaymentForm ? (
         <form onSubmit={handlePaymentSubmit}>
           <div className="form-grid">
             <div className="form-group">
@@ -336,6 +367,9 @@ const CaseDetails = () => {
             {paymentForm.requestedFromClient ? 'Request payment' : 'Save payment'}
           </button>
         </form>
+        ) : (
+          <p className="empty-state">Open the fee form when you need to request a payment or record a received amount.</p>
+        )}
         <div className="record-list top-space">
           {payments.map((payment) => (
             <article key={payment.id} className="record-item">

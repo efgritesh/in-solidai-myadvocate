@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink, createCaseAccessToken } from '../utils/caseAccess';
-import { ArrowRightIcon, CopyIcon, EyeIcon, PlusIcon } from './AppIcons';
+import { ArrowRightIcon, CloseIcon, CopyIcon, EyeIcon, PlusIcon } from './AppIcons';
 
 const defaultLifecycle = [
   { title: 'Initial consultation', eta: 'Apr 2026' },
@@ -39,6 +39,7 @@ const createLifecycle = (customSteps) => {
 const Cases = () => {
   const navigate = useNavigate();
   const [cases, setCases] = useState([]);
+  const [showForm, setShowForm] = useState(false);
   const [caseNumber, setCaseNumber] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
@@ -47,6 +48,7 @@ const Cases = () => {
   const [nextStep, setNextStep] = useState('');
   const [status, setStatus] = useState('Open');
   const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
+  const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
   const [lifecycleSteps, setLifecycleSteps] = useState(defaultLifecycle);
 
   const fetchCases = async () => {
@@ -88,9 +90,10 @@ const Cases = () => {
       ...current,
       {
         title: selectedLifecyclePreset,
-        eta: '',
+        eta: selectedLifecycleEta,
       },
     ]);
+    setSelectedLifecycleEta('');
   };
 
   const handleAddCase = async (e) => {
@@ -127,7 +130,9 @@ const Cases = () => {
     setNextStep('');
     setStatus('Open');
     setSelectedLifecyclePreset(lifecyclePresets[0]);
+    setSelectedLifecycleEta('');
     setLifecycleSteps(defaultLifecycle);
+    setShowForm(false);
     await fetchCases();
   };
 
@@ -142,17 +147,24 @@ const Cases = () => {
       subtitle="Create, review, and share matters with clearer lifecycle planning for both advocate and client views."
       showBack
     >
-      <section className="panel">
+      <section className={`panel${showForm ? '' : ' panel--collapsed'}`}>
         <div className="section-heading">
           <div>
             <p className="eyebrow">New matter</p>
             <h2>Add a case</h2>
           </div>
-          <button type="button" className="icon-button icon-button--accent" aria-label="Add lifecycle step" onClick={addLifecycleStep}>
-            <PlusIcon className="app-icon" />
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label={showForm ? 'Close add case form' : 'Open add case form'}
+            title={showForm ? 'Close add case form' : 'Open add case form'}
+            onClick={() => setShowForm((current) => !current)}
+          >
+            {showForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
           </button>
         </div>
-        <form onSubmit={handleAddCase}>
+        {showForm ? (
+          <form onSubmit={handleAddCase}>
           <div className="form-grid">
             <div className="form-group">
               <label>Case Number:</label>
@@ -225,6 +237,14 @@ const Cases = () => {
                 ))}
               </select>
             </div>
+            <div className="form-group">
+              <label>Tentative month:</label>
+              <input
+                type="month"
+                value={selectedLifecycleEta}
+                onChange={(e) => setSelectedLifecycleEta(e.target.value)}
+              />
+            </div>
             <div className="form-group full-span">
               <label>Lifecycle planning:</label>
               <div className="planning-stack">
@@ -238,20 +258,32 @@ const Cases = () => {
                       required
                     />
                     <input
-                      type="text"
+                      type="month"
                       value={step.eta}
                       onChange={(e) => updateLifecycleDraft(index, 'eta', e.target.value)}
-                      placeholder="Tentative month-year, e.g. Aug 2026"
                     />
                   </div>
                 ))}
               </div>
             </div>
+            <div className="form-group full-span">
+              <button
+                type="button"
+                className="button secondary"
+                onClick={addLifecycleStep}
+              >
+                Add lifecycle step
+              </button>
+            </div>
           </div>
           <button type="submit" className="button">Add Case</button>
-        </form>
+          </form>
+        ) : (
+          <p className="empty-state">Tap the plus icon to create a new matter with planned milestones and a client access link.</p>
+        )}
       </section>
 
+      {!showForm ? (
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -269,8 +301,8 @@ const Cases = () => {
                   <div>
                     <strong>{caseItem.case_number}</strong>
                     <p>{caseItem.client_name}</p>
+                    <p className="case-status-text">{caseItem.status}</p>
                   </div>
-                  <span className="badge">{caseItem.status}</span>
                 </div>
                 <div className="matter-row__meta">
                   <span>{caseItem.next_step || 'No next step added yet.'}</span>
@@ -285,6 +317,7 @@ const Cases = () => {
                     type="button"
                     className="icon-button"
                     aria-label="Copy client case link"
+                    title="Copy client case link"
                     onClick={() => copyCaseLink(caseItem.client_access_token)}
                   >
                     <CopyIcon className="app-icon" />
@@ -295,6 +328,7 @@ const Cases = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Open client case view"
+                    title="Open client case view"
                   >
                     <EyeIcon className="app-icon" />
                   </a>
@@ -302,6 +336,7 @@ const Cases = () => {
                     type="button"
                     className="icon-button icon-button--accent"
                     aria-label="Open case details"
+                    title="Open case details"
                     onClick={() => navigate(`/cases/${caseItem.id}`)}
                   >
                     <ArrowRightIcon className="app-icon" />
@@ -312,6 +347,7 @@ const Cases = () => {
           </div>
         )}
       </section>
+      ) : null}
     </PageShell>
   );
 };
