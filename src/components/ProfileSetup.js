@@ -50,50 +50,59 @@ const ProfileSetup = () => {
 
   return (
     <div className="auth-screen">
-      <div className="auth-card">
-        <p className="eyebrow">First-time setup</p>
-        <h1>{t('profileSetup')}</h1>
-        <p className="auth-subtitle">
-          Complete your profile so your practice dashboard is ready to use on any device.
-        </p>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>{t('name')}:</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>{t('phone')}:</label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>{t('address')}:</label>
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>{t('profilePic')}:</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-            />
-          </div>
-          <button type="submit" className="button">{t('save')}</button>
-          {error ? <p style={{ color: 'red' }}>{error}</p> : null}
-        </form>
+      <div className="auth-layout">
+        <section className="auth-hero auth-hero--dark">
+          <img
+            className="auth-hero__logo"
+            src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
+            alt="Supreme Court of India emblem"
+          />
+          <p className="eyebrow">First-time setup</p>
+          <h1>{t('profileSetup')}</h1>
+          <p className="auth-subtitle">
+            Complete your profile so your legal workspace is ready to use on mobile, tablet, and desktop.
+          </p>
+        </section>
+        <div className="auth-card">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>{t('name')}:</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('phone')}:</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('address')}:</label>
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('profilePic')}:</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+            </div>
+            <button type="submit" className="button">{t('save')}</button>
+            {error ? <p className="error-text">{error}</p> : null}
+          </form>
+        </div>
       </div>
     </div>
   );

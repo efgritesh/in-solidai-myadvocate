@@ -49,69 +49,79 @@ const SignUp = () => {
 
   return (
     <div className="auth-screen">
-      <div className="auth-card">
-        <p className="eyebrow">Role-based access</p>
-        <h1>Create your account</h1>
-        <p className="auth-subtitle">
-          Create an advocate or admin account. Clients will access their case using a secure link from the advocate.
-        </p>
+      <div className="auth-layout">
+        <section className="auth-hero auth-hero--dark">
+          <img
+            className="auth-hero__logo"
+            src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
+            alt="Supreme Court of India emblem"
+          />
+          <p className="eyebrow">Role-based access</p>
+          <h1>Create your account</h1>
+          <p className="auth-subtitle">
+            Create an advocate or admin account. Clients continue through secure case links only.
+          </p>
+        </section>
+        <div className="auth-card">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Role:</label>
+              <select value={form.role} onChange={(e) => updateField('role', e.target.value)}>
+                <option value="admin">Admin</option>
+                <option value="advocate">Advocate</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>{t('name')}:</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => updateField('name', e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('email')}:</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => updateField('email', e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('password')}:</label>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(e) => updateField('password', e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Confirm Password:</label>
+              <input
+                type="password"
+                value={form.confirmPassword}
+                onChange={(e) => updateField('confirmPassword', e.target.value)}
+                required
+              />
+            </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Role:</label>
-            <select value={form.role} onChange={(e) => updateField('role', e.target.value)}>
-              <option value="admin">Admin</option>
-              <option value="advocate">Advocate</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>{t('name')}:</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => updateField('name', e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>{t('email')}:</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => updateField('email', e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>{t('password')}:</label>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => updateField('password', e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>Confirm Password:</label>
-            <input
-              type="password"
-              value={form.confirmPassword}
-              onChange={(e) => updateField('confirmPassword', e.target.value)}
-              required
-            />
-          </div>
+            <button type="submit" className="button">Create account</button>
+          </form>
 
-          <button type="submit" className="button">Create account</button>
-        </form>
+          <div className="auth-divider"><span>or</span></div>
 
-        <button type="button" className="button secondary auth-secondary-button" onClick={handleGoogleSignup}>
-          Continue with Google
-        </button>
+          <button type="button" className="button secondary auth-secondary-button" onClick={handleGoogleSignup}>
+            Continue with Google
+          </button>
 
-        <p className="helper-text auth-footer">
-          Already have an account? <Link className="text-link" to="/login">Sign in</Link>
-        </p>
-        {error ? <p className="error-text">{error}</p> : null}
+          <p className="helper-text auth-footer">
+            Already have an account? <Link className="text-link" to="/login">Sign in</Link>
+          </p>
+          {error ? <p className="error-text">{error}</p> : null}
+        </div>
       </div>
     </div>
   );

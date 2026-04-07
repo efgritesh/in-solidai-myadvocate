@@ -39,43 +39,53 @@ const Login = () => {
 
   return (
     <div className="auth-screen">
-      <div className="auth-card">
-        <p className="eyebrow">Secure access</p>
-        <h1>{t('login')}</h1>
-        <p className="auth-subtitle">
-          Sign in with email or Google and we will route you to the correct dashboard.
-        </p>
+      <div className="auth-layout">
+        <section className="auth-hero auth-hero--dark">
+          <img
+            className="auth-hero__logo"
+            src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
+            alt="Supreme Court of India emblem"
+          />
+          <p className="eyebrow">Secure access</p>
+          <h1>{t('login')}</h1>
+          <p className="auth-subtitle">
+            Sign in and continue to your advocate or admin workspace.
+          </p>
+        </section>
+        <div className="auth-card">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>{t('email')}:</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('password')}:</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="button">{t('submit')}</button>
+          </form>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>{t('email')}:</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>{t('password')}:</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <button type="submit" className="button">{t('submit')}</button>
-        </form>
+          <div className="auth-divider"><span>or</span></div>
 
-        <button type="button" className="button secondary auth-secondary-button" onClick={handleGoogleLogin}>
-          Continue with Google
-        </button>
+          <button type="button" className="button secondary auth-secondary-button" onClick={handleGoogleLogin}>
+            Continue with Google
+          </button>
 
-        <p className="helper-text auth-footer">
-          Need a test account? <Link className="text-link" to="/signup">Create one</Link>
-        </p>
-        {error ? <p className="error-text">{error}</p> : null}
+          <p className="helper-text auth-footer">
+            Need a test account? <Link className="text-link" to="/signup">Create one</Link>
+          </p>
+          {error ? <p className="error-text">{error}</p> : null}
+        </div>
       </div>
     </div>
   );
