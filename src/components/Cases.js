@@ -7,18 +7,31 @@ import { buildCaseAccessLink, createCaseAccessToken } from '../utils/caseAccess'
 import { ArrowRightIcon, CopyIcon, EyeIcon, PlusIcon } from './AppIcons';
 
 const defaultLifecycle = [
+  { title: 'Initial consultation', eta: 'Apr 2026' },
+  { title: 'Draft petition and evidence set', eta: 'May 2026' },
+  { title: 'File before court', eta: 'Jun 2026' },
+  { title: 'Attend hearing and next directions', eta: 'Jul 2026' },
+  { title: 'Order follow-up and closure', eta: 'Aug 2026' },
+];
+
+const lifecyclePresets = [
   'Initial consultation',
+  'Document review',
   'Draft petition and evidence set',
+  'Legal notice',
   'File before court',
-  'Attend hearing and next directions',
+  'Interim relief hearing',
+  'Main hearing',
+  'Arguments',
   'Order follow-up and closure',
 ];
 
 const createLifecycle = (customSteps) => {
-  const titles = customSteps.length ? customSteps : defaultLifecycle;
-  return titles.map((title, index) => ({
+  const steps = customSteps.length ? customSteps : defaultLifecycle;
+  return steps.map((step, index) => ({
     id: `step-${index + 1}`,
-    title,
+    title: step.title,
+    eta: step.eta || '',
     status: index === 0 ? 'in_progress' : 'pending',
   }));
 };
@@ -26,7 +39,6 @@ const createLifecycle = (customSteps) => {
 const Cases = () => {
   const navigate = useNavigate();
   const [cases, setCases] = useState([]);
-  const [showForm, setShowForm] = useState(false);
   const [caseNumber, setCaseNumber] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
@@ -34,7 +46,8 @@ const Cases = () => {
   const [summary, setSummary] = useState('');
   const [nextStep, setNextStep] = useState('');
   const [status, setStatus] = useState('Open');
-  const [lifecycleInput, setLifecycleInput] = useState('');
+  const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
+  const [lifecycleSteps, setLifecycleSteps] = useState(defaultLifecycle);
 
   const fetchCases = async () => {
     const advocateId = auth.currentUser?.uid;
@@ -52,20 +65,45 @@ const Cases = () => {
       cases.map((caseItem) => {
         const lifecycle = caseItem.lifecycle || [];
         const completedSteps = lifecycle.filter((step) => step.status === 'done').length;
+        const activeMilestone = lifecycle.find((step) => step.status !== 'done') || lifecycle[lifecycle.length - 1];
         const totalSteps = lifecycle.length || 1;
         return {
           ...caseItem,
           completedSteps,
           totalSteps,
+          activeMilestone,
         };
       }),
     [cases]
   );
 
+  const updateLifecycleDraft = (index, key, value) => {
+    setLifecycleSteps((current) =>
+      current.map((step, stepIndex) => (stepIndex === index ? { ...step, [key]: value } : step))
+    );
+  };
+
+  const addLifecycleStep = () => {
+    setLifecycleSteps((current) => [
+      ...current,
+      {
+        title: selectedLifecyclePreset,
+        eta: '',
+      },
+    ]);
+  };
+
   const handleAddCase = async (e) => {
     e.preventDefault();
     const advocateId = auth.currentUser?.uid;
     if (!advocateId) return;
+
+    const preparedLifecycle = lifecycleSteps
+      .map((step) => ({
+        title: step.title.trim(),
+        eta: step.eta.trim(),
+      }))
+      .filter((step) => step.title);
 
     await addDoc(collection(db, 'cases'), {
       advocate_id: advocateId,
@@ -78,12 +116,7 @@ const Cases = () => {
       status,
       client_access_enabled: true,
       client_access_token: createCaseAccessToken(caseNumber),
-      lifecycle: createLifecycle(
-        lifecycleInput
-          .split('\n')
-          .map((step) => step.trim())
-          .filter(Boolean)
-      ),
+      lifecycle: createLifecycle(preparedLifecycle),
     });
 
     setCaseNumber('');
@@ -93,8 +126,8 @@ const Cases = () => {
     setSummary('');
     setNextStep('');
     setStatus('Open');
-    setLifecycleInput('');
-    setShowForm(false);
+    setSelectedLifecyclePreset(lifecyclePresets[0]);
+    setLifecycleSteps(defaultLifecycle);
     await fetchCases();
   };
 
@@ -106,134 +139,148 @@ const Cases = () => {
   return (
     <PageShell
       title="Cases"
-      subtitle="Scan active matters quickly, then open each case for full details, payment requests, and client access."
+      subtitle="Create, review, and share matters with clearer lifecycle planning for both advocate and client views."
       showBack
-      actions={
-        <button
-          type="button"
-          className="icon-button icon-button--accent"
-          aria-label={showForm ? 'Close add case form' : 'Add a case'}
-          onClick={() => setShowForm((current) => !current)}
-        >
-          <PlusIcon className="app-icon" />
-        </button>
-      }
     >
-      <section className={`panel${showForm ? '' : ' panel--collapsed'}`}>
+      <section className="panel">
         <div className="section-heading">
           <div>
             <p className="eyebrow">New matter</p>
             <h2>Add a case</h2>
           </div>
+          <button type="button" className="icon-button icon-button--accent" aria-label="Add lifecycle step" onClick={addLifecycleStep}>
+            <PlusIcon className="app-icon" />
+          </button>
         </div>
-        {showForm ? (
-          <form onSubmit={handleAddCase}>
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Case Number:</label>
-                <input
-                  type="text"
-                  placeholder="e.g. DEL-CIV-204/2026"
-                  value={caseNumber}
-                  onChange={(e) => setCaseNumber(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Client Name:</label>
-                <input
-                  type="text"
-                  placeholder="Client full name"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Client Email:</label>
-                <input
-                  type="email"
-                  placeholder="For WhatsApp or email follow-up"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Client Phone:</label>
-                <input
-                  type="text"
-                  placeholder="WhatsApp-enabled number"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                />
-              </div>
-              <div className="form-group full-span">
-                <label>Case Summary:</label>
-                <textarea
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  placeholder="What should the client understand about this matter?"
-                />
-              </div>
-              <div className="form-group full-span">
-                <label>Next Step:</label>
-                <input
-                  type="text"
-                  value={nextStep}
-                  onChange={(e) => setNextStep(e.target.value)}
-                  placeholder="What is currently pending or next?"
-                />
-              </div>
-              <div className="form-group">
-                <label>Status:</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                  <option value="Open">Open</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Closed">Closed</option>
-                </select>
-              </div>
-              <div className="form-group full-span">
-                <label>Lifecycle steps:</label>
-                <textarea
-                  value={lifecycleInput}
-                  onChange={(e) => setLifecycleInput(e.target.value)}
-                  placeholder={'Optional custom steps, one per line.\nLeave empty to use the built-in case lifecycle.'}
-                />
+        <form onSubmit={handleAddCase}>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Case Number:</label>
+              <input
+                type="text"
+                placeholder="e.g. DEL-CIV-204/2026"
+                value={caseNumber}
+                onChange={(e) => setCaseNumber(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Client Name:</label>
+              <input
+                type="text"
+                placeholder="Client full name"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Client Email:</label>
+              <input
+                type="email"
+                placeholder="For WhatsApp or email follow-up"
+                value={clientEmail}
+                onChange={(e) => setClientEmail(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>Client Phone:</label>
+              <input
+                type="text"
+                placeholder="WhatsApp-enabled number"
+                value={clientPhone}
+                onChange={(e) => setClientPhone(e.target.value)}
+              />
+            </div>
+            <div className="form-group full-span">
+              <label>Case Summary:</label>
+              <textarea
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="What should the client understand about this matter?"
+              />
+            </div>
+            <div className="form-group full-span">
+              <label>Next Step:</label>
+              <input
+                type="text"
+                value={nextStep}
+                onChange={(e) => setNextStep(e.target.value)}
+                placeholder="What is currently pending or next?"
+              />
+            </div>
+            <div className="form-group">
+              <label>Status:</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="Open">Open</option>
+                <option value="Pending">Pending</option>
+                <option value="Closed">Closed</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Step preset:</label>
+              <select value={selectedLifecyclePreset} onChange={(e) => setSelectedLifecyclePreset(e.target.value)}>
+                {lifecyclePresets.map((preset) => (
+                  <option key={preset} value={preset}>{preset}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group full-span">
+              <label>Lifecycle planning:</label>
+              <div className="planning-stack">
+                {lifecycleSteps.map((step, index) => (
+                  <div key={`draft-${index + 1}`} className="planning-row">
+                    <input
+                      type="text"
+                      value={step.title}
+                      onChange={(e) => updateLifecycleDraft(index, 'title', e.target.value)}
+                      placeholder="Step title"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={step.eta}
+                      onChange={(e) => updateLifecycleDraft(index, 'eta', e.target.value)}
+                      placeholder="Tentative month-year, e.g. Aug 2026"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
-            <button type="submit" className="button">Add Case</button>
-          </form>
-        ) : (
-          <p className="empty-state">Use the plus icon to add a new matter with lifecycle steps and a client access link.</p>
-        )}
+          </div>
+          <button type="submit" className="button">Add Case</button>
+        </form>
       </section>
 
       <section className="panel">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Current matters</p>
-            <h2>{cases.length} cases</h2>
+            <h2>{cases.length} case board</h2>
           </div>
         </div>
         {cases.length === 0 ? (
           <p className="empty-state">No cases yet. Add your first matter to start tracking progress.</p>
         ) : (
-          <div className="case-stack">
+          <div className="matter-board">
             {caseSummaries.map((caseItem) => (
-              <article key={caseItem.id} className="case-summary-card">
-                <div className="case-summary-card__row">
+              <article key={caseItem.id} className="matter-row">
+                <div className="matter-row__main">
                   <div>
                     <strong>{caseItem.case_number}</strong>
                     <p>{caseItem.client_name}</p>
                   </div>
                   <span className="badge">{caseItem.status}</span>
                 </div>
-                <p className="case-summary-card__next">{caseItem.next_step || 'No next step added yet.'}</p>
-                <div className="progress-strip">
+                <div className="matter-row__meta">
+                  <span>{caseItem.next_step || 'No next step added yet.'}</span>
+                  <span>{caseItem.activeMilestone?.title || 'No lifecycle planned'}{caseItem.activeMilestone?.eta ? ` | ${caseItem.activeMilestone.eta}` : ''}</span>
+                </div>
+                <div className="progress-strip matter-row__progress">
                   <span>{caseItem.completedSteps}/{caseItem.totalSteps} milestones complete</span>
                   <span>{caseItem.client_access_enabled ? 'Client link live' : 'Client link paused'}</span>
                 </div>
-                <div className="case-summary-card__actions">
+                <div className="matter-row__actions">
                   <button
                     type="button"
                     className="icon-button"

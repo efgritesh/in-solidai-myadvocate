@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { seedAdvocateData } from '../utils/seedData';
-import { DocumentsIcon, HearingsIcon, PaymentsIcon, ShareIcon } from './AppIcons';
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -152,16 +151,10 @@ const Dashboard = () => {
           <strong>{t('clients')}</strong>
           <span>Keep contact details accessible during court visits.</span>
         </Link>
-        <article className="action-tile action-tile--dense">
-          <div className="action-tile__icons">
-            <HearingsIcon className="app-icon" />
-            <PaymentsIcon className="app-icon" />
-            <DocumentsIcon className="app-icon" />
-            <ShareIcon className="app-icon" />
-          </div>
-          <strong>Case-led workflow</strong>
-          <span>Hearings, payments, documents, and sharing now sit under each matter instead of the top nav.</span>
-        </article>
+        <Link className="action-tile" to="/invite">
+          <strong>Client links</strong>
+          <span>Copy and share secure access links directly with clients.</span>
+        </Link>
       </section>
     </PageShell>
   );

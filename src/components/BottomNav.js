@@ -49,7 +49,7 @@ const BottomNav = ({ items }) => {
             />
             <div>
               <p className="eyebrow">Legal workspace</p>
-              <strong className="top-nav__title">My Advocate</strong>
+              <strong className="top-nav__title">iAdvocate</strong>
             </div>
           </div>
           <div className="top-nav__actions">

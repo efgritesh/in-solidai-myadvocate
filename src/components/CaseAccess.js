@@ -244,6 +244,11 @@ const CaseAccess = () => {
                   </div>
                   <div className="timeline-step__body">
                     <strong>{step.title}</strong>
+                    <span className="timeline-step__eta">
+                      {step.status === 'done'
+                        ? `Recorded ${step.eta || 'timeline reached'}`
+                        : `Tentative ${step.eta || 'date to be updated'}`}
+                    </span>
                     <p>
                       {step.status === 'done'
                         ? 'Completed and recorded by your advocate.'

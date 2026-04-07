@@ -11,11 +11,11 @@ const dateAfter = (days) => {
 };
 
 const buildLifecycle = (overrides = {}) => [
-  { id: 'consultation', title: 'Initial consultation', status: overrides.consultation || 'done' },
-  { id: 'drafting', title: 'Draft petition and evidence set', status: overrides.drafting || 'in_progress' },
-  { id: 'filing', title: 'File before court', status: overrides.filing || 'pending' },
-  { id: 'hearing', title: 'Attend hearing and next directions', status: overrides.hearing || 'pending' },
-  { id: 'closure', title: 'Order follow-up and closure', status: overrides.closure || 'pending' },
+  { id: 'consultation', title: 'Initial consultation', eta: overrides.consultationEta || 'Apr 2026', status: overrides.consultation || 'done' },
+  { id: 'drafting', title: 'Draft petition and evidence set', eta: overrides.draftingEta || 'May 2026', status: overrides.drafting || 'in_progress' },
+  { id: 'filing', title: 'File before court', eta: overrides.filingEta || 'Jun 2026', status: overrides.filing || 'pending' },
+  { id: 'hearing', title: 'Attend hearing and next directions', eta: overrides.hearingEta || 'Jul 2026', status: overrides.hearing || 'pending' },
+  { id: 'closure', title: 'Order follow-up and closure', eta: overrides.closureEta || 'Aug 2026', status: overrides.closure || 'pending' },
 ];
 
 const advocateClients = (advocateId) => [
@@ -197,7 +197,7 @@ const seedCollectionIfEmpty = async (collectionName, fieldName, fieldValue, reco
 export const seedAdvocateData = async (advocateId) => {
   if (!advocateId) return;
 
-  const seedKey = `seeded_${advocateId}_advocate_v4`;
+const seedKey = `seeded_${advocateId}_advocate_v5`;
   if (localStorage.getItem(seedKey) === 'true') return;
 
   const cases = advocateCases(advocateId);

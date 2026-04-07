@@ -4,7 +4,19 @@ import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink } from '../utils/caseAccess';
-import { CopyIcon, LockIcon, PaymentsIcon, ShareIcon, UnlockIcon } from './AppIcons';
+import { CopyIcon, LockIcon, PaymentsIcon, PlusIcon, ShareIcon, UnlockIcon } from './AppIcons';
+
+const lifecyclePresets = [
+  'Initial consultation',
+  'Document review',
+  'Draft petition and evidence set',
+  'Legal notice',
+  'File before court',
+  'Interim relief hearing',
+  'Main hearing',
+  'Arguments',
+  'Order follow-up and closure',
+];
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -26,6 +38,7 @@ const CaseDetails = () => {
   const [caseRecord, setCaseRecord] = useState(null);
   const [payments, setPayments] = useState([]);
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
+  const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
 
   const loadCase = useCallback(async () => {
     if (!caseId) return;
@@ -64,6 +77,30 @@ const CaseDetails = () => {
     const lifecycle = (caseRecord.lifecycle || []).map((step) =>
       step.id === stepId ? { ...step, status: nextStatus } : step
     );
+    await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
+    await loadCase();
+  };
+
+  const updateLifecycleField = async (stepId, key, value) => {
+    if (!caseRecord) return;
+    const lifecycle = (caseRecord.lifecycle || []).map((step) =>
+      step.id === stepId ? { ...step, [key]: value } : step
+    );
+    await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
+    await loadCase();
+  };
+
+  const addLifecycleStep = async () => {
+    if (!caseRecord) return;
+    const lifecycle = [
+      ...(caseRecord.lifecycle || []),
+      {
+        id: `step-${(caseRecord.lifecycle || []).length + 1}`,
+        title: selectedLifecyclePreset,
+        eta: '',
+        status: 'pending',
+      },
+    ];
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
     await loadCase();
   };
@@ -189,13 +226,37 @@ const CaseDetails = () => {
             <p className="eyebrow">Lifecycle</p>
             <h2>Progress control</h2>
           </div>
+          <button type="button" className="icon-button icon-button--accent" aria-label="Add lifecycle step" onClick={addLifecycleStep}>
+            <PlusIcon className="app-icon" />
+          </button>
+        </div>
+        <div className="form-group">
+          <label>Add preset step:</label>
+          <select value={selectedLifecyclePreset} onChange={(e) => setSelectedLifecyclePreset(e.target.value)}>
+            {lifecyclePresets.map((preset) => (
+              <option key={preset} value={preset}>{preset}</option>
+            ))}
+          </select>
         </div>
         <div className="lifecycle-editor">
           {(caseRecord.lifecycle || []).map((step, index) => (
             <div key={step.id} className="lifecycle-row lifecycle-row--card">
-              <div>
-                <strong>Step {index + 1}</strong>
-                <span>{step.title}</span>
+              <div className="planning-stack">
+                <div>
+                  <strong>Step {index + 1}</strong>
+                </div>
+                <input
+                  type="text"
+                  value={step.title}
+                  onChange={(e) => updateLifecycleField(step.id, 'title', e.target.value)}
+                  placeholder="Step title"
+                />
+                <input
+                  type="text"
+                  value={step.eta || ''}
+                  onChange={(e) => updateLifecycleField(step.id, 'eta', e.target.value)}
+                  placeholder="Tentative month-year"
+                />
               </div>
               <select value={step.status} onChange={(e) => updateLifecycleStatus(step.id, e.target.value)}>
                 <option value="pending">Pending</option>

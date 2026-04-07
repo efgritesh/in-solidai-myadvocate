@@ -626,6 +626,14 @@ textarea {
   color: var(--muted);
 }
 
+.timeline-step__eta {
+  display: inline-flex;
+  margin: 6px 0 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .timeline-step--done .timeline-step__dot {
   background: #111111;
   color: #ffffff;
@@ -876,6 +884,51 @@ textarea {
   text-align: center;
 }
 
+.planning-stack {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.planning-row {
+  display: grid;
+  gap: 10px;
+}
+
+.matter-board {
+  display: grid;
+  gap: 12px;
+}
+
+.matter-row {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.matter-row__main,
+.matter-row__actions,
+.matter-row__meta,
+.matter-row__progress {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.matter-row__meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.matter-row__actions {
+  justify-content: flex-end;
+}
+
 @media (min-width: 768px) {
   .page-frame {
     width: min(100%, 1480px);
@@ -950,5 +1003,27 @@ textarea {
   .auth-hero,
   .auth-card {
     padding: 32px 28px;
+  }
+
+  .planning-row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(180px, 0.8fr);
+  }
+
+  .matter-row {
+    grid-template-columns: minmax(220px, 1.1fr) minmax(260px, 1fr) minmax(220px, 0.95fr) auto;
+    align-items: center;
+  }
+
+  .matter-row__main,
+  .matter-row__meta,
+  .matter-row__progress,
+  .matter-row__actions {
+    min-width: 0;
+  }
+
+  .matter-row__meta,
+  .matter-row__progress {
+    display: grid;
+    justify-content: start;
   }
 }

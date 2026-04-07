@@ -21,7 +21,7 @@ const LanguageSelection = () => {
             src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
             alt="Supreme Court of India emblem"
           />
-          <p className="eyebrow">My Advocate</p>
+          <p className="eyebrow">iAdvocate</p>
           <h1>{t('chooseLanguage')}</h1>
           <p className="auth-subtitle">
             A simple legal workspace for advocates, case updates, client links, and payments.
