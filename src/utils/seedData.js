@@ -19,9 +19,9 @@ const buildLifecycle = (overrides = {}) => [
 ];
 
 const advocateClients = (advocateId) => [
-  { advocate_id: advocateId, name: 'Aarav Mehta', phone: '9876543210', email: 'aarav.mehta@example.com' },
-  { advocate_id: advocateId, name: 'Neha Sharma', phone: '9822012345', email: 'neha.sharma@example.com' },
-  { advocate_id: advocateId, name: 'Rohan Iyer', phone: '9811198111', email: 'rohan.iyer@example.com' },
+  { advocate_id: advocateId, name: 'Aarav Mehta', phone: '9876543210', email: 'aarav.mehta@example.com', preferredLanguage: 'en' },
+  { advocate_id: advocateId, name: 'Neha Sharma', phone: '9822012345', email: 'neha.sharma@example.com', preferredLanguage: 'hi' },
+  { advocate_id: advocateId, name: 'Rohan Iyer', phone: '9811198111', email: 'rohan.iyer@example.com', preferredLanguage: 'en' },
 ];
 
 const advocateCases = (advocateId) => [
@@ -31,6 +31,8 @@ const advocateCases = (advocateId) => [
     client_name: 'Aarav Mehta',
     client_email: 'aarav.mehta@example.com',
     client_phone: '9876543210',
+    advocate_language: 'en',
+    client_language: 'en',
     status: 'Open',
     court: 'Delhi District Court',
     summary: 'Civil recovery matter involving unpaid commercial dues and interim relief.',
@@ -45,6 +47,8 @@ const advocateCases = (advocateId) => [
     client_name: 'Neha Sharma',
     client_email: 'neha.sharma@example.com',
     client_phone: '9822012345',
+    advocate_language: 'en',
+    client_language: 'hi',
     status: 'Pending',
     court: 'Family Court Bengaluru',
     summary: 'Family matter currently at counselling and settlement review stage.',
@@ -59,6 +63,8 @@ const advocateCases = (advocateId) => [
     client_name: 'Rohan Iyer',
     client_email: 'rohan.iyer@example.com',
     client_phone: '9811198111',
+    advocate_language: 'en',
+    client_language: 'en',
     status: 'Open',
     court: 'Commercial Court Mumbai',
     summary: 'Commercial dispute with current hearing preparation underway.',

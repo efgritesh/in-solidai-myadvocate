@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useDropzone } from 'react-dropzone';
 import { useParams } from 'react-router-dom';
 import { db, storage } from '../firebase';
+import LanguageSelector from './LanguageSelector';
+import { getStoredClientLanguage } from '../utils/language';
 import { DocumentsIcon, PaymentsIcon, ShareIcon } from './AppIcons';
 
 const formatTimelineMonth = (value) => {
@@ -19,7 +21,7 @@ const formatTimelineMonth = (value) => {
 };
 
 const CaseAccess = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { token } = useParams();
   const [caseRecord, setCaseRecord] = useState(null);
   const [payments, setPayments] = useState([]);
@@ -68,6 +70,15 @@ const CaseAccess = () => {
   useEffect(() => {
     loadCase();
   }, [loadCase]);
+
+  useEffect(() => {
+    if (!caseRecord) return;
+    const preferredLanguage =
+      getStoredClientLanguage(token) || caseRecord.client_language || caseRecord.advocate_language || 'en';
+    if (i18n.language !== preferredLanguage) {
+      i18n.changeLanguage(preferredLanguage);
+    }
+  }, [caseRecord, i18n, token]);
 
   const requestedPayments = useMemo(
     () => payments.filter((payment) => payment.requested_from_client || payment.status === 'Requested' || payment.status === 'Paid'),
@@ -201,6 +212,7 @@ const CaseAccess = () => {
                   {t('clientCaseAccessSubtitle')}
                 </p>
               </div>
+              <LanguageSelector token={token} mode="client" className="public-language-selector" />
             </div>
           </div>
         </header>

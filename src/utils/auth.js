@@ -5,6 +5,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
+import { getStoredLanguage } from './language';
 
 export const roleRoutes = {
   admin: '/admin-dashboard',
@@ -16,6 +17,7 @@ export const getRouteForRole = (role) => roleRoutes[role] || '/dashboard';
 export const ensureUserProfile = async (user, role = 'advocate', extraData = {}) => {
   const userRef = doc(db, 'users', user.uid);
   const userSnap = await getDoc(userRef);
+  const preferredLanguage = extraData.preferredLanguage || getStoredLanguage();
 
   if (!userSnap.exists()) {
     const baseProfile = {
@@ -25,6 +27,7 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
       name: extraData.name || user.displayName || '',
       createdAt: new Date().toISOString(),
       profileComplete: role === 'admin',
+      preferredLanguage,
     };
 
     await setDoc(userRef, { ...baseProfile, ...extraData });
@@ -34,15 +37,16 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
   const currentData = userSnap.data();
   const mergedRole = currentData.role || role;
 
-  if ((!currentData.email && user.email) || (!currentData.name && user.displayName)) {
+  if ((!currentData.email && user.email) || (!currentData.name && user.displayName) || !currentData.preferredLanguage) {
     await updateDoc(userRef, {
       email: currentData.email || user.email || '',
       name: currentData.name || user.displayName || '',
       role: mergedRole,
+      preferredLanguage: currentData.preferredLanguage || preferredLanguage,
     });
   }
 
-  return { ...currentData, role: mergedRole };
+  return { ...currentData, role: mergedRole, preferredLanguage: currentData.preferredLanguage || preferredLanguage };
 };
 
 export const loginWithEmail = async (email, password) => {

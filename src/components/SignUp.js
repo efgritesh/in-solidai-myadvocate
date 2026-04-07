@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { getRouteForRole, loginWithGoogle, signupWithEmail } from '../utils/auth';
 
 const SignUp = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '',
@@ -30,6 +30,9 @@ const SignUp = () => {
 
     try {
       const { profile } = await signupWithEmail(form);
+      const nextLanguage = profile.preferredLanguage || 'en';
+      i18n.changeLanguage(nextLanguage);
+      localStorage.setItem('selectedLanguage', nextLanguage);
       navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
     } catch (err) {
       setError(err.message);
@@ -41,6 +44,9 @@ const SignUp = () => {
 
     try {
       const { profile } = await loginWithGoogle(form.role);
+      const nextLanguage = profile.preferredLanguage || 'en';
+      i18n.changeLanguage(nextLanguage);
+      localStorage.setItem('selectedLanguage', nextLanguage);
       navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
     } catch (err) {
       setError(err.message);

@@ -4,13 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { getRouteForRole, loginWithEmail, loginWithGoogle } from '../utils/auth';
 
 const Login = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const completeLogin = (profile) => {
+    const nextLanguage = profile.preferredLanguage || 'en';
+    i18n.changeLanguage(nextLanguage);
+    localStorage.setItem('selectedLanguage', nextLanguage);
     navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
   };
 

@@ -60,7 +60,7 @@ const formatTimelineMonth = (value) => {
 };
 
 const Cases = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [cases, setCases] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -125,6 +125,15 @@ const Cases = () => {
     const advocateId = auth.currentUser?.uid;
     if (!advocateId) return;
 
+    const clientSnapshot = await getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId)));
+    const matchedClient = clientSnapshot.docs
+      .map((docItem) => docItem.data())
+      .find((client) =>
+        (clientEmail && client.email === clientEmail) ||
+        (clientPhone && client.phone === clientPhone) ||
+        client.name === clientName
+      );
+
     const preparedLifecycle = lifecycleSteps
       .map((step) => ({
         title: step.title.trim(),
@@ -143,6 +152,8 @@ const Cases = () => {
       status,
       client_access_enabled: true,
       client_access_token: createCaseAccessToken(caseNumber),
+      advocate_language: i18n.language || 'en',
+      client_language: matchedClient?.preferredLanguage || i18n.language || 'en',
       lifecycle: createLifecycle(preparedLifecycle),
     });
 

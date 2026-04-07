@@ -10,6 +10,7 @@ const Clients = () => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [preferredLanguage, setPreferredLanguage] = useState('en');
 
   const fetchClients = async () => {
     const advocateId = auth.currentUser?.uid;
@@ -32,11 +33,13 @@ const Clients = () => {
       name,
       phone,
       email,
+      preferredLanguage,
     });
 
     setName('');
     setPhone('');
     setEmail('');
+    setPreferredLanguage('en');
     await fetchClients();
   };
 
@@ -80,6 +83,13 @@ const Clients = () => {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
+            <div className="form-group">
+              <label>{t('preferredLanguage')}:</label>
+              <select value={preferredLanguage} onChange={(e) => setPreferredLanguage(e.target.value)}>
+                <option value="en">{t('english')}</option>
+                <option value="hi">{t('hindi')}</option>
+              </select>
+            </div>
           </div>
           <button type="submit" className="button">{t('addClient')}</button>
         </form>
@@ -102,7 +112,7 @@ const Clients = () => {
                   <strong>{client.name}</strong>
                   <p>{client.email || t('noEmailAdded')}</p>
                 </div>
-                <span className="badge">{client.phone}</span>
+                <span className="badge">{client.phone} | {(client.preferredLanguage || 'en').toUpperCase()}</span>
               </article>
             ))}
           </div>

@@ -38,6 +38,7 @@ const ProfileSetup = () => {
         address,
         profilePicUrl,
         profileComplete: true,
+        preferredLanguage: localStorage.getItem('selectedLanguage') || 'en',
       });
 
       const userSnap = await getDoc(doc(db, 'users', user.uid));

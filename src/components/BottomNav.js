@@ -10,6 +10,7 @@ import {
   MenuIcon,
 } from './AppIcons';
 import { auth } from '../firebase';
+import LanguageSelector from './LanguageSelector';
 
 const defaultIcons = {
   '/dashboard': DashboardIcon,
@@ -54,6 +55,7 @@ const BottomNav = ({ items }) => {
           </div>
           <div className="top-nav__actions">
             <div className="top-nav__menu top-nav__menu--desktop">
+              <LanguageSelector className="top-nav__language" />
               {navItems.map((item) => {
                 const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
                 return (
@@ -88,6 +90,7 @@ const BottomNav = ({ items }) => {
           </div>
         </div>
         <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`}>
+          <LanguageSelector className="top-nav__language top-nav__language--mobile" />
           {navItems.map((item) => {
             const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
             return (
