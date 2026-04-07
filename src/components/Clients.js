@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 
 const Clients = () => {
+  const { t } = useTranslation();
   const [clients, setClients] = useState([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -39,70 +41,66 @@ const Clients = () => {
   };
 
   return (
-    <PageShell
-      title="Clients"
-      subtitle="Keep key contact details reachable in a few taps."
-      showBack
-    >
+    <PageShell title={t('clients')} subtitle={t('clientsSubtitle')} showBack>
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Client intake</p>
-            <h2>Add a client</h2>
+            <p className="eyebrow">{t('clientIntake')}</p>
+            <h2>{t('addClient')}</h2>
           </div>
         </div>
         <form onSubmit={handleAddClient}>
           <div className="form-grid">
             <div className="form-group">
-              <label>Name:</label>
+              <label>{t('name')}:</label>
               <input
                 type="text"
-                placeholder="Client full name"
+                placeholder={t('clientFullName')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
               />
             </div>
             <div className="form-group">
-              <label>Phone:</label>
+              <label>{t('phone')}:</label>
               <input
                 type="text"
-                placeholder="10-digit mobile number"
+                placeholder={t('mobileNumber')}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 required
               />
             </div>
             <div className="form-group">
-              <label>Email:</label>
+              <label>{t('email')}:</label>
               <input
                 type="email"
-                placeholder="Optional email address"
+                placeholder={t('optionalEmail')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
           </div>
-          <button type="submit" className="button">Add Client</button>
+          <button type="submit" className="button">{t('addClient')}</button>
         </form>
       </section>
 
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Directory</p>
-            <h2>{clients.length} clients</h2>
+            <p className="eyebrow">{t('directory')}</p>
+            <h2>{clients.length} {t('clients').toLowerCase()}</h2>
           </div>
         </div>
         {clients.length === 0 ? (
-          <p className="empty-state">Your client list is empty. Add one to begin organizing your practice.</p>
+          <p className="empty-state">{t('clientsEmpty')}</p>
         ) : (
           <div className="record-list">
             {clients.map((client) => (
               <article key={client.id} className="record-item">
                 <div>
                   <strong>{client.name}</strong>
-                  <p>{client.email || 'No email added'}</p>
+                  <p>{client.email || t('noEmailAdded')}</p>
                 </div>
                 <span className="badge">{client.phone}</span>
               </article>

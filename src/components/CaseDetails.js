@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
@@ -54,6 +55,7 @@ const buildSmsShareLink = (caseRecord) =>
   `sms:?&body=${encodeURIComponent(buildShareMessage(caseRecord))}`;
 
 const CaseDetails = () => {
+  const { t } = useTranslation();
   const { caseId } = useParams();
   const [caseRecord, setCaseRecord] = useState(null);
   const [payments, setPayments] = useState([]);
@@ -163,9 +165,9 @@ const CaseDetails = () => {
 
   if (!caseRecord) {
     return (
-      <PageShell title="Case details" subtitle="Loading matter details." showBack>
+      <PageShell title={t('caseDetails')} subtitle={t('loadingMatterDetails')} showBack>
         <section className="panel">
-          <p className="empty-state">This case could not be found.</p>
+          <p className="empty-state">{t('caseNotFound')}</p>
         </section>
       </PageShell>
     );
@@ -174,7 +176,7 @@ const CaseDetails = () => {
   return (
     <PageShell
       title={caseRecord.case_number}
-      subtitle="Matter details, client access, lifecycle tracking, and case-linked payments in one place."
+      subtitle={t('caseDetailsSubtitle')}
       showBack
       actions={
         <div className="header-icon-group">
@@ -183,16 +185,16 @@ const CaseDetails = () => {
             href={buildWhatsAppShareLink(caseRecord)}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Share on WhatsApp"
-            title="Share on WhatsApp"
+            aria-label={t('shareOnWhatsApp')}
+            title={t('shareOnWhatsApp')}
           >
             <WhatsAppIcon className="app-icon" />
           </a>
           <a
             className="icon-button"
             href={buildSmsShareLink(caseRecord)}
-            aria-label="Share by SMS"
-            title="Share by SMS"
+            aria-label={t('shareBySms')}
+            title={t('shareBySms')}
           >
             <MessageIcon className="app-icon" />
           </a>
@@ -201,16 +203,16 @@ const CaseDetails = () => {
             href={buildCaseAccessLink(caseRecord.client_access_token)}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Preview client case view"
-            title="Preview client case view"
+            aria-label={t('previewClientCaseView')}
+            title={t('previewClientCaseView')}
           >
             <EyeIcon className="app-icon" />
           </a>
           <button
             type="button"
             className={`icon-button${caseRecord.client_access_enabled ? '' : ' icon-button--danger'}`}
-            aria-label={caseRecord.client_access_enabled ? 'Pause client access' : 'Enable client access'}
-            title={caseRecord.client_access_enabled ? 'Pause client access' : 'Enable client access'}
+            aria-label={caseRecord.client_access_enabled ? t('pauseClientAccess') : t('enableClientAccess')}
+            title={caseRecord.client_access_enabled ? t('pauseClientAccess') : t('enableClientAccess')}
             onClick={toggleClientAccess}
           >
             {caseRecord.client_access_enabled ? <UnlockIcon className="app-icon" /> : <LockIcon className="app-icon" />}
@@ -220,9 +222,9 @@ const CaseDetails = () => {
     >
       <section className="hero-card case-hero">
         <div>
-          <p className="eyebrow">Client</p>
+          <p className="eyebrow">{t('clientLabel')}</p>
           <h2>{caseRecord.client_name}</h2>
-          <p>{caseRecord.client_phone || caseRecord.client_email || 'Client contact not added yet.'}</p>
+          <p>{caseRecord.client_phone || caseRecord.client_email || t('clientContactMissing')}</p>
         </div>
         <div className="case-hero__meta">
           <span className="badge">{caseRecord.status}</span>
@@ -233,35 +235,35 @@ const CaseDetails = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Matter brief</p>
-            <h2>Case details</h2>
+            <p className="eyebrow">{t('matterBrief')}</p>
+            <h2>{t('caseDetails')}</h2>
           </div>
         </div>
         <div className="details-grid">
           <article className="record-item">
             <div>
-              <strong>Summary</strong>
-              <p>{caseRecord.summary || 'No summary added yet.'}</p>
+              <strong>{t('summaryLabel')}</strong>
+              <p>{caseRecord.summary || t('noSummaryAdded')}</p>
             </div>
           </article>
           <article className="record-item">
             <div>
-              <strong>Next step</strong>
-              <p>{caseRecord.next_step || 'No next step added yet.'}</p>
+              <strong>{t('nextStepShort')}</strong>
+              <p>{caseRecord.next_step || t('noNextStepYet')}</p>
             </div>
           </article>
           <article className="record-item">
             <div>
-              <strong>Client link</strong>
-              <p>{caseRecord.client_access_enabled ? 'Active until case closure or manual pause.' : 'Currently disabled.'}</p>
+              <strong>{t('clientLinkLabel')}</strong>
+              <p>{caseRecord.client_access_enabled ? t('clientLinkActive') : t('clientLinkDisabled')}</p>
             </div>
             <a
               className="icon-button"
               href={buildCaseAccessLink(caseRecord.client_access_token)}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Preview client case view"
-              title="Preview client case view"
+              aria-label={t('previewClientCaseView')}
+              title={t('previewClientCaseView')}
             >
               <EyeIcon className="app-icon" />
             </a>
@@ -272,14 +274,14 @@ const CaseDetails = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Lifecycle</p>
-            <h2>Progress control</h2>
+            <p className="eyebrow">{t('lifecycle')}</p>
+            <h2>{t('progressControl')}</h2>
           </div>
           <button
             type="button"
             className="icon-button icon-button--accent"
-            aria-label="Add lifecycle step"
-            title="Add lifecycle step"
+            aria-label={t('addLifecycleStep')}
+            title={t('addLifecycleStep')}
             onClick={addLifecycleStep}
           >
             <PlusIcon className="app-icon" />
@@ -302,13 +304,13 @@ const CaseDetails = () => {
             <div key={step.id} className="lifecycle-row lifecycle-row--card">
               <div className="planning-stack">
                 <div>
-                  <strong>Step {index + 1}</strong>
+                  <strong>{t('stepNumber', { count: index + 1 })}</strong>
                 </div>
                 <input
                   type="text"
                   value={step.title}
                   onChange={(e) => updateLifecycleField(step.id, 'title', e.target.value)}
-                  placeholder="Step title"
+                  placeholder={t('stepTitle')}
                 />
                 <input
                   type="month"
@@ -317,9 +319,9 @@ const CaseDetails = () => {
                 />
               </div>
               <select value={step.status} onChange={(e) => updateLifecycleStatus(step.id, e.target.value)}>
-                <option value="pending">Pending</option>
-                <option value="in_progress">In progress</option>
-                <option value="done">Done</option>
+                <option value="pending">{t('tentative')}</option>
+                <option value="in_progress">{t('inProgress')}</option>
+                <option value="done">{t('done')}</option>
               </select>
             </div>
           ))}
@@ -329,16 +331,16 @@ const CaseDetails = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Payments</p>
-            <h2>Request or record fees</h2>
+            <p className="eyebrow">{t('payments')}</p>
+            <h2>{t('requestOrRecordFees')}</h2>
           </div>
           <div className="header-icon-group">
             <PaymentsIcon className="app-icon section-icon" />
             <button
               type="button"
               className="icon-button icon-button--accent"
-              aria-label={showPaymentForm ? 'Close payment form' : 'Open payment form'}
-              title={showPaymentForm ? 'Close payment form' : 'Open payment form'}
+              aria-label={showPaymentForm ? t('closePaymentForm') : t('openPaymentForm')}
+              title={showPaymentForm ? t('closePaymentForm') : t('openPaymentForm')}
               onClick={() => setShowPaymentForm((current) => !current)}
             >
               {showPaymentForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
@@ -349,17 +351,17 @@ const CaseDetails = () => {
         <form onSubmit={handlePaymentSubmit}>
           <div className="form-grid">
             <div className="form-group">
-              <label>Amount:</label>
+              <label>{t('amount')}:</label>
               <input
                 type="number"
-                placeholder="Amount in INR"
+                placeholder={t('amountInInr')}
                 value={paymentForm.amount}
                 onChange={(e) => setPaymentForm((current) => ({ ...current, amount: e.target.value }))}
                 required
               />
             </div>
             <div className="form-group">
-              <label>Date:</label>
+              <label>{t('date')}:</label>
               <input
                 type="date"
                 value={paymentForm.date}
@@ -368,7 +370,7 @@ const CaseDetails = () => {
               />
             </div>
             <div className="form-group">
-              <label>Stage:</label>
+              <label>{t('stage')}:</label>
               <input
                 type="text"
                 placeholder="Filing, hearing, drafting, etc."
@@ -377,7 +379,7 @@ const CaseDetails = () => {
               />
             </div>
             <div className="form-group">
-              <label>Payment mode:</label>
+              <label>{t('paymentMode')}:</label>
               <select
                 value={paymentForm.requestedFromClient ? 'request' : 'recorded'}
                 onChange={(e) =>
@@ -387,15 +389,15 @@ const CaseDetails = () => {
                   }))
                 }
               >
-                <option value="request">Request from client</option>
-                <option value="recorded">Record received payment</option>
+                <option value="request">{t('requestFromClient')}</option>
+                <option value="recorded">{t('recordReceived')}</option>
               </select>
             </div>
             <div className="form-group full-span">
-              <label>Description:</label>
+              <label>{t('description')}:</label>
               <input
                 type="text"
-                placeholder="What is this payment for?"
+                placeholder={t('paymentPurpose')}
                 value={paymentForm.description}
                 onChange={(e) => setPaymentForm((current) => ({ ...current, description: e.target.value }))}
                 required
@@ -403,18 +405,18 @@ const CaseDetails = () => {
             </div>
           </div>
           <button type="submit" className="button">
-            {paymentForm.requestedFromClient ? 'Request payment' : 'Save payment'}
+            {paymentForm.requestedFromClient ? t('requestPayment') : t('savePayment')}
           </button>
         </form>
         ) : (
-          <p className="empty-state">Open the fee form when you need to request a payment or record a received amount.</p>
+          <p className="empty-state">{t('feeFormHint')}</p>
         )}
         <div className="record-list top-space">
           {payments.map((payment) => (
             <article key={payment.id} className="record-item">
               <div>
-                <strong>{payment.description || payment.stage || 'Case fee'}</strong>
-                <p>{payment.stage || 'Case fee'} | {payment.date}</p>
+                <strong>{payment.description || payment.stage || t('caseFee')}</strong>
+                <p>{payment.stage || t('caseFee')} | {payment.date}</p>
               </div>
               <span className="badge">{formatCurrency(payment.amount)} | {payment.status || 'Paid'}</span>
             </article>

@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink } from '../utils/caseAccess';
+import { EyeIcon, MessageIcon, WhatsAppIcon } from './AppIcons';
 
 const Invite = () => {
+  const { t } = useTranslation();
   const [caseLinks, setCaseLinks] = useState([]);
 
   useEffect(() => {
@@ -18,26 +21,22 @@ const Invite = () => {
     loadCases();
   }, []);
 
-  const copyLink = async (token) => {
-    await navigator.clipboard.writeText(buildCaseAccessLink(token));
-    alert('Client case link copied.');
-  };
+  const buildShareMessage = (caseItem) =>
+    `iAdvocate has shared your case updates for ${caseItem.case_number}. Open your case link here: ${buildCaseAccessLink(
+      caseItem.client_access_token
+    )}`;
 
   return (
-    <PageShell
-      title="Client access links"
-      subtitle="Share a client-safe case view over WhatsApp, SMS, or email. The link remains active until the case is concluded or you disable it."
-      showBack
-    >
+    <PageShell title={t('clientAccessLinks')} subtitle={t('clientAccessLinksSubtitle')} showBack>
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Shareable case access</p>
-            <h2>{caseLinks.length} links</h2>
+            <p className="eyebrow">{t('shareableCaseAccess')}</p>
+            <h2>{caseLinks.length} {t('links')}</h2>
           </div>
         </div>
         {caseLinks.length === 0 ? (
-          <p className="empty-state">No cases available yet. Add a case first, then return here to copy its client link.</p>
+          <p className="empty-state">{t('clientLinksEmpty')}</p>
         ) : (
           <div className="record-list">
             {caseLinks.map((caseItem) => (
@@ -46,11 +45,35 @@ const Invite = () => {
                   <strong>{caseItem.case_number}</strong>
                   <p>{caseItem.client_name}</p>
                 </div>
-                <div className="case-link-panel">
-                  <input value={buildCaseAccessLink(caseItem.client_access_token)} readOnly />
-                  <button type="button" className="button" onClick={() => copyLink(caseItem.client_access_token)}>
-                    Copy client link
-                  </button>
+                <div className="inline-actions">
+                  <a
+                    className="icon-button"
+                    href={`https://wa.me/?text=${encodeURIComponent(buildShareMessage(caseItem))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t('shareOnWhatsApp')}
+                    title={t('shareOnWhatsApp')}
+                  >
+                    <WhatsAppIcon className="app-icon" />
+                  </a>
+                  <a
+                    className="icon-button"
+                    href={`sms:?&body=${encodeURIComponent(buildShareMessage(caseItem))}`}
+                    aria-label={t('shareBySms')}
+                    title={t('shareBySms')}
+                  >
+                    <MessageIcon className="app-icon" />
+                  </a>
+                  <a
+                    className="icon-button"
+                    href={buildCaseAccessLink(caseItem.client_access_token)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t('previewClientCaseView')}
+                    title={t('previewClientCaseView')}
+                  >
+                    <EyeIcon className="app-icon" />
+                  </a>
                 </div>
               </article>
             ))}

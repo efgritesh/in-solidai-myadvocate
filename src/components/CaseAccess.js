@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { useTranslation } from 'react-i18next';
 import { useDropzone } from 'react-dropzone';
 import { useParams } from 'react-router-dom';
 import { db, storage } from '../firebase';
@@ -18,6 +19,7 @@ const formatTimelineMonth = (value) => {
 };
 
 const CaseAccess = () => {
+  const { t } = useTranslation();
   const { token } = useParams();
   const [caseRecord, setCaseRecord] = useState(null);
   const [payments, setPayments] = useState([]);
@@ -59,9 +61,9 @@ const CaseAccess = () => {
       setStatus('ready');
     } catch (error) {
       setStatus('not_found');
-      setErrorMessage(error.message || 'Unable to load this case right now.');
+      setErrorMessage(error.message || t('invalidClientLink'));
     }
-  }, [token]);
+  }, [t, token]);
 
   useEffect(() => {
     loadCase();
@@ -148,8 +150,8 @@ const CaseAccess = () => {
     return (
       <div className="auth-screen">
         <div className="auth-card">
-          <h1>Loading case access</h1>
-          <p className="auth-subtitle">Opening the client view for this case link.</p>
+          <h1>{t('loadingCaseAccess')}</h1>
+          <p className="auth-subtitle">{t('openingClientView')}</p>
         </div>
       </div>
     );
@@ -159,9 +161,9 @@ const CaseAccess = () => {
     return (
       <div className="auth-screen">
         <div className="auth-card">
-          <h1>Link not found</h1>
+          <h1>{t('linkNotFound')}</h1>
           <p className="auth-subtitle">
-            {errorMessage || 'This client access link is invalid or no longer exists.'}
+            {errorMessage || t('invalidClientLink')}
           </p>
         </div>
       </div>
@@ -172,9 +174,9 @@ const CaseAccess = () => {
     return (
       <div className="auth-screen">
         <div className="auth-card">
-          <h1>Case access closed</h1>
+          <h1>{t('caseAccessClosed')}</h1>
           <p className="auth-subtitle">
-            This link is no longer active because the case has been concluded or client access was disabled.
+            {t('caseAccessClosedSubtitle')}
           </p>
         </div>
       </div>
@@ -193,10 +195,10 @@ const CaseAccess = () => {
                 alt="Supreme Court of India emblem"
               />
               <div>
-                <p className="eyebrow">Client case access</p>
+                <p className="eyebrow">{t('clientCaseAccess')}</p>
                 <h1>{caseRecord.case_number}</h1>
                 <p className="screen-subtitle">
-                  Shared by your advocate for reviewing progress, payments, documents, and updates relevant to your matter.
+                  {t('clientCaseAccessSubtitle')}
                 </p>
               </div>
             </div>
@@ -206,34 +208,34 @@ const CaseAccess = () => {
         <main className="stack">
           <section className="hero-card case-hero case-hero--public">
             <div>
-              <p className="eyebrow">Case summary</p>
+              <p className="eyebrow">{t('caseSummary')}</p>
               <h2>{caseRecord.client_name}</h2>
-              <p>{caseRecord.summary || 'No summary added yet.'}</p>
+              <p>{caseRecord.summary || t('noSummaryAdded')}</p>
             </div>
             <div className="case-hero__meta">
               <span className="badge">{caseRecord.status}</span>
-              <span className="case-hero__progress">{caseRecord.next_step || 'Next update will appear here.'}</span>
+              <span className="case-hero__progress">{caseRecord.next_step || t('nextStepSoon')}</span>
             </div>
           </section>
 
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Matter brief</p>
-                <h2>Important details</h2>
+                <p className="eyebrow">{t('matterBrief')}</p>
+                <h2>{t('importantDetails')}</h2>
               </div>
             </div>
             <div className="details-grid">
               <article className="record-item">
                 <div>
-                  <strong>Court</strong>
-                  <p>{caseRecord.court || 'Not added'}</p>
+                  <strong>{t('court')}</strong>
+                  <p>{caseRecord.court || t('notAdded')}</p>
                 </div>
               </article>
               <article className="record-item">
                 <div>
-                  <strong>Next step</strong>
-                  <p>{caseRecord.next_step || 'Your advocate will update the next step shortly.'}</p>
+                  <strong>{t('nextStepShort')}</strong>
+                  <p>{caseRecord.next_step || t('nextStepSoon')}</p>
                 </div>
               </article>
             </div>
@@ -242,8 +244,8 @@ const CaseAccess = () => {
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Progress tracker</p>
-                <h2>Case lifecycle</h2>
+                <p className="eyebrow">{t('progressTracker')}</p>
+                <h2>{t('caseLifecycle')}</h2>
               </div>
             </div>
             <div className="timeline">
@@ -262,10 +264,10 @@ const CaseAccess = () => {
                     </span>
                     <p>
                       {step.status === 'done'
-                        ? 'Completed and recorded by your advocate.'
+                        ? t('completedRecordedByAdvocate')
                         : step.status === 'in_progress'
-                          ? 'Currently active in your case.'
-                          : 'Upcoming in the case journey.'}
+                          ? t('currentlyActiveInCase')
+                          : t('upcomingCaseJourney')}
                     </p>
                   </div>
                 </article>
@@ -276,8 +278,8 @@ const CaseAccess = () => {
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Fees</p>
-                <h2>Requested and submitted payments</h2>
+                <p className="eyebrow">{t('fees')}</p>
+                <h2>{t('requestedSubmittedPayments')}</h2>
               </div>
               <PaymentsIcon className="app-icon section-icon" />
             </div>
@@ -286,7 +288,7 @@ const CaseAccess = () => {
                 <article key={payment.id} className="record-item">
                   <div>
                     <strong>{payment.description}</strong>
-                    <p>{payment.stage || 'Case fee'} | {payment.date}</p>
+                    <p>{payment.stage || t('caseFee')} | {payment.date}</p>
                   </div>
                   <span className="badge">{payment.status}</span>
                 </article>
@@ -295,7 +297,7 @@ const CaseAccess = () => {
             <form onSubmit={handlePaymentSubmit} className="top-space">
               <div className="form-grid">
                 <div className="form-group">
-                  <label>Amount paid:</label>
+                  <label>{t('amountPaid')}:</label>
                   <input
                     type="number"
                     value={paymentForm.amount}
@@ -304,24 +306,24 @@ const CaseAccess = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Payment note:</label>
+                  <label>{t('paymentNote')}:</label>
                   <input
                     type="text"
-                    placeholder="Reference, UPI note, or stage"
+                    placeholder={t('paymentNotePlaceholder')}
                     value={paymentForm.description}
                     onChange={(e) => setPaymentForm((current) => ({ ...current, description: e.target.value }))}
                   />
                 </div>
               </div>
-              <button type="submit" className="button">Submit payment update</button>
+              <button type="submit" className="button">{t('submitPaymentUpdate')}</button>
             </form>
           </section>
 
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Documents</p>
-                <h2>Shared files and uploads</h2>
+                <p className="eyebrow">{t('documents')}</p>
+                <h2>{t('sharedFilesUploads')}</h2>
               </div>
               <DocumentsIcon className="app-icon section-icon" />
             </div>
@@ -330,26 +332,26 @@ const CaseAccess = () => {
                 <article key={docItem.id} className="record-item">
                   <div>
                     <strong>{docItem.name}</strong>
-                    <p>{docItem.type} | {docItem.uploaded_by_role || 'shared'}</p>
+                    <p>{docItem.type} | {docItem.uploaded_by_role || t('shared')}</p>
                   </div>
                   <a className="inline-link" href={docItem.url} target="_blank" rel="noopener noreferrer">
-                    Open
+                    {t('open')}
                   </a>
                 </article>
               ))}
             </div>
             <div className="dropzone top-space" {...getRootProps()}>
               <input {...getInputProps()} />
-              <p>Tap to upload a document or image for this case</p>
-              <small>Your advocate will be able to review this upload inside the case records.</small>
+              <p>{t('tapToUploadCaseDoc')}</p>
+              <small>{t('clientUploadHint')}</small>
             </div>
           </section>
 
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Comments</p>
-                <h2>Updates and questions</h2>
+                <p className="eyebrow">{t('comments')}</p>
+                <h2>{t('updatesQuestions')}</h2>
               </div>
               <ShareIcon className="app-icon section-icon" />
             </div>
@@ -366,10 +368,10 @@ const CaseAccess = () => {
             </div>
             <form onSubmit={handleCommentSubmit} className="top-space">
               <div className="form-group">
-                <label>Add a message for your advocate:</label>
+                <label>{t('addMessageForAdvocate')}:</label>
                 <textarea value={comment} onChange={(e) => setComment(e.target.value)} required />
               </div>
-              <button type="submit" className="button">Send message</button>
+              <button type="submit" className="button">{t('sendMessage')}</button>
             </form>
           </section>
         </main>

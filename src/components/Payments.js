@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 
@@ -11,6 +12,7 @@ const formatCurrency = (value) =>
   }).format(value || 0);
 
 const Payments = () => {
+  const { t } = useTranslation();
   const [payments, setPayments] = useState([]);
   const [caseId, setCaseId] = useState('');
   const [amount, setAmount] = useState('');
@@ -34,11 +36,7 @@ const Payments = () => {
     const advocateId = auth.currentUser?.uid;
     if (!advocateId) return;
     const caseSnapshot = await getDocs(
-      query(
-        collection(db, 'cases'),
-        where('advocate_id', '==', advocateId),
-        where('case_number', '==', caseId)
-      )
+      query(collection(db, 'cases'), where('advocate_id', '==', advocateId), where('case_number', '==', caseId))
     );
     const caseRecord = caseSnapshot.docs[0]?.data();
 
@@ -62,88 +60,62 @@ const Payments = () => {
   };
 
   return (
-    <PageShell
-      title="Payments"
-      subtitle="Record fees fast and keep collection history visible during client follow-ups."
-      showBack
-    >
+    <PageShell title={t('payments')} subtitle={t('paymentsSubtitle')} showBack>
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Fee entry</p>
-            <h2>Add a payment</h2>
+            <p className="eyebrow">{t('feeEntry')}</p>
+            <h2>{t('addPayment')}</h2>
           </div>
         </div>
         <form onSubmit={handleAddPayment}>
           <div className="form-grid">
             <div className="form-group">
-              <label>Case ID:</label>
-              <input
-                type="text"
-                placeholder="Linked case number"
-                value={caseId}
-                onChange={(e) => setCaseId(e.target.value)}
-                required
-              />
+              <label>{t('caseId')}:</label>
+              <input type="text" placeholder={t('linkedCaseNumber')} value={caseId} onChange={(e) => setCaseId(e.target.value)} required />
             </div>
             <div className="form-group">
-              <label>Amount:</label>
-              <input
-                type="number"
-                placeholder="Amount in INR"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
+              <label>{t('amount')}:</label>
+              <input type="number" placeholder={t('amountInInr')} value={amount} onChange={(e) => setAmount(e.target.value)} required />
             </div>
             <div className="form-group">
-              <label>Date:</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
+              <label>{t('date')}:</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
             </div>
             <div className="form-group">
-              <label>Description:</label>
-              <input
-                type="text"
-                placeholder="What was the payment for?"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+              <label>{t('description')}:</label>
+              <input type="text" placeholder={t('paymentPurpose')} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Client action:</label>
+              <label>{t('clientAction')}:</label>
               <select value={requestedFromClient ? 'request' : 'recorded'} onChange={(e) => setRequestedFromClient(e.target.value === 'request')}>
-                <option value="request">Request client payment</option>
-                <option value="recorded">Record received payment</option>
+                <option value="request">{t('requestClientPayment')}</option>
+                <option value="recorded">{t('recordReceivedPayment')}</option>
               </select>
             </div>
           </div>
-          <button type="submit" className="button">Add Payment</button>
+          <button type="submit" className="button">{t('addPayment')}</button>
         </form>
       </section>
 
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Collections</p>
-            <h2>{payments.length} entries</h2>
+            <p className="eyebrow">{t('collections')}</p>
+            <h2>{payments.length} {t('entries')}</h2>
           </div>
         </div>
         {payments.length === 0 ? (
-          <p className="empty-state">No payments recorded yet. Add the latest received amount to start tracking.</p>
+          <p className="empty-state">{t('paymentsEmpty')}</p>
         ) : (
           <div className="record-list">
             {payments.map((payment) => (
               <article key={payment.id} className="record-item">
                 <div>
                   <strong>{payment.case_id}</strong>
-                  <p>{payment.description || 'No description added'}</p>
+                  <p>{payment.description || t('noDescriptionAdded')}</p>
                 </div>
-                <span className="badge">{formatCurrency(payment.amount)} • {payment.status || 'Paid'}</span>
+                <span className="badge">{formatCurrency(payment.amount)} | {payment.status || t('paid')}</span>
               </article>
             ))}
           </div>

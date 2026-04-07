@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 
 const Hearings = () => {
+  const { t } = useTranslation();
   const [hearings, setHearings] = useState([]);
   const [caseId, setCaseId] = useState('');
   const [date, setDate] = useState('');
@@ -39,69 +41,60 @@ const Hearings = () => {
   };
 
   return (
-    <PageShell
-      title="Hearings"
-      subtitle="See upcoming court dates clearly and update them without scrolling around."
-      showBack
-    >
+    <PageShell title={t('hearings')} subtitle={t('hearingsSubtitle')} showBack>
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Schedule</p>
-            <h2>Add a hearing</h2>
+            <p className="eyebrow">{t('schedule')}</p>
+            <h2>{t('addHearing')}</h2>
           </div>
         </div>
         <form onSubmit={handleAddHearing}>
           <div className="form-grid">
             <div className="form-group">
-              <label>Case ID:</label>
+              <label>{t('caseId')}:</label>
               <input
                 type="text"
-                placeholder="Linked case number"
+                placeholder={t('linkedCaseNumber')}
                 value={caseId}
                 onChange={(e) => setCaseId(e.target.value)}
                 required
               />
             </div>
             <div className="form-group">
-              <label>Date:</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
+              <label>{t('date')}:</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
             </div>
             <div className="form-group">
-              <label>Description:</label>
+              <label>{t('description')}:</label>
               <input
                 type="text"
-                placeholder="Purpose of hearing"
+                placeholder={t('purposeOfHearing')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
           </div>
-          <button type="submit" className="button">Add Hearing</button>
+          <button type="submit" className="button">{t('addHearing')}</button>
         </form>
       </section>
 
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Calendar</p>
-            <h2>{hearings.length} hearings</h2>
+            <p className="eyebrow">{t('calendar')}</p>
+            <h2>{hearings.length} {t('hearings').toLowerCase()}</h2>
           </div>
         </div>
         {hearings.length === 0 ? (
-          <p className="empty-state">No hearings added yet. Start with the next listed matter.</p>
+          <p className="empty-state">{t('hearingsEmpty')}</p>
         ) : (
           <div className="record-list">
             {hearings.map((hearing) => (
               <article key={hearing.id} className="record-item">
                 <div>
                   <strong>{hearing.case_id}</strong>
-                  <p>{hearing.description || 'No description added'}</p>
+                  <p>{hearing.description || t('noDescriptionAdded')}</p>
                 </div>
                 <span className="badge">{hearing.date}</span>
               </article>

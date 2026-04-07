@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
@@ -59,6 +60,7 @@ const formatTimelineMonth = (value) => {
 };
 
 const Cases = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [cases, setCases] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -160,21 +162,21 @@ const Cases = () => {
 
   return (
     <PageShell
-      title="Cases"
-      subtitle="Create, review, and share matters with clearer lifecycle planning for both advocate and client views."
+      title={t('cases')}
+      subtitle={t('casesSubtitle')}
       showBack
     >
       <section className={`panel${showForm ? '' : ' panel--collapsed'}`}>
         <div className="section-heading">
           <div>
-            <p className="eyebrow">New matter</p>
-            <h2>Add a case</h2>
+            <p className="eyebrow">{t('newMatter')}</p>
+            <h2>{t('addCase')}</h2>
           </div>
           <button
             type="button"
             className="icon-button icon-button--accent"
-            aria-label={showForm ? 'Close add case form' : 'Open add case form'}
-            title={showForm ? 'Close add case form' : 'Open add case form'}
+            aria-label={showForm ? t('closeAddCaseForm') : t('openAddCaseForm')}
+            title={showForm ? t('closeAddCaseForm') : t('openAddCaseForm')}
             onClick={() => setShowForm((current) => !current)}
           >
             {showForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
@@ -184,7 +186,7 @@ const Cases = () => {
           <form onSubmit={handleAddCase}>
           <div className="form-grid">
             <div className="form-group">
-              <label>Case Number:</label>
+              <label>{t('caseNumber')}:</label>
               <input
                 type="text"
                 placeholder="e.g. DEL-CIV-204/2026"
@@ -194,7 +196,7 @@ const Cases = () => {
               />
             </div>
             <div className="form-group">
-              <label>Client Name:</label>
+              <label>{t('clientName')}:</label>
               <input
                 type="text"
                 placeholder="Client full name"
@@ -204,7 +206,7 @@ const Cases = () => {
               />
             </div>
             <div className="form-group">
-              <label>Client Email:</label>
+              <label>{t('clientEmail')}:</label>
               <input
                 type="email"
                 placeholder="For WhatsApp or email follow-up"
@@ -213,7 +215,7 @@ const Cases = () => {
               />
             </div>
             <div className="form-group">
-              <label>Client Phone:</label>
+              <label>{t('clientPhone')}:</label>
               <input
                 type="text"
                 placeholder="WhatsApp-enabled number"
@@ -222,7 +224,7 @@ const Cases = () => {
               />
             </div>
             <div className="form-group full-span">
-              <label>Case Summary:</label>
+              <label>{t('caseSummary')}:</label>
               <textarea
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
@@ -230,7 +232,7 @@ const Cases = () => {
               />
             </div>
             <div className="form-group full-span">
-              <label>Next Step:</label>
+              <label>{t('nextStep')}:</label>
               <input
                 type="text"
                 value={nextStep}
@@ -239,7 +241,7 @@ const Cases = () => {
               />
             </div>
             <div className="form-group">
-              <label>Status:</label>
+              <label>{t('statusLabel')}:</label>
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="Open">Open</option>
                 <option value="Pending">Pending</option>
@@ -247,7 +249,7 @@ const Cases = () => {
               </select>
             </div>
             <div className="form-group">
-              <label>Step preset:</label>
+              <label>{t('stepPreset')}:</label>
               <select value={selectedLifecyclePreset} onChange={(e) => setSelectedLifecyclePreset(e.target.value)}>
                 {lifecyclePresets.map((preset) => (
                   <option key={preset} value={preset}>{preset}</option>
@@ -255,7 +257,7 @@ const Cases = () => {
               </select>
             </div>
             <div className="form-group">
-              <label>Tentative month:</label>
+              <label>{t('tentativeMonth')}:</label>
               <input
                 type="month"
                 value={selectedLifecycleEta}
@@ -263,7 +265,7 @@ const Cases = () => {
               />
             </div>
             <div className="form-group full-span">
-              <label>Lifecycle planning:</label>
+              <label>{t('lifecyclePlanning')}:</label>
               <div className="planning-stack">
                 {lifecycleSteps.map((step, index) => (
                   <div key={`draft-${index + 1}`} className="planning-row">
@@ -271,7 +273,7 @@ const Cases = () => {
                       type="text"
                       value={step.title}
                       onChange={(e) => updateLifecycleDraft(index, 'title', e.target.value)}
-                      placeholder="Step title"
+                      placeholder={t('stepTitle')}
                       required
                     />
                     <input
@@ -289,14 +291,14 @@ const Cases = () => {
                 className="button secondary"
                 onClick={addLifecycleStep}
               >
-                Add lifecycle step
+                {t('addLifecycleStep')}
               </button>
             </div>
           </div>
-          <button type="submit" className="button">Add Case</button>
+          <button type="submit" className="button">{t('addCaseButton')}</button>
           </form>
         ) : (
-          <p className="empty-state">Tap the plus icon to create a new matter with planned milestones and a client access link.</p>
+          <p className="empty-state">{t('addMatterHint')}</p>
         )}
       </section>
 
@@ -304,12 +306,12 @@ const Cases = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Current matters</p>
-            <h2>{cases.length} case board</h2>
+            <p className="eyebrow">{t('currentMatters')}</p>
+            <h2>{cases.length} {t('caseBoard')}</h2>
           </div>
         </div>
         {cases.length === 0 ? (
-          <p className="empty-state">No cases yet. Add your first matter to start tracking progress.</p>
+          <p className="empty-state">{t('noCasesYet')}</p>
         ) : (
           <div className="matter-board">
             {caseSummaries.map((caseItem) => (
@@ -322,12 +324,12 @@ const Cases = () => {
                   </div>
                 </div>
                 <div className="matter-row__meta">
-                  <span>{caseItem.next_step || 'No next step added yet.'}</span>
-                  <span>{caseItem.activeMilestone?.title || 'No lifecycle planned'}{caseItem.activeMilestone?.eta ? ` | ${formatTimelineMonth(caseItem.activeMilestone.eta)}` : ''}</span>
+                  <span>{caseItem.next_step || t('noNextStepYet')}</span>
+                  <span>{caseItem.activeMilestone?.title || t('noLifecyclePlanned')}{caseItem.activeMilestone?.eta ? ` | ${formatTimelineMonth(caseItem.activeMilestone.eta)}` : ''}</span>
                 </div>
                 <div className="progress-strip matter-row__progress">
-                  <span>{caseItem.completedSteps}/{caseItem.totalSteps} milestones complete</span>
-                  <span>{caseItem.client_access_enabled ? 'Client link live' : 'Client link paused'}</span>
+                  <span>{caseItem.completedSteps}/{caseItem.totalSteps} {t('milestonesComplete')}</span>
+                  <span>{caseItem.client_access_enabled ? t('clientLinkLive') : t('clientLinkPaused')}</span>
                 </div>
                 <div className="matter-row__actions">
                   <a
@@ -335,16 +337,16 @@ const Cases = () => {
                     href={buildWhatsAppShareLink(caseItem)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="Share on WhatsApp"
-                    title="Share on WhatsApp"
+                    aria-label={t('shareOnWhatsApp')}
+                    title={t('shareOnWhatsApp')}
                   >
                     <WhatsAppIcon className="app-icon" />
                   </a>
                   <a
                     className="icon-button"
                     href={buildSmsShareLink(caseItem)}
-                    aria-label="Share by SMS"
-                    title="Share by SMS"
+                    aria-label={t('shareBySms')}
+                    title={t('shareBySms')}
                   >
                     <MessageIcon className="app-icon" />
                   </a>
@@ -353,16 +355,16 @@ const Cases = () => {
                     href={buildCaseAccessLink(caseItem.client_access_token)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="Preview client case view"
-                    title="Preview client case view"
+                    aria-label={t('previewClientCaseView')}
+                    title={t('previewClientCaseView')}
                   >
                     <EyeIcon className="app-icon" />
                   </a>
                   <button
                     type="button"
                     className="icon-button icon-button--accent"
-                    aria-label="Open case details"
-                    title="Open case details"
+                    aria-label={t('openCaseDetails')}
+                    title={t('openCaseDetails')}
                     onClick={() => navigate(`/cases/${caseItem.id}`)}
                   >
                     <ArrowRightIcon className="app-icon" />

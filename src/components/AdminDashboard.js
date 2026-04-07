@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { seedAdminData } from '../utils/seedData';
 
 const AdminDashboard = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     admins: 0,
@@ -52,39 +54,39 @@ const AdminDashboard = () => {
 
   return (
     <PageShell
-      title="Admin dashboard"
-      subtitle="A lightweight IT admin view for account health, role distribution, and platform checks."
+      title={t('adminDashboard')}
+      subtitle={t('adminDashboardSubtitle')}
       showNav={false}
       actions={(
         <button className="button danger" onClick={handleLogout}>
-          Logout
+          {t('logout')}
         </button>
       )}
     >
       <section className="stats-grid">
         <article className="stat-card">
           <strong>{stats.admins}</strong>
-          <span>Admins</span>
+          <span>{t('admins')}</span>
         </article>
         <article className="stat-card">
           <strong>{stats.advocates}</strong>
-          <span>Advocates</span>
+          <span>{t('advocates')}</span>
         </article>
         <article className="stat-card">
           <strong>{stats.clients}</strong>
-          <span>Clients</span>
+          <span>{t('clients')}</span>
         </article>
         <article className="stat-card">
           <strong>{stats.cases}</strong>
-          <span>Cases</span>
+          <span>{t('cases')}</span>
         </article>
       </section>
 
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Operations</p>
-            <h2>System alerts</h2>
+            <p className="eyebrow">{t('operations')}</p>
+            <h2>{t('systemAlerts')}</h2>
           </div>
         </div>
         <div className="record-list">
@@ -103,24 +105,24 @@ const AdminDashboard = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Platform snapshot</p>
-            <h2>IT admin controls</h2>
+            <p className="eyebrow">{t('platformSnapshot')}</p>
+            <h2>{t('itAdminControls')}</h2>
           </div>
         </div>
         <div className="record-list">
           <article className="record-item">
             <div>
-              <strong>Authentication</strong>
-              <p>Email/password and Google sign-in are enabled in the app flow for testing.</p>
+              <strong>{t('authentication')}</strong>
+              <p>{t('authenticationSummary')}</p>
             </div>
-            <span className="badge">Active</span>
+            <span className="badge">{t('active')}</span>
           </article>
           <article className="record-item">
             <div>
-              <strong>Payments tracked</strong>
-              <p>{stats.payments} payment records are available across advocate and client views.</p>
+              <strong>{t('paymentsTracked')}</strong>
+              <p>{t('paymentsTrackedSummary', { count: stats.payments })}</p>
             </div>
-            <span className="badge">Live</span>
+            <span className="badge">{t('live')}</span>
           </article>
         </div>
       </section>
