@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from './BottomNav';
+import { ArrowLeftIcon } from './AppIcons';
 
 const PageShell = ({ title, subtitle, actions, children, showBack = false, navItems, showNav = true }) => {
   const navigate = useNavigate();
@@ -12,12 +13,12 @@ const PageShell = ({ title, subtitle, actions, children, showBack = false, navIt
         <header className="screen-header">
           <div className="screen-header__content">
             {showBack ? (
-              <button type="button" className="ghost-button" onClick={() => navigate(-1)}>
-                Back
+              <button type="button" className="icon-button ghost-button ghost-button--icon" onClick={() => navigate(-1)}>
+                <ArrowLeftIcon className="app-icon" />
               </button>
             ) : null}
             <div>
-              <p className="eyebrow">My Advocate</p>
+              <p className="eyebrow">Advocate desk</p>
               <h1>{title}</h1>
               {subtitle ? <p className="screen-subtitle">{subtitle}</p> : null}
             </div>

@@ -4,6 +4,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useDropzone } from 'react-dropzone';
 import { useParams } from 'react-router-dom';
 import { db, storage } from '../firebase';
+import { DocumentsIcon, PaymentsIcon, ShareIcon } from './AppIcons';
 
 const CaseAccess = () => {
   const { token } = useParams();
@@ -58,6 +59,16 @@ const CaseAccess = () => {
   const requestedPayments = useMemo(
     () => payments.filter((payment) => payment.requested_from_client || payment.status === 'Requested' || payment.status === 'Paid'),
     [payments]
+  );
+
+  const timelineSteps = useMemo(
+    () =>
+      (caseRecord?.lifecycle || []).map((step, index, source) => ({
+        ...step,
+        index,
+        isLast: index === source.length - 1,
+      })),
+    [caseRecord]
   );
 
   const onDrop = async (acceptedFiles) => {
@@ -164,36 +175,48 @@ const CaseAccess = () => {
       <div className="page-frame page-frame--public">
         <header className="screen-header">
           <div className="screen-header__content">
-            <div>
-              <p className="eyebrow">Client case access</p>
-              <h1>{caseRecord.case_number}</h1>
-              <p className="screen-subtitle">
-                Shared by your advocate for reviewing progress, payments, documents, and updates relevant to your matter.
-              </p>
+            <div className="public-hero">
+              <img
+                className="public-hero__logo"
+                src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
+                alt="Supreme Court of India emblem"
+              />
+              <div>
+                <p className="eyebrow">Client case access</p>
+                <h1>{caseRecord.case_number}</h1>
+                <p className="screen-subtitle">
+                  Shared by your advocate for reviewing progress, payments, documents, and updates relevant to your matter.
+                </p>
+              </div>
             </div>
           </div>
         </header>
 
         <main className="stack">
+          <section className="hero-card case-hero case-hero--public">
+            <div>
+              <p className="eyebrow">Case summary</p>
+              <h2>{caseRecord.client_name}</h2>
+              <p>{caseRecord.summary || 'No summary added yet.'}</p>
+            </div>
+            <div className="case-hero__meta">
+              <span className="badge">{caseRecord.status}</span>
+              <span className="case-hero__progress">{caseRecord.next_step || 'Next update will appear here.'}</span>
+            </div>
+          </section>
+
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Case summary</p>
-                <h2>{caseRecord.client_name}</h2>
+                <p className="eyebrow">Matter brief</p>
+                <h2>Important details</h2>
               </div>
-              <span className="badge">{caseRecord.status}</span>
             </div>
-            <div className="record-list">
+            <div className="details-grid">
               <article className="record-item">
                 <div>
                   <strong>Court</strong>
                   <p>{caseRecord.court || 'Not added'}</p>
-                </div>
-              </article>
-              <article className="record-item">
-                <div>
-                  <strong>Summary</strong>
-                  <p>{caseRecord.summary || 'No summary added yet.'}</p>
                 </div>
               </article>
               <article className="record-item">
@@ -212,11 +235,24 @@ const CaseAccess = () => {
                 <h2>Case lifecycle</h2>
               </div>
             </div>
-            <div className="lifecycle-list">
-              {(caseRecord.lifecycle || []).map((step) => (
-                <span key={step.id} className={`lifecycle-chip lifecycle-chip--${step.status}`}>
-                  {step.title}
-                </span>
+            <div className="timeline">
+              {timelineSteps.map((step, index) => (
+                <article key={step.id} className={`timeline-step timeline-step--${step.status}`}>
+                  <div className="timeline-step__rail">
+                    <span className="timeline-step__dot">{index + 1}</span>
+                    {!step.isLast ? <span className="timeline-step__line" /> : null}
+                  </div>
+                  <div className="timeline-step__body">
+                    <strong>{step.title}</strong>
+                    <p>
+                      {step.status === 'done'
+                        ? 'Completed and recorded by your advocate.'
+                        : step.status === 'in_progress'
+                          ? 'Currently active in your case.'
+                          : 'Upcoming in the case journey.'}
+                    </p>
+                  </div>
+                </article>
               ))}
             </div>
           </section>
@@ -227,13 +263,14 @@ const CaseAccess = () => {
                 <p className="eyebrow">Fees</p>
                 <h2>Requested and submitted payments</h2>
               </div>
+              <PaymentsIcon className="app-icon section-icon" />
             </div>
             <div className="record-list">
               {requestedPayments.map((payment) => (
                 <article key={payment.id} className="record-item">
                   <div>
                     <strong>{payment.description}</strong>
-                    <p>{payment.stage || 'Case fee'} • {payment.date}</p>
+                    <p>{payment.stage || 'Case fee'} | {payment.date}</p>
                   </div>
                   <span className="badge">{payment.status}</span>
                 </article>
@@ -270,13 +307,14 @@ const CaseAccess = () => {
                 <p className="eyebrow">Documents</p>
                 <h2>Shared files and uploads</h2>
               </div>
+              <DocumentsIcon className="app-icon section-icon" />
             </div>
             <div className="record-list">
               {documents.map((docItem) => (
                 <article key={docItem.id} className="record-item">
                   <div>
                     <strong>{docItem.name}</strong>
-                    <p>{docItem.type} • {docItem.uploaded_by_role || 'shared'}</p>
+                    <p>{docItem.type} | {docItem.uploaded_by_role || 'shared'}</p>
                   </div>
                   <a className="inline-link" href={docItem.url} target="_blank" rel="noopener noreferrer">
                     Open
@@ -297,6 +335,7 @@ const CaseAccess = () => {
                 <p className="eyebrow">Comments</p>
                 <h2>Updates and questions</h2>
               </div>
+              <ShareIcon className="app-icon section-icon" />
             </div>
             <div className="record-list">
               {comments.map((commentItem) => (

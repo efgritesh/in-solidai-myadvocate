@@ -8,6 +8,7 @@ import ProfileSetup from './components/ProfileSetup';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
 import Cases from './components/Cases';
+import CaseDetails from './components/CaseDetails';
 import Clients from './components/Clients';
 import Hearings from './components/Hearings';
 import Payments from './components/Payments';
@@ -27,6 +28,7 @@ function App() {
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/case-access/:token" element={<CaseAccess />} />
         <Route path="/cases" element={<Cases />} />
+        <Route path="/cases/:caseId" element={<CaseDetails />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/hearings" element={<Hearings />} />
         <Route path="/payments" element={<Payments />} />
