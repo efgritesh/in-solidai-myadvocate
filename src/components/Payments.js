@@ -3,6 +3,7 @@ import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
+import LoadingState from './LoadingState';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -19,12 +20,20 @@ const Payments = () => {
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
   const [requestedFromClient, setRequestedFromClient] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const fetchPayments = async () => {
     const advocateId = auth.currentUser?.uid;
-    if (!advocateId) return;
-    const querySnapshot = await getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId)));
-    setPayments(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    if (!advocateId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const querySnapshot = await getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId)));
+      setPayments(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -61,6 +70,8 @@ const Payments = () => {
 
   return (
     <PageShell title={t('payments')} subtitle={t('paymentsSubtitle')} showBack>
+      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
+      <>
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -121,6 +132,8 @@ const Payments = () => {
           </div>
         )}
       </section>
+      </>
+      )}
     </PageShell>
   );
 };

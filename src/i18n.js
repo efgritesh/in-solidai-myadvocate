@@ -254,6 +254,7 @@ const resources = {
       consentBody:
         'By using iAdvocate, advocates are responsible for obtaining the client consent needed to store records, share case updates, request payments, and exchange documents through the app. Clients using a shared case link consent to viewing case information relevant to them and to submitting documents, comments, or payment updates through that link.',
       supportEmailLabel: 'Support:',
+      loadingWorkspace: 'Loading your workspace.',
       copyrightLine: '© 2026 iAdvocate by SolidAI. All rights reserved.',
     },
   },

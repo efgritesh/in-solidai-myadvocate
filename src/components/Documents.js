@@ -5,18 +5,27 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from '../firebase';
 import PageShell from './PageShell';
+import LoadingState from './LoadingState';
 
 const Documents = () => {
   const { t } = useTranslation();
   const [documents, setDocuments] = useState([]);
   const [caseId, setCaseId] = useState('');
   const [type, setType] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const fetchDocuments = async () => {
     const advocateId = auth.currentUser?.uid;
-    if (!advocateId) return;
-    const querySnapshot = await getDocs(query(collection(db, 'documents'), where('advocate_id', '==', advocateId)));
-    setDocuments(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    if (!advocateId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const querySnapshot = await getDocs(query(collection(db, 'documents'), where('advocate_id', '==', advocateId)));
+      setDocuments(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -58,6 +67,8 @@ const Documents = () => {
 
   return (
     <PageShell title={t('documents')} subtitle={t('documentsSubtitle')} showBack>
+      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
+      <>
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -109,6 +120,8 @@ const Documents = () => {
           </div>
         )}
       </section>
+      </>
+      )}
     </PageShell>
   );
 };

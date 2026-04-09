@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getRouteForRole, loginWithEmail, loginWithGoogle } from '../utils/auth';
+import { saveCurrentUserLanguage, setStoredLanguage } from '../utils/language';
 import LanguageSelector from './LanguageSelector';
 
 const Login = () => {
@@ -11,10 +12,13 @@ const Login = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const completeLogin = (profile) => {
-    const nextLanguage = profile.preferredLanguage || 'en';
-    i18n.changeLanguage(nextLanguage);
-    localStorage.setItem('selectedLanguage', nextLanguage);
+  const completeLogin = async (profile) => {
+    const nextLanguage = i18n.language || 'en';
+    await i18n.changeLanguage(nextLanguage);
+    setStoredLanguage(nextLanguage);
+    if (profile.preferredLanguage !== nextLanguage) {
+      await saveCurrentUserLanguage(nextLanguage);
+    }
     navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
   };
 
@@ -24,7 +28,7 @@ const Login = () => {
 
     try {
       const { profile } = await loginWithEmail(email, password);
-      completeLogin(profile);
+      await completeLogin(profile);
     } catch (err) {
       setError(err.message);
     }
@@ -35,7 +39,7 @@ const Login = () => {
 
     try {
       const { profile } = await loginWithGoogle('advocate');
-      completeLogin(profile);
+      await completeLogin(profile);
     } catch (err) {
       setError(err.message);
     }

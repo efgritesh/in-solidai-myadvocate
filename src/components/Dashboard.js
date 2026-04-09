@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { seedAdvocateData } from '../utils/seedData';
+import LoadingState from './LoadingState';
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -16,44 +17,52 @@ const Dashboard = () => {
     hearings: 0,
     payments: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadDashboard = async () => {
       const advocateId = auth.currentUser?.uid;
-      if (!advocateId) return;
+      if (!advocateId) {
+        setLoading(false);
+        return;
+      }
 
-      await seedAdvocateData(advocateId);
+      try {
+        await seedAdvocateData(advocateId);
 
-      const [hearingsSnap, casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'hearings'), where('advocate_id', '==', advocateId))),
-        getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
-        getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
-        getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
-      ]);
+        const [hearingsSnap, casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
+          getDocs(query(collection(db, 'hearings'), where('advocate_id', '==', advocateId))),
+          getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
+          getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
+          getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
+        ]);
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      const nextSevenDays = new Date(today);
-      nextSevenDays.setDate(today.getDate() + 7);
+        const nextSevenDays = new Date(today);
+        nextSevenDays.setDate(today.getDate() + 7);
 
-      const hearingRecords = hearingsSnap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
+        const hearingRecords = hearingsSnap.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-      const upcoming = hearingRecords.filter((hearing) => {
-        const hearingDate = new Date(hearing.date);
-        return hearingDate >= today && hearingDate <= nextSevenDays;
-      });
+        const upcoming = hearingRecords.filter((hearing) => {
+          const hearingDate = new Date(hearing.date);
+          return hearingDate >= today && hearingDate <= nextSevenDays;
+        });
 
-      setHearings(upcoming.slice(0, 4));
-      setReminders(upcoming.slice(0, 2));
-      setStats({
-        hearings: hearingRecords.length,
-        cases: casesSnap.size,
-        clients: clientsSnap.size,
-        payments: paymentsSnap.size,
-      });
+        setHearings(upcoming.slice(0, 4));
+        setReminders(upcoming.slice(0, 2));
+        setStats({
+          hearings: hearingRecords.length,
+          cases: casesSnap.size,
+          clients: clientsSnap.size,
+          payments: paymentsSnap.size,
+        });
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadDashboard();
@@ -64,6 +73,8 @@ const Dashboard = () => {
       title={t('practiceDashboard')}
       subtitle={t('practiceDashboardSubtitle')}
     >
+      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
+      <>
       <section className="hero-card">
         <div>
           <p className="eyebrow">{t('todayAtAGlance')}</p>
@@ -79,15 +90,15 @@ const Dashboard = () => {
         </article>
         <article className="stat-card">
           <strong>{stats.clients}</strong>
-          <span>Clients</span>
+          <span>{t('clients')}</span>
         </article>
         <article className="stat-card">
           <strong>{stats.hearings}</strong>
-          <span>Hearings</span>
+          <span>{t('hearings')}</span>
         </article>
         <article className="stat-card">
           <strong>{stats.payments}</strong>
-          <span>Payments</span>
+          <span>{t('payments')}</span>
         </article>
       </section>
 
@@ -153,6 +164,8 @@ const Dashboard = () => {
           <span>{t('shareSecureClientLinks')}</span>
         </Link>
       </section>
+      </>
+      )}
     </PageShell>
   );
 };

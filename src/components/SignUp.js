@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getRouteForRole, loginWithGoogle, signupWithEmail } from '../utils/auth';
+import { saveCurrentUserLanguage, setStoredLanguage } from '../utils/language';
 import LanguageSelector from './LanguageSelector';
 
 const SignUp = () => {
@@ -31,9 +32,10 @@ const SignUp = () => {
 
     try {
       const { profile } = await signupWithEmail(form);
-      const nextLanguage = profile.preferredLanguage || 'en';
-      i18n.changeLanguage(nextLanguage);
-      localStorage.setItem('selectedLanguage', nextLanguage);
+      const nextLanguage = i18n.language || 'en';
+      await i18n.changeLanguage(nextLanguage);
+      setStoredLanguage(nextLanguage);
+      await saveCurrentUserLanguage(nextLanguage);
       navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
     } catch (err) {
       setError(err.message);
@@ -45,9 +47,10 @@ const SignUp = () => {
 
     try {
       const { profile } = await loginWithGoogle(form.role);
-      const nextLanguage = profile.preferredLanguage || 'en';
-      i18n.changeLanguage(nextLanguage);
-      localStorage.setItem('selectedLanguage', nextLanguage);
+      const nextLanguage = i18n.language || 'en';
+      await i18n.changeLanguage(nextLanguage);
+      setStoredLanguage(nextLanguage);
+      await saveCurrentUserLanguage(nextLanguage);
       navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
     } catch (err) {
       setError(err.message);

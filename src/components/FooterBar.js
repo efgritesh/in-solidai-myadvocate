@@ -10,7 +10,6 @@ const FooterBar = () => {
       <div className="app-footer__links">
         <Link to="/about">{t('about')}</Link>
         <Link to="/invite">{t('clientLinks')}</Link>
-        <a href="mailto:ritesh.chaturvedi@solidai.in">ritesh.chaturvedi@solidai.in</a>
       </div>
       <p className="app-footer__copy">{t('copyrightLine')}</p>
     </footer>

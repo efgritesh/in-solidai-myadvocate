@@ -17,6 +17,7 @@ import Documents from './components/Documents';
 import Invite from './components/Invite';
 import CaseAccess from './components/CaseAccess';
 import About from './components/About';
+import { ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards';
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -29,20 +30,20 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<LanguageSelection />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/profile-setup" element={<ProfileSetup />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/" element={<PublicOnlyRoute><LanguageSelection /></PublicOnlyRoute>} />
+        <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+        <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
+        <Route path="/profile-setup" element={<ProtectedRoute allowIncomplete><ProfileSetup /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['advocate']}><Dashboard /></ProtectedRoute>} />
+        <Route path="/admin-dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="/case-access/:token" element={<CaseAccess />} />
-        <Route path="/cases" element={<Cases />} />
-        <Route path="/cases/:caseId" element={<CaseDetails />} />
-        <Route path="/clients" element={<Clients />} />
-        <Route path="/hearings" element={<Hearings />} />
-        <Route path="/payments" element={<Payments />} />
-        <Route path="/documents" element={<Documents />} />
-        <Route path="/invite" element={<Invite />} />
+        <Route path="/cases" element={<ProtectedRoute allowedRoles={['advocate']}><Cases /></ProtectedRoute>} />
+        <Route path="/cases/:caseId" element={<ProtectedRoute allowedRoles={['advocate']}><CaseDetails /></ProtectedRoute>} />
+        <Route path="/clients" element={<ProtectedRoute allowedRoles={['advocate']}><Clients /></ProtectedRoute>} />
+        <Route path="/hearings" element={<ProtectedRoute allowedRoles={['advocate']}><Hearings /></ProtectedRoute>} />
+        <Route path="/payments" element={<ProtectedRoute allowedRoles={['advocate']}><Payments /></ProtectedRoute>} />
+        <Route path="/documents" element={<ProtectedRoute allowedRoles={['advocate']}><Documents /></ProtectedRoute>} />
+        <Route path="/invite" element={<ProtectedRoute allowedRoles={['advocate']}><Invite /></ProtectedRoute>} />
         <Route path="/about" element={<About />} />
       </Routes>
     </Router>

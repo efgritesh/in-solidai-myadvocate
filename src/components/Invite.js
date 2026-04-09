@@ -5,17 +5,26 @@ import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink } from '../utils/caseAccess';
 import { EyeIcon, MessageIcon, WhatsAppIcon } from './AppIcons';
+import LoadingState from './LoadingState';
 
 const Invite = () => {
   const { t } = useTranslation();
   const [caseLinks, setCaseLinks] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadCases = async () => {
       const advocateId = auth.currentUser?.uid;
-      if (!advocateId) return;
-      const snapshot = await getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId)));
-      setCaseLinks(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      if (!advocateId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const snapshot = await getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId)));
+        setCaseLinks(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadCases();
@@ -28,6 +37,8 @@ const Invite = () => {
 
   return (
     <PageShell title={t('clientAccessLinks')} subtitle={t('clientAccessLinksSubtitle')} showBack>
+      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
+      <>
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -80,6 +91,8 @@ const Invite = () => {
           </div>
         )}
       </section>
+      </>
+      )}
     </PageShell>
   );
 };

@@ -3,6 +3,7 @@ import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
+import LoadingState from './LoadingState';
 
 const Hearings = () => {
   const { t } = useTranslation();
@@ -10,12 +11,20 @@ const Hearings = () => {
   const [caseId, setCaseId] = useState('');
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const fetchHearings = async () => {
     const advocateId = auth.currentUser?.uid;
-    if (!advocateId) return;
-    const querySnapshot = await getDocs(query(collection(db, 'hearings'), where('advocate_id', '==', advocateId)));
-    setHearings(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    if (!advocateId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const querySnapshot = await getDocs(query(collection(db, 'hearings'), where('advocate_id', '==', advocateId)));
+      setHearings(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -42,6 +51,8 @@ const Hearings = () => {
 
   return (
     <PageShell title={t('hearings')} subtitle={t('hearingsSubtitle')} showBack>
+      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
+      <>
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -102,6 +113,8 @@ const Hearings = () => {
           </div>
         )}
       </section>
+      </>
+      )}
     </PageShell>
   );
 };

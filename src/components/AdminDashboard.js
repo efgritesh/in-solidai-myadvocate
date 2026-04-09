@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { seedAdminData } from '../utils/seedData';
+import LoadingState from './LoadingState';
 
 const AdminDashboard = () => {
   const { t } = useTranslation();
@@ -18,30 +19,38 @@ const AdminDashboard = () => {
     payments: 0,
   });
   const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadAdminData = async () => {
       const adminId = auth.currentUser?.uid;
-      if (!adminId) return;
+      if (!adminId) {
+        setLoading(false);
+        return;
+      }
 
-      await seedAdminData(adminId);
+      try {
+        await seedAdminData(adminId);
 
-      const [usersSnap, casesSnap, paymentsSnap, alertsSnap] = await Promise.all([
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'cases')),
-        getDocs(collection(db, 'payments')),
-        getDocs(query(collection(db, 'system_alerts'), where('admin_id', '==', adminId))),
-      ]);
+        const [usersSnap, casesSnap, paymentsSnap, alertsSnap] = await Promise.all([
+          getDocs(collection(db, 'users')),
+          getDocs(collection(db, 'cases')),
+          getDocs(collection(db, 'payments')),
+          getDocs(query(collection(db, 'system_alerts'), where('admin_id', '==', adminId))),
+        ]);
 
-      const users = usersSnap.docs.map((docItem) => docItem.data());
-      setStats({
-        admins: users.filter((user) => user.role === 'admin').length,
-        advocates: users.filter((user) => user.role === 'advocate').length,
-        clients: users.filter((user) => user.role === 'client').length,
-        cases: casesSnap.size,
-        payments: paymentsSnap.size,
-      });
-      setAlerts(alertsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+        const users = usersSnap.docs.map((docItem) => docItem.data());
+        setStats({
+          admins: users.filter((user) => user.role === 'admin').length,
+          advocates: users.filter((user) => user.role === 'advocate').length,
+          clients: users.filter((user) => user.role === 'client').length,
+          cases: casesSnap.size,
+          payments: paymentsSnap.size,
+        });
+        setAlerts(alertsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadAdminData();
@@ -63,6 +72,8 @@ const AdminDashboard = () => {
         </button>
       )}
     >
+      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
+      <>
       <section className="stats-grid">
         <article className="stat-card">
           <strong>{stats.admins}</strong>
@@ -126,6 +137,8 @@ const AdminDashboard = () => {
           </article>
         </div>
       </section>
+      </>
+      )}
     </PageShell>
   );
 };

@@ -15,6 +15,7 @@ import {
   UnlockIcon,
   WhatsAppIcon,
 } from './AppIcons';
+import LoadingState from './LoadingState';
 
 const lifecyclePresets = [
   'Initial consultation',
@@ -63,27 +64,35 @@ const CaseDetails = () => {
   const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
   const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const loadCase = useCallback(async () => {
-    if (!caseId) return;
-    const caseSnap = await getDoc(doc(db, 'cases', caseId));
-    if (!caseSnap.exists()) {
-      setCaseRecord(null);
-      setPayments([]);
+    if (!caseId) {
+      setLoading(false);
       return;
     }
+    try {
+      const caseSnap = await getDoc(doc(db, 'cases', caseId));
+      if (!caseSnap.exists()) {
+        setCaseRecord(null);
+        setPayments([]);
+        return;
+      }
 
-    const nextCase = { id: caseSnap.id, ...caseSnap.data() };
-    const paymentSnap = await getDocs(
-      query(
-        collection(db, 'payments'),
-        where('advocate_id', '==', auth.currentUser?.uid || ''),
-        where('case_id', '==', nextCase.case_number)
-      )
-    );
+      const nextCase = { id: caseSnap.id, ...caseSnap.data() };
+      const paymentSnap = await getDocs(
+        query(
+          collection(db, 'payments'),
+          where('advocate_id', '==', auth.currentUser?.uid || ''),
+          where('case_id', '==', nextCase.case_number)
+        )
+      );
 
-    setCaseRecord(nextCase);
-    setPayments(paymentSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      setCaseRecord(nextCase);
+      setPayments(paymentSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+    } finally {
+      setLoading(false);
+    }
   }, [caseId]);
 
   useEffect(() => {
@@ -162,6 +171,14 @@ const CaseDetails = () => {
     setPaymentForm(emptyPaymentForm);
     await loadCase();
   };
+
+  if (loading) {
+    return (
+      <PageShell title={t('caseDetails')} subtitle={t('loadingMatterDetails')} showBack>
+        <LoadingState label={t('loadingMatterDetails')} />
+      </PageShell>
+    );
+  }
 
   if (!caseRecord) {
     return (

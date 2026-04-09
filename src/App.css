@@ -134,6 +134,15 @@ textarea {
   font-weight: 700;
 }
 
+.brand-mark {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-family: UberMove, UberMoveText, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
 .hero-card,
 .panel,
 .auth-card {
@@ -998,6 +1007,8 @@ textarea {
   margin-top: 24px;
   padding: 20px 4px 0;
   border-top: 1px solid var(--line);
+  justify-items: end;
+  text-align: right;
 }
 
 .app-footer__links {
@@ -1006,6 +1017,7 @@ textarea {
   gap: 12px;
   color: var(--muted);
   font-size: 0.92rem;
+  justify-content: flex-end;
 }
 
 .app-footer__copy {
@@ -1080,6 +1092,35 @@ textarea {
   justify-content: flex-end;
 }
 
+.loading-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px 16px;
+  color: var(--muted);
+}
+
+.loading-state--fullscreen {
+  min-height: 100vh;
+  place-content: center;
+  background: var(--bg);
+}
+
+.loading-state__spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid #d9d9d9;
+  border-top-color: #111111;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (min-width: 768px) {
   .page-frame {
     width: min(100%, 1480px);
@@ -1149,10 +1190,6 @@ textarea {
   .top-nav__logout--desktop {
     display: inline-flex;
     align-items: center;
-  }
-
-  .app-footer__links {
-    justify-content: flex-start;
   }
 
   .auth-layout {

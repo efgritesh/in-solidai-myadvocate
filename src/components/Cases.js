@@ -6,6 +6,7 @@ import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink, createCaseAccessToken } from '../utils/caseAccess';
 import { ArrowRightIcon, CloseIcon, EyeIcon, MessageIcon, PlusIcon, WhatsAppIcon } from './AppIcons';
+import LoadingState from './LoadingState';
 
 const defaultLifecycle = [
   { title: 'Initial consultation', eta: 'Apr 2026' },
@@ -74,12 +75,20 @@ const Cases = () => {
   const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
   const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
   const [lifecycleSteps, setLifecycleSteps] = useState(defaultLifecycle);
+  const [loading, setLoading] = useState(true);
 
   const fetchCases = async () => {
     const advocateId = auth.currentUser?.uid;
-    if (!advocateId) return;
-    const querySnapshot = await getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId)));
-    setCases(querySnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+    if (!advocateId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const querySnapshot = await getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId)));
+      setCases(querySnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -177,6 +186,8 @@ const Cases = () => {
       subtitle={t('casesSubtitle')}
       showBack
     >
+      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
+      <>
       <section className={`panel${showForm ? '' : ' panel--collapsed'}`}>
         <div className="section-heading">
           <div>
@@ -387,6 +398,8 @@ const Cases = () => {
         )}
       </section>
       ) : null}
+      </>
+      )}
     </PageShell>
   );
 };
