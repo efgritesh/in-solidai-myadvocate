@@ -15,31 +15,11 @@ const About = () => {
           </div>
         </div>
         <p className="empty-state">{t('aboutDescription')}</p>
-      </section>
-
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">{t('forAdvocates')}</p>
-            <h2>{t('aboutAdvocateSuiteTitle')}</h2>
-          </div>
-        </div>
         <div className="record-list">
           <article className="record-item"><div><strong>{t('practiceDashboard')}</strong><p>{t('aboutAdvocateDashboard')}</p></div></article>
           <article className="record-item"><div><strong>{t('cases')}</strong><p>{t('aboutAdvocateCases')}</p></div></article>
           <article className="record-item"><div><strong>{t('aiDraftingAssistant')}</strong><p>{t('aboutAdvocateDrafting')}</p></div></article>
           <article className="record-item"><div><strong>{t('clientLinks')}</strong><p>{t('aboutAdvocateClientLinks')}</p></div></article>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">{t('features')}</p>
-            <h2>{t('aboutRecentCapabilitiesTitle')}</h2>
-          </div>
-        </div>
-        <div className="record-list">
           <article className="record-item"><div><strong>{t('cases')}</strong><p>{t('aboutCases')}</p></div></article>
           <article className="record-item"><div><strong>{t('clientLinks')}</strong><p>{t('aboutClientLinks')}</p></div></article>
           <article className="record-item"><div><strong>{t('payments')}</strong><p>{t('aboutPayments')}</p></div></article>

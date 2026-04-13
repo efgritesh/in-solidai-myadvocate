@@ -13,6 +13,7 @@ import {
 } from './AppIcons';
 import { auth } from '../firebase';
 import LanguageSelector from './LanguageSelector';
+import useCurrentUserProfile from '../utils/useCurrentUserProfile';
 
 const defaultIcons = {
   '/dashboard': DashboardIcon,
@@ -26,6 +27,8 @@ const BottomNav = ({ items }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const { profile } = useCurrentUserProfile();
+  const showPremiumBadge = profile?.role === 'advocate' && !profile?.premiumActive;
 
   const navItems = useMemo(
     () =>
@@ -99,6 +102,9 @@ const BottomNav = ({ items }) => {
                   >
                     <Icon className="app-icon" />
                     <span>{item.label}</span>
+                    {showPremiumBadge && item.to === '/drafting' ? (
+                      <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
+                    ) : null}
                   </NavLink>
                 );
               })}
@@ -142,6 +148,9 @@ const BottomNav = ({ items }) => {
               >
                 <Icon className="app-icon" />
                 <span>{item.label}</span>
+                {showPremiumBadge && item.to === '/drafting' ? (
+                  <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
+                ) : null}
               </NavLink>
             );
           })}

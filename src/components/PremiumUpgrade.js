@@ -1,46 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
-import { DraftingIcon, LockIcon } from './AppIcons';
-import { PREMIUM_PLAN_PRICE_INR } from '../utils/premium';
+import { DraftingIcon } from './AppIcons';
+import { activatePremiumSubscription, PREMIUM_PLAN_PRICE_INR } from '../utils/premium';
+import useCurrentUserProfile from '../utils/useCurrentUserProfile';
 
 const PremiumUpgrade = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
+  const { profile, loading } = useCurrentUserProfile();
+  const [working, setWorking] = useState(false);
+  const [status, setStatus] = useState('');
 
   const params = new URLSearchParams(location.search);
   const nextPath = params.get('next') || '/drafting';
 
-  useEffect(() => {
-    let active = true;
+  const handleSubscribe = async () => {
+    setWorking(true);
+    setStatus('');
 
-    const loadProfile = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      const userSnap = await getDoc(doc(db, 'users', user.uid));
-      if (active) {
-        setProfile(userSnap.exists() ? userSnap.data() : null);
-        setLoading(false);
-      }
-    };
-
-    loadProfile();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    try {
+      await activatePremiumSubscription();
+      navigate(nextPath, {
+        replace: true,
+        state: { premiumActivated: true },
+      });
+    } catch (error) {
+      setStatus(error.message);
+      setWorking(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -74,37 +66,29 @@ const PremiumUpgrade = () => {
 
   return (
     <PageShell title={t('premiumTitle')} subtitle={t('premiumSubtitle')} showBack>
-      <section className="panel panel--accent">
+      <section className="panel panel--accent premium-panel">
         <div className="section-heading">
           <div>
             <p className="eyebrow">{t('premiumPlanLabel')}</p>
-            <h2>{t('premiumLockedFeatureTitle')}</h2>
-          </div>
-          <LockIcon className="app-icon section-icon" />
-        </div>
-        <p className="supporting-copy">{t('premiumLockedFeatureBody')}</p>
-      </section>
-
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">{t('premiumMonthlyPlan')}</p>
             <h2>{t('premiumPlanHeadline', { amount: PREMIUM_PLAN_PRICE_INR })}</h2>
           </div>
           <DraftingIcon className="app-icon section-icon" />
         </div>
+        <p className="supporting-copy">{t('premiumLockedFeatureBody')}</p>
         <div className="record-list">
           <article className="record-item"><div><strong>{t('aiDraftingAssistant')}</strong><p>{t('premiumFeatureDrafting')}</p></div></article>
           <article className="record-item"><div><strong>{t('reviewExtractedText')}</strong><p>{t('premiumFeatureOcr')}</p></div></article>
           <article className="record-item"><div><strong>{t('exportDocx')}</strong><p>{t('premiumFeatureExports')}</p></div></article>
         </div>
+        {working ? <LoadingState compact label={t('premiumActivating')} /> : null}
+        {status ? <p className="error-text top-space">{status}</p> : null}
         <div className="button-row top-space">
-          <Link className="button" to={`/premium/checkout?next=${encodeURIComponent(nextPath)}`}>
-            {t('goToDummyPayment')}
-          </Link>
-          <Link className="button button--secondary" to="/dashboard">
+          <button type="button" className="button" onClick={handleSubscribe} disabled={working}>
+            {t('subscribe')}
+          </button>
+          <button type="button" className="button button--secondary" onClick={() => navigate('/dashboard')}>
             {t('backToDashboard')}
-          </Link>
+          </button>
         </div>
       </section>
     </PageShell>

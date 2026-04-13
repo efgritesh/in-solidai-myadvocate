@@ -20,7 +20,6 @@ import CaseAccess from './components/CaseAccess';
 import About from './components/About';
 import DraftingAssistant from './components/DraftingAssistant';
 import PremiumUpgrade from './components/PremiumUpgrade';
-import PremiumCheckout from './components/PremiumCheckout';
 import { ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards';
 
 function App() {
@@ -46,7 +45,6 @@ function App() {
         <Route path="/clients" element={<ProtectedRoute allowedRoles={['advocate']}><Clients /></ProtectedRoute>} />
         <Route path="/clients/:clientId" element={<ProtectedRoute allowedRoles={['advocate']}><ClientDetails /></ProtectedRoute>} />
         <Route path="/premium" element={<ProtectedRoute allowedRoles={['advocate']}><PremiumUpgrade /></ProtectedRoute>} />
-        <Route path="/premium/checkout" element={<ProtectedRoute allowedRoles={['advocate']}><PremiumCheckout /></ProtectedRoute>} />
         <Route
           path="/drafting"
           element={

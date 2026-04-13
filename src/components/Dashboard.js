@@ -9,10 +9,12 @@ import LoadingState from './LoadingState';
 import { syncAdvocateClientAccess } from '../utils/clientAccessRecords';
 import { formatLifecycleDate, isHearingLifecycleStep } from '../utils/lifecycle';
 import { DraftingIcon } from './AppIcons';
+import useCurrentUserProfile from '../utils/useCurrentUserProfile';
 
 const Dashboard = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { profile } = useCurrentUserProfile();
   const [hearings, setHearings] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [stats, setStats] = useState({
@@ -24,6 +26,45 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const buildDashboardState = (casesSnap, clientsSnap, paymentsSnap) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const nextSevenDays = new Date(today);
+      nextSevenDays.setDate(today.getDate() + 7);
+
+      const caseRecords = casesSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+      const hearingRecords = caseRecords
+        .flatMap((caseRecord) =>
+          (caseRecord.lifecycle || [])
+            .filter((step) => isHearingLifecycleStep(step) && step.scheduled_date)
+            .map((step) => ({
+              id: `${caseRecord.id}-${step.id}`,
+              case_id: caseRecord.case_number,
+              case_doc_id: caseRecord.id,
+              date: step.scheduled_date,
+              description: step.notes || step.title,
+              purpose: step.title,
+              status: step.status,
+            }))
+        )
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const upcoming = hearingRecords.filter((hearing) => {
+        const hearingDate = new Date(hearing.date);
+        return hearingDate >= today && hearingDate <= nextSevenDays;
+      });
+
+      setHearings(upcoming.slice(0, 4));
+      setReminders(upcoming.slice(0, 2));
+      setStats({
+        hearings: hearingRecords.length,
+        cases: caseRecords.length,
+        clients: clientsSnap.size,
+        payments: paymentsSnap.size,
+      });
+    };
+
     const loadDashboard = async () => {
       const advocateId = auth.currentUser?.uid;
       if (!advocateId) {
@@ -32,51 +73,24 @@ const Dashboard = () => {
       }
 
       try {
-        await seedAdvocateData(advocateId);
-        await syncAdvocateClientAccess(advocateId);
-
         const [casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
           getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
           getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
           getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
         ]);
+        buildDashboardState(casesSnap, clientsSnap, paymentsSnap);
+        setLoading(false);
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        await seedAdvocateData(advocateId);
+        await syncAdvocateClientAccess(advocateId);
 
-        const nextSevenDays = new Date(today);
-        nextSevenDays.setDate(today.getDate() + 7);
+        const [freshCases, freshClients, freshPayments] = await Promise.all([
+          getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
+          getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
+          getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
+        ]);
 
-        const caseRecords = casesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        const hearingRecords = caseRecords
-          .flatMap((caseRecord) =>
-            (caseRecord.lifecycle || [])
-              .filter((step) => isHearingLifecycleStep(step) && step.scheduled_date)
-              .map((step) => ({
-                id: `${caseRecord.id}-${step.id}`,
-                case_id: caseRecord.case_number,
-                case_doc_id: caseRecord.id,
-                date: step.scheduled_date,
-                description: step.notes || step.title,
-                purpose: step.title,
-                status: step.status,
-              }))
-          )
-          .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        const upcoming = hearingRecords.filter((hearing) => {
-          const hearingDate = new Date(hearing.date);
-          return hearingDate >= today && hearingDate <= nextSevenDays;
-        });
-
-        setHearings(upcoming.slice(0, 4));
-        setReminders(upcoming.slice(0, 2));
-        setStats({
-          hearings: hearingRecords.length,
-          cases: caseRecords.length,
-          clients: clientsSnap.size,
-          payments: paymentsSnap.size,
-        });
+        buildDashboardState(freshCases, freshClients, freshPayments);
       } finally {
         setLoading(false);
       }
@@ -189,6 +203,7 @@ const Dashboard = () => {
           <span>{t('shareSecureClientLinks')}</span>
         </Link>
         <Link className="action-tile action-tile--drafting" to="/drafting">
+          {!profile?.premiumActive ? <span className="premium-pill premium-pill--card">{t('premiumShort')}</span> : null}
           <div className="action-tile__header">
             <DraftingIcon className="app-icon" />
             <strong>{t('aiDraftingAssistant')}</strong>
