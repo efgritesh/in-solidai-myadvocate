@@ -203,10 +203,10 @@ const Dashboard = () => {
           <span>{t('shareSecureClientLinks')}</span>
         </Link>
         <Link className="action-tile action-tile--drafting" to="/drafting">
-          {!profile?.premiumActive ? <span className="premium-pill premium-pill--card">{t('premiumShort')}</span> : null}
           <div className="action-tile__header">
             <DraftingIcon className="app-icon" />
             <strong>{t('aiDraftingAssistant')}</strong>
+            {!profile?.premiumActive ? <span className="premium-pill premium-pill--inline">{t('premiumShort')}</span> : null}
           </div>
           <span>{t('dashboardDraftingCardSubtitle')}</span>
         </Link>

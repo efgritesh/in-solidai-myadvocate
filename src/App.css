@@ -793,16 +793,16 @@ textarea {
   top: 72px;
   right: 0;
   bottom: 0;
-  width: min(292px, calc(100vw - 14px));
+  width: min(274px, calc(100vw - 10px));
   display: block;
   pointer-events: none;
 }
 
 .top-nav__drawer {
   display: grid;
-  gap: 6px;
+  gap: 3px;
   height: 100%;
-  padding: 12px;
+  padding: 8px 8px 6px;
   background: #0d0d0d;
   border-left: 1px solid #1f1f1f;
   box-shadow: -18px 0 36px rgba(0, 0, 0, 0.18);
@@ -822,9 +822,9 @@ textarea {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 9px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: 14px;
   background: #111111;
   color: rgba(255, 255, 255, 0.76);
   text-decoration: none;
@@ -835,9 +835,17 @@ textarea {
 }
 
 .top-nav__link span {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   text-align: left;
   word-break: break-word;
+}
+
+.top-nav__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .top-nav__logout {
@@ -846,7 +854,7 @@ textarea {
   color: rgba(255, 255, 255, 0.74);
   font-size: 0.86rem;
   font-weight: 600;
-  padding: 8px 4px;
+  padding: 6px 4px;
   cursor: pointer;
 }
 
@@ -858,7 +866,7 @@ textarea {
   width: 100%;
   justify-content: flex-start;
   text-align: left;
-  padding: 10px 4px 2px;
+  padding: 6px 4px 0;
 }
 
 .top-nav__link.active {
@@ -1262,6 +1270,17 @@ textarea {
   resize: vertical;
 }
 
+.lifecycle-row__summary {
+  width: 100%;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  text-align: left;
+}
+
+.lifecycle-row__summary:hover {
+  border-color: #111111;
+}
+
 .record-item--interactive {
   cursor: pointer;
 }
@@ -1296,19 +1315,22 @@ textarea {
 }
 
 .premium-pill--nav {
-  margin-left: auto;
+  margin-left: 0;
   background: #ffd84d;
   color: #111111;
   animation: premiumPulse 1.1s ease-in-out infinite alternate;
+  min-height: 18px;
+  padding: 0 5px;
+  font-size: 0.62rem;
 }
 
-.premium-pill--card {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+.premium-pill--inline {
   background: #ffd84d;
   color: #111111;
   animation: premiumPulse 1.1s ease-in-out infinite alternate;
+  min-height: 20px;
+  padding: 0 6px;
+  font-size: 0.65rem;
 }
 
 .install-card,

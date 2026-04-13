@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
-import { ArrowRightIcon } from './AppIcons';
+import { ArrowRightIcon, CloseIcon, PlusIcon } from './AppIcons';
 
 const Clients = () => {
   const { t } = useTranslation();
@@ -16,6 +16,7 @@ const Clients = () => {
   const [email, setEmail] = useState('');
   const [preferredLanguage, setPreferredLanguage] = useState('en');
   const [loading, setLoading] = useState(true);
+  const [showAddClientForm, setShowAddClientForm] = useState(false);
 
   const fetchClients = async () => {
     const advocateId = auth.currentUser?.uid;
@@ -52,6 +53,7 @@ const Clients = () => {
     setPhone('');
     setEmail('');
     setPreferredLanguage('en');
+    setShowAddClientForm(false);
     await fetchClients();
   };
 
@@ -65,7 +67,17 @@ const Clients = () => {
             <p className="eyebrow">{t('clientIntake')}</p>
             <h2>{t('addClient')}</h2>
           </div>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label={showAddClientForm ? t('closeAddClientForm') : t('openAddClientForm')}
+            title={showAddClientForm ? t('closeAddClientForm') : t('openAddClientForm')}
+            onClick={() => setShowAddClientForm((current) => !current)}
+          >
+            {showAddClientForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+          </button>
         </div>
+        {showAddClientForm ? (
         <form onSubmit={handleAddClient}>
           <div className="form-grid">
             <div className="form-group">
@@ -107,8 +119,12 @@ const Clients = () => {
           </div>
           <button type="submit" className="button">{t('addClient')}</button>
         </form>
+        ) : (
+          <p className="empty-state">{t('addClientHint')}</p>
+        )}
       </section>
 
+      {!showAddClientForm ? (
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -139,6 +155,7 @@ const Clients = () => {
           </div>
         )}
       </section>
+      ) : null}
       </>
       )}
     </PageShell>

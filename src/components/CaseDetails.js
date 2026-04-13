@@ -17,7 +17,7 @@ import {
   WhatsAppIcon,
 } from './AppIcons';
 import LoadingState from './LoadingState';
-import { syncCaseAccessPayment, syncCaseAccessRecord } from '../utils/clientAccessRecords';
+import { syncCaseAccessComment, syncCaseAccessPayment, syncCaseAccessRecord } from '../utils/clientAccessRecords';
 import { createLifecycleStep, formatLifecycleDate, isHearingLifecycleStep, sortLifecycleForCase } from '../utils/lifecycle';
 
 const lifecyclePresets = [
@@ -70,7 +70,11 @@ const CaseDetails = () => {
   const [selectedLifecycleType, setSelectedLifecycleType] = useState('general');
   const [selectedLifecycleDate, setSelectedLifecycleDate] = useState('');
   const [selectedLifecycleNotes, setSelectedLifecycleNotes] = useState('');
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [activePanel, setActivePanel] = useState('');
+  const [expandedLifecycleStep, setExpandedLifecycleStep] = useState('');
+  const [comments, setComments] = useState([]);
+  const [clientDocuments, setClientDocuments] = useState([]);
+  const [commentDraft, setCommentDraft] = useState('');
   const [loading, setLoading] = useState(true);
 
   const loadCase = useCallback(async () => {
@@ -87,18 +91,48 @@ const CaseDetails = () => {
       }
 
       const nextCase = { id: caseSnap.id, ...caseSnap.data() };
-      const paymentSnap = nextCase.client_access_token
-        ? await getDocs(collection(db, 'client_access', nextCase.client_access_token, 'payments'))
-        : await getDocs(
-            query(
-              collection(db, 'payments'),
-              where('advocate_id', '==', auth.currentUser?.uid || ''),
-              where('case_id', '==', nextCase.case_number)
-            )
-          );
+      const [paymentSnap, commentSnap, documentsSnap] = nextCase.client_access_token
+        ? await Promise.all([
+            getDocs(collection(db, 'client_access', nextCase.client_access_token, 'payments')),
+            getDocs(collection(db, 'client_access', nextCase.client_access_token, 'comments')),
+            getDocs(collection(db, 'client_access', nextCase.client_access_token, 'documents')),
+          ])
+        : await Promise.all([
+            getDocs(
+              query(
+                collection(db, 'payments'),
+                where('advocate_id', '==', auth.currentUser?.uid || ''),
+                where('case_id', '==', nextCase.case_number)
+              )
+            ),
+            getDocs(
+              query(
+                collection(db, 'comments'),
+                where('advocate_id', '==', auth.currentUser?.uid || ''),
+                where('case_id', '==', nextCase.case_number)
+              )
+            ),
+            getDocs(
+              query(
+                collection(db, 'documents'),
+                where('advocate_id', '==', auth.currentUser?.uid || ''),
+                where('case_id', '==', nextCase.case_number)
+              )
+            ),
+          ]);
 
       setCaseRecord(nextCase);
       setPayments(paymentSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      setComments(
+        commentSnap.docs
+          .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+          .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))
+      );
+      setClientDocuments(
+        documentsSnap.docs
+          .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+          .filter((item) => item.uploaded_by_role === 'client')
+      );
     } finally {
       setLoading(false);
     }
@@ -159,6 +193,8 @@ const CaseDetails = () => {
     setSelectedLifecycleEta('');
     setSelectedLifecycleDate('');
     setSelectedLifecycleNotes('');
+    setExpandedLifecycleStep(nextStep.id);
+    setActivePanel('');
     await loadCase();
   };
 
@@ -194,7 +230,49 @@ const CaseDetails = () => {
     await syncCaseAccessPayment(caseRecord.client_access_token, paymentPayload, paymentRef.id);
 
     setPaymentForm(emptyPaymentForm);
+    setActivePanel('');
     await loadCase();
+  };
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!caseRecord || !commentDraft.trim()) return;
+
+    const payload = {
+      advocate_id: auth.currentUser?.uid,
+      case_id: caseRecord.case_number,
+      author_role: 'advocate',
+      author_name: auth.currentUser?.displayName || 'Advocate',
+      message: commentDraft.trim(),
+      created_at: new Date().toISOString(),
+      client_access_token: caseRecord.client_access_token,
+    };
+
+    const commentRef = await addDoc(collection(db, 'comments'), payload);
+    await syncCaseAccessComment(caseRecord.client_access_token, payload, commentRef.id);
+    setCommentDraft('');
+    setActivePanel('');
+    await loadCase();
+  };
+
+  const toggleLifecycleStep = (stepId) => {
+    setExpandedLifecycleStep((current) => {
+      const next = current === stepId ? '' : stepId;
+      if (next) {
+        setActivePanel('');
+      }
+      return next;
+    });
+  };
+
+  const togglePanel = (panelKey) => {
+    setActivePanel((current) => {
+      const next = current === panelKey ? '' : panelKey;
+      if (next) {
+        setExpandedLifecycleStep('');
+      }
+      return next;
+    });
   };
 
   if (loading) {
@@ -331,13 +409,15 @@ const CaseDetails = () => {
           <button
             type="button"
             className="icon-button icon-button--accent"
-            aria-label={t('addLifecycleStep')}
-            title={t('addLifecycleStep')}
-            onClick={addLifecycleStep}
+            aria-label={activePanel === 'lifecycle-add' ? t('closeAddStageForm') : t('addLifecycleStep')}
+            title={activePanel === 'lifecycle-add' ? t('closeAddStageForm') : t('addLifecycleStep')}
+            onClick={() => togglePanel('lifecycle-add')}
           >
-            <PlusIcon className="app-icon" />
+            {activePanel === 'lifecycle-add' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
           </button>
         </div>
+        {activePanel === 'lifecycle-add' ? (
+        <>
         <div className="planning-row">
           <select value={selectedLifecyclePreset} onChange={(e) => setSelectedLifecyclePreset(e.target.value)}>
             {lifecyclePresets.map((preset) => (
@@ -367,16 +447,35 @@ const CaseDetails = () => {
             placeholder={t('stageNotesPlaceholder')}
           />
         </div>
+        <button type="button" className="button" onClick={addLifecycleStep}>
+          {t('addLifecycleStep')}
+        </button>
+        </>
+        ) : (
+          <p className="empty-state">{t('lifecycleFormHint')}</p>
+        )}
         <div className="lifecycle-editor">
           {(caseRecord.lifecycle || []).map((step, index) => (
             <div key={step.id} className="lifecycle-row lifecycle-row--card">
-              <div className="planning-stack">
+              <button
+                type="button"
+                className="record-item lifecycle-row__summary"
+                onClick={() => toggleLifecycleStep(step.id)}
+              >
                 <div>
                   <strong>{t('stepNumber', { count: index + 1 })}</strong>
+                  <p>{step.title}</p>
                   {isHearingLifecycleStep(step) && step.scheduled_date ? (
                     <p className="case-status-text">{t('hearingOn')} {formatLifecycleDate(step.scheduled_date)}</p>
                   ) : null}
                 </div>
+                <div className="record-item__action">
+                  <span className="badge">{step.status}</span>
+                  {expandedLifecycleStep === step.id ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+                </div>
+              </button>
+              {expandedLifecycleStep === step.id ? (
+              <div className="planning-stack">
                 <input
                   type="text"
                   value={step.title}
@@ -405,12 +504,13 @@ const CaseDetails = () => {
                   onChange={(e) => updateLifecycleField(step.id, 'notes', e.target.value)}
                   placeholder={t('stageNotesPlaceholder')}
                 />
+                <select value={step.status} onChange={(e) => updateLifecycleStatus(step.id, e.target.value)}>
+                  <option value="pending">{t('tentative')}</option>
+                  <option value="in_progress">{t('inProgress')}</option>
+                  <option value="done">{t('done')}</option>
+                </select>
               </div>
-              <select value={step.status} onChange={(e) => updateLifecycleStatus(step.id, e.target.value)}>
-                <option value="pending">{t('tentative')}</option>
-                <option value="in_progress">{t('inProgress')}</option>
-                <option value="done">{t('done')}</option>
-              </select>
+              ) : null}
             </div>
           ))}
         </div>
@@ -427,15 +527,15 @@ const CaseDetails = () => {
             <button
               type="button"
               className="icon-button icon-button--accent"
-              aria-label={showPaymentForm ? t('closePaymentForm') : t('openPaymentForm')}
-              title={showPaymentForm ? t('closePaymentForm') : t('openPaymentForm')}
-              onClick={() => setShowPaymentForm((current) => !current)}
+              aria-label={activePanel === 'payments' ? t('closePaymentForm') : t('openPaymentForm')}
+              title={activePanel === 'payments' ? t('closePaymentForm') : t('openPaymentForm')}
+              onClick={() => togglePanel('payments')}
             >
-              {showPaymentForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+              {activePanel === 'payments' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
             </button>
           </div>
         </div>
-        {showPaymentForm ? (
+        {activePanel === 'payments' ? (
         <form onSubmit={handlePaymentSubmit}>
           <div className="form-grid">
             <div className="form-group">
@@ -510,6 +610,92 @@ const CaseDetails = () => {
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">{t('comments')}</p>
+            <h2>{t('caseNotes')}</h2>
+          </div>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label={activePanel === 'notes' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
+            title={activePanel === 'notes' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
+            onClick={() => togglePanel('notes')}
+          >
+            {activePanel === 'notes' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+          </button>
+        </div>
+        {comments.length === 0 ? (
+          <p className="empty-state">{t('caseNotesEmpty')}</p>
+        ) : (
+          <div className="record-list">
+            {comments.map((commentItem) => (
+              <article key={commentItem.id} className="record-item record-item--stack">
+                <div>
+                  <strong>{commentItem.author_name || commentItem.author_role}</strong>
+                  <p>{commentItem.message}</p>
+                </div>
+                <span className="badge">{commentItem.author_role}</span>
+              </article>
+            ))}
+          </div>
+        )}
+        {activePanel === 'notes' ? (
+          <form onSubmit={handleCommentSubmit} className="top-space">
+            <div className="form-group">
+              <label>{t('addCaseNote')}</label>
+              <textarea
+                value={commentDraft}
+                onChange={(e) => setCommentDraft(e.target.value)}
+                placeholder={t('addCaseNotePlaceholder')}
+                required
+              />
+            </div>
+            <button type="submit" className="button">{t('saveCaseNote')}</button>
+          </form>
+        ) : null}
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">{t('documents')}</p>
+            <h2>{t('clientSharedDocuments')}</h2>
+          </div>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label={activePanel === 'client-documents' ? t('collapseClientDocuments') : t('expandClientDocuments')}
+            title={activePanel === 'client-documents' ? t('collapseClientDocuments') : t('expandClientDocuments')}
+            onClick={() => togglePanel('client-documents')}
+          >
+            {activePanel === 'client-documents' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+          </button>
+        </div>
+        {activePanel === 'client-documents' ? (
+          clientDocuments.length === 0 ? (
+            <p className="empty-state">{t('clientDocumentsEmpty')}</p>
+          ) : (
+            <div className="record-list">
+              {clientDocuments.map((documentItem) => (
+                <article key={documentItem.id} className="record-item">
+                  <div>
+                    <strong>{documentItem.name}</strong>
+                    <p>{documentItem.type || t('generalFile')}</p>
+                  </div>
+                  <a className="inline-link" href={documentItem.url} target="_blank" rel="noopener noreferrer">
+                    {t('open')}
+                  </a>
+                </article>
+              ))}
+            </div>
+          )
+        ) : (
+          <p className="empty-state">{t('clientDocumentsHint')}</p>
+        )}
       </section>
     </PageShell>
   );

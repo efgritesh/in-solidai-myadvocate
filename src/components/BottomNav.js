@@ -101,10 +101,12 @@ const BottomNav = ({ items }) => {
                     onClick={() => setOpen(false)}
                   >
                     <Icon className="app-icon" />
-                    <span>{item.label}</span>
-                    {showPremiumBadge && item.to === '/drafting' ? (
-                      <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
-                    ) : null}
+                    <span className="top-nav__label">
+                      <span>{item.label}</span>
+                      {showPremiumBadge && item.to === '/drafting' ? (
+                        <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
+                      ) : null}
+                    </span>
                   </NavLink>
                 );
               })}
@@ -147,10 +149,12 @@ const BottomNav = ({ items }) => {
                 onClick={() => setOpen(false)}
               >
                 <Icon className="app-icon" />
-                <span>{item.label}</span>
-                {showPremiumBadge && item.to === '/drafting' ? (
-                  <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
-                ) : null}
+                <span className="top-nav__label">
+                  <span>{item.label}</span>
+                  {showPremiumBadge && item.to === '/drafting' ? (
+                    <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
+                  ) : null}
+                </span>
               </NavLink>
             );
           })}
