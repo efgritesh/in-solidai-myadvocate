@@ -63,16 +63,28 @@ const DraftingAssistant = () => {
   const [typedText, setTypedText] = useState('');
   const [activeCase, setActiveCase] = useState(null);
 
-  const loadSessionArtifacts = useCallback(async (sessionId) => {
-    if (!sessionId) {
+  const loadSessionArtifacts = useCallback(async (sessionId, advocateId = auth.currentUser?.uid) => {
+    if (!sessionId || !advocateId) {
       setSources([]);
       setOutput(null);
       return;
     }
 
     const [sourcesSnapshot, outputSnapshot] = await Promise.all([
-      getDocs(query(collection(db, 'drafting_sources'), where('session_id', '==', sessionId))),
-      getDocs(query(collection(db, 'drafting_outputs'), where('session_id', '==', sessionId))),
+      getDocs(
+        query(
+          collection(db, 'drafting_sources'),
+          where('session_id', '==', sessionId),
+          where('advocate_id', '==', advocateId)
+        )
+      ),
+      getDocs(
+        query(
+          collection(db, 'drafting_outputs'),
+          where('session_id', '==', sessionId),
+          where('advocate_id', '==', advocateId)
+        )
+      ),
     ]);
 
     const nextSources = sourcesSnapshot.docs
@@ -131,7 +143,7 @@ const DraftingAssistant = () => {
           outputLanguage: selectedSession.output_language || selectedCase?.client_language || 'en',
           instructions: selectedSession.instructions || '',
         });
-        await loadSessionArtifacts(selectedSession.id);
+        await loadSessionArtifacts(selectedSession.id, advocateId);
       } else {
         setSources([]);
         setOutput(null);
@@ -145,6 +157,11 @@ const DraftingAssistant = () => {
             : '',
         });
       }
+      setStatusMessage('');
+    } catch (error) {
+      setStatusMessage(error.message || t('unableToLoadDraftingWorkspace'));
+      setSources([]);
+      setOutput(null);
     } finally {
       setLoading(false);
     }
