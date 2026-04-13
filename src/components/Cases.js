@@ -364,8 +364,12 @@ const Cases = () => {
           <p className="empty-state">{t('noCasesYet')}</p>
         ) : (
           <div className="matter-board">
-            {caseSummaries.map((caseItem) => (
-              <article key={caseItem.id} className="matter-row">
+                {caseSummaries.map((caseItem) => (
+              <article
+                key={caseItem.id}
+                className="matter-row matter-row--interactive"
+                onClick={() => navigate(`/cases/${caseItem.id}`)}
+              >
                 <div className="matter-row__main">
                   <div>
                     <strong>{caseItem.case_number}</strong>
@@ -389,6 +393,7 @@ const Cases = () => {
                     rel="noopener noreferrer"
                     aria-label={t('shareOnWhatsApp')}
                     title={t('shareOnWhatsApp')}
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <WhatsAppIcon className="app-icon" />
                   </a>
@@ -397,6 +402,7 @@ const Cases = () => {
                     href={buildSmsShareLink(caseItem)}
                     aria-label={t('shareBySms')}
                     title={t('shareBySms')}
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <MessageIcon className="app-icon" />
                   </a>
@@ -407,6 +413,7 @@ const Cases = () => {
                     rel="noopener noreferrer"
                     aria-label={t('previewClientCaseView')}
                     title={t('previewClientCaseView')}
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <EyeIcon className="app-icon" />
                   </a>
@@ -415,7 +422,10 @@ const Cases = () => {
                     className="icon-button icon-button--accent"
                     aria-label={t('openCaseDetails')}
                     title={t('openCaseDetails')}
-                    onClick={() => navigate(`/cases/${caseItem.id}`)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate(`/cases/${caseItem.id}`);
+                    }}
                   >
                     <ArrowRightIcon className="app-icon" />
                   </button>

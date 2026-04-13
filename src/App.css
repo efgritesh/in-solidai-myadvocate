@@ -452,6 +452,26 @@ textarea {
   font-size: 1.8rem;
 }
 
+.stat-card--interactive,
+.matter-row--interactive {
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card--interactive:hover,
+.record-item--interactive:hover,
+.matter-row--interactive:hover {
+  border-color: #111111;
+  box-shadow: 0 10px 24px rgba(17, 17, 17, 0.08);
+  transform: translateY(-1px);
+}
+
+.record-item__action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .action-tile {
   background: #fafafa;
 }

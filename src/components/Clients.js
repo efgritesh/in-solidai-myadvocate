@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
+import { ArrowRightIcon } from './AppIcons';
 
 const Clients = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -118,12 +121,19 @@ const Clients = () => {
         ) : (
           <div className="record-list">
             {clients.map((client) => (
-              <article key={client.id} className="record-item">
+              <article
+                key={client.id}
+                className="record-item record-item--interactive"
+                onClick={() => navigate(`/clients/${client.id}`)}
+              >
                 <div>
                   <strong>{client.name}</strong>
                   <p>{client.email || t('noEmailAdded')}</p>
                 </div>
-                <span className="badge">{client.phone} | {(client.preferredLanguage || 'en').toUpperCase()}</span>
+                <div className="record-item__action">
+                  <span className="badge">{client.phone} | {(client.preferredLanguage || 'en').toUpperCase()}</span>
+                  <ArrowRightIcon className="app-icon" />
+                </div>
               </article>
             ))}
           </div>

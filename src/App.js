@@ -11,6 +11,7 @@ import AdminDashboard from './components/AdminDashboard';
 import Cases from './components/Cases';
 import CaseDetails from './components/CaseDetails';
 import Clients from './components/Clients';
+import ClientDetails from './components/ClientDetails';
 import Hearings from './components/Hearings';
 import Payments from './components/Payments';
 import Documents from './components/Documents';
@@ -41,6 +42,7 @@ function App() {
         <Route path="/cases" element={<ProtectedRoute allowedRoles={['advocate']}><Cases /></ProtectedRoute>} />
         <Route path="/cases/:caseId" element={<ProtectedRoute allowedRoles={['advocate']}><CaseDetails /></ProtectedRoute>} />
         <Route path="/clients" element={<ProtectedRoute allowedRoles={['advocate']}><Clients /></ProtectedRoute>} />
+        <Route path="/clients/:clientId" element={<ProtectedRoute allowedRoles={['advocate']}><ClientDetails /></ProtectedRoute>} />
         <Route path="/drafting" element={<ProtectedRoute allowedRoles={['advocate']}><DraftingAssistant /></ProtectedRoute>} />
         <Route path="/hearings" element={<ProtectedRoute allowedRoles={['advocate']}><Hearings /></ProtectedRoute>} />
         <Route path="/payments" element={<ProtectedRoute allowedRoles={['advocate']}><Payments /></ProtectedRoute>} />

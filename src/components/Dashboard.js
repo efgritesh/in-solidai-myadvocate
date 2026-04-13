@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
@@ -10,6 +10,7 @@ import { syncAdvocateClientAccess } from '../utils/clientAccessRecords';
 
 const Dashboard = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [hearings, setHearings] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [stats, setStats] = useState({
@@ -45,8 +46,18 @@ const Dashboard = () => {
         const nextSevenDays = new Date(today);
         nextSevenDays.setDate(today.getDate() + 7);
 
+        const caseRecords = casesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const caseIdByNumber = caseRecords.reduce((lookup, caseRecord) => {
+          lookup[caseRecord.case_number] = caseRecord.id;
+          return lookup;
+        }, {});
+
         const hearingRecords = hearingsSnap.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            case_doc_id: caseIdByNumber[doc.data().case_id] || '',
+          }))
           .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const upcoming = hearingRecords.filter((hearing) => {
@@ -58,7 +69,7 @@ const Dashboard = () => {
         setReminders(upcoming.slice(0, 2));
         setStats({
           hearings: hearingRecords.length,
-          cases: casesSnap.size,
+          cases: caseRecords.length,
           clients: clientsSnap.size,
           payments: paymentsSnap.size,
         });
@@ -86,19 +97,19 @@ const Dashboard = () => {
       </section>
 
       <section className="stats-grid">
-        <article className="stat-card">
+        <article className="stat-card stat-card--interactive" onClick={() => navigate('/cases')}>
           <strong>{stats.cases}</strong>
           <span>{t('activeMatters')}</span>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card--interactive" onClick={() => navigate('/clients')}>
           <strong>{stats.clients}</strong>
           <span>{t('clients')}</span>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card--interactive" onClick={() => navigate('/hearings')}>
           <strong>{stats.hearings}</strong>
           <span>{t('hearings')}</span>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card--interactive" onClick={() => navigate('/payments')}>
           <strong>{stats.payments}</strong>
           <span>{t('payments')}</span>
         </article>
@@ -116,7 +127,11 @@ const Dashboard = () => {
         ) : (
           <div className="record-list">
             {reminders.map((reminder) => (
-              <article key={reminder.id} className="record-item">
+              <article
+                key={reminder.id}
+                className="record-item record-item--interactive"
+                onClick={() => reminder.case_doc_id && navigate(`/cases/${reminder.case_doc_id}`)}
+              >
                 <div>
                   <strong>{reminder.case_id}</strong>
                   <p>{reminder.description}</p>
@@ -140,7 +155,11 @@ const Dashboard = () => {
         ) : (
           <div className="record-list">
             {hearings.map((hearing) => (
-              <article key={hearing.id} className="record-item">
+              <article
+                key={hearing.id}
+                className="record-item record-item--interactive"
+                onClick={() => hearing.case_doc_id && navigate(`/cases/${hearing.case_doc_id}`)}
+              >
                 <div>
                   <strong>{hearing.case_id}</strong>
                   <p>{hearing.description}</p>
