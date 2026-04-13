@@ -37,7 +37,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
           return response;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(async () => (await caches.match('/index.html')) || new Response('Offline', { status: 503 }))
     );
     return;
   }

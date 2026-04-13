@@ -4,7 +4,7 @@ const vision = require('@google-cloud/vision');
 const pdfParse = require('pdf-parse');
 const { GoogleAuth } = require('google-auth-library');
 const { Document, HeadingLevel, Packer, Paragraph, TextRun } = require('docx');
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
 
 admin.initializeApp();
@@ -67,6 +67,35 @@ async function requireSignedInUser(request) {
   return {
     uid: request.auth.uid,
     profile: userSnap.data(),
+  };
+}
+
+async function activatePremiumForUser({ uid, profile, data }) {
+  if (profile.role !== 'advocate') {
+    throw new HttpsError('permission-denied', 'Only advocates can activate the premium plan.');
+  }
+
+  const billingAmountInr = Number(data?.billingAmountInr || 200);
+  const activatedAt = admin.firestore.Timestamp.now();
+  const renewalDate = admin.firestore.Timestamp.fromDate(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  );
+
+  await db.collection('users').doc(uid).update({
+    subscriptionPlan: 'premium_monthly',
+    premiumStatus: 'active',
+    premiumActive: true,
+    premiumSource: data?.source || 'dummy_checkout',
+    premiumBillingAmountInr: billingAmountInr,
+    premiumActivatedAt: activatedAt,
+    premiumRenewalDate: renewalDate,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return {
+    premiumActive: true,
+    subscriptionPlan: 'premium_monthly',
+    billingAmountInr,
   };
 }
 
@@ -810,31 +839,55 @@ exports.publishDraftingOutput = onCall(async (request) => {
 
 exports.activatePremiumSubscription = onCall(async (request) => {
   const user = await requireSignedInUser(request);
+  return activatePremiumForUser({
+    uid: user.uid,
+    profile: user.profile,
+    data: request.data,
+  });
+});
 
-  if (user.profile.role !== 'advocate') {
-    throw new HttpsError('permission-denied', 'Only advocates can activate the premium plan.');
+exports.activatePremiumSubscriptionHttp = onRequest(async (request, response) => {
+  response.set('Access-Control-Allow-Origin', 'https://in-solidai-myadvocate.web.app');
+  response.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (request.method === 'OPTIONS') {
+    response.status(204).send('');
+    return;
   }
 
-  const billingAmountInr = Number(request.data?.billingAmountInr || 200);
-  const activatedAt = admin.firestore.Timestamp.now();
-  const renewalDate = admin.firestore.Timestamp.fromDate(
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  );
+  if (request.method !== 'POST') {
+    response.status(405).json({ error: 'Method not allowed.' });
+    return;
+  }
 
-  await db.collection('users').doc(user.uid).update({
-    subscriptionPlan: 'premium_monthly',
-    premiumStatus: 'active',
-    premiumActive: true,
-    premiumSource: request.data?.source || 'dummy_checkout',
-    premiumBillingAmountInr: billingAmountInr,
-    premiumActivatedAt: activatedAt,
-    premiumRenewalDate: renewalDate,
-    updatedAt: new Date().toISOString(),
-  });
+  try {
+    const header = request.headers.authorization || '';
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    if (!match) {
+      response.status(401).json({ error: 'Missing authorization token.' });
+      return;
+    }
 
-  return {
-    premiumActive: true,
-    subscriptionPlan: 'premium_monthly',
-    billingAmountInr,
-  };
+    const decodedToken = await admin.auth().verifyIdToken(match[1]);
+    const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+    if (!userSnap.exists) {
+      response.status(404).json({ error: 'User profile not found.' });
+      return;
+    }
+
+    const result = await activatePremiumForUser({
+      uid: decodedToken.uid,
+      profile: userSnap.data(),
+      data: request.body || {},
+    });
+
+    response.status(200).json(result);
+  } catch (error) {
+    const message = error instanceof HttpsError ? error.message : 'Unable to activate premium.';
+    const status = error instanceof HttpsError
+      ? (error.code === 'permission-denied' ? 403 : error.code === 'unauthenticated' ? 401 : 400)
+      : 500;
+    response.status(status).json({ error: message });
+  }
 });
