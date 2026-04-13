@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 const FooterBar = () => {
@@ -7,10 +6,6 @@ const FooterBar = () => {
 
   return (
     <footer className="app-footer">
-      <div className="app-footer__links">
-        <Link to="/about">{t('about')}</Link>
-        <Link to="/invite">{t('clientLinks')}</Link>
-      </div>
       <p className="app-footer__copy">{t('copyrightLine')}</p>
     </footer>
   );

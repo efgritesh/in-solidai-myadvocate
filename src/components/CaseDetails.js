@@ -11,7 +11,6 @@ import {
   EyeIcon,
   LockIcon,
   MessageIcon,
-  PaymentsIcon,
   PlusIcon,
   UnlockIcon,
   WhatsAppIcon,
@@ -92,6 +91,8 @@ const CaseDetails = () => {
   const [commentDraft, setCommentDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const locale = t('preferredLocale', { defaultValue: 'en-IN' });
+  const paymentsPanelOpen = activePanel === 'payments' || activePanel === 'payments-add';
+  const notesPanelOpen = activePanel === 'notes' || activePanel === 'notes-add';
 
   const loadCase = useCallback(async () => {
     if (!caseId) {
@@ -538,32 +539,48 @@ const CaseDetails = () => {
             <p className="eyebrow">{t('payments')}</p>
             <h2>{t('requestOrRecordFees')}</h2>
           </div>
-          <div className="header-icon-group">
-            <button
-              type="button"
-              className="icon-button icon-button--accent"
-              aria-label={activePanel === 'payments-add' ? t('closePaymentForm') : t('openPaymentForm')}
-              title={activePanel === 'payments-add' ? t('closePaymentForm') : t('openPaymentForm')}
-              onClick={() => togglePanel('payments-add')}
-            >
-              {activePanel === 'payments-add' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={activePanel === 'payments-history' ? t('closePaymentHistory') : t('openPaymentHistory')}
-              title={activePanel === 'payments-history' ? t('closePaymentHistory') : t('openPaymentHistory')}
-              onClick={() => togglePanel('payments-history')}
-            >
-              <PaymentsIcon className="app-icon" />
-            </button>
-          </div>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label={paymentsPanelOpen ? t('closePaymentHistory') : t('openPaymentHistory')}
+            title={paymentsPanelOpen ? t('closePaymentHistory') : t('openPaymentHistory')}
+            onClick={() => togglePanel('payments')}
+          >
+            {paymentsPanelOpen ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+          </button>
         </div>
-        {activePanel !== 'payments-add' && activePanel !== 'payments-history' ? (
+        {!paymentsPanelOpen ? (
           <p className="empty-state">{t('feeFormHint')}</p>
         ) : null}
+        {paymentsPanelOpen ? (
+          <>
+          <div className="record-list top-space">
+            {payments.length === 0 ? (
+              <p className="empty-state">{t('paymentsEmpty')}</p>
+            ) : (
+              payments.map((payment) => (
+                <article key={payment.id} className="record-item record-item--stack">
+                  <div>
+                    <strong>{payment.description || payment.stage || t('caseFee')}</strong>
+                    <p>{payment.stage || t('caseFee')}</p>
+                    <p className="record-item__meta">{payment.date}</p>
+                  </div>
+                  <span className="badge">{formatCurrency(payment.amount)} | {payment.status || 'Paid'}</span>
+                </article>
+              ))
+            )}
+          </div>
+          <button
+            type="button"
+            className="button button--secondary top-space"
+            onClick={() => setActivePanel((current) => (current === 'payments-add' ? 'payments' : 'payments-add'))}
+          >
+            {activePanel === 'payments-add' ? t('closePaymentForm') : t('addPayment')}
+          </button>
+          </>
+        ) : null}
         {activePanel === 'payments-add' ? (
-          <form onSubmit={handlePaymentSubmit}>
+          <form onSubmit={handlePaymentSubmit} className="top-space">
             <div className="form-grid">
               <div className="form-group">
                 <label>{t('amount')}:</label>
@@ -624,24 +641,6 @@ const CaseDetails = () => {
             </button>
           </form>
         ) : null}
-        {activePanel === 'payments-history' ? (
-          <div className="record-list top-space">
-            {payments.length === 0 ? (
-              <p className="empty-state">{t('paymentsEmpty')}</p>
-            ) : (
-              payments.map((payment) => (
-                <article key={payment.id} className="record-item record-item--stack">
-                  <div>
-                    <strong>{payment.description || payment.stage || t('caseFee')}</strong>
-                    <p>{payment.stage || t('caseFee')}</p>
-                    <p className="record-item__meta">{payment.date}</p>
-                  </div>
-                  <span className="badge">{formatCurrency(payment.amount)} | {payment.status || 'Paid'}</span>
-                </article>
-              ))
-            )}
-          </div>
-        ) : null}
       </section>
 
       <section className="panel">
@@ -650,46 +649,22 @@ const CaseDetails = () => {
             <p className="eyebrow">{t('comments')}</p>
             <h2>{t('caseNotes')}</h2>
           </div>
-          <div className="header-icon-group">
-            <button
-              type="button"
-              className="icon-button icon-button--accent"
-              aria-label={activePanel === 'notes-add' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
-              title={activePanel === 'notes-add' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
-              onClick={() => togglePanel('notes-add')}
-            >
-              {activePanel === 'notes-add' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={activePanel === 'notes-history' ? t('closeCaseNotesHistory') : t('openCaseNotesHistory')}
-              title={activePanel === 'notes-history' ? t('closeCaseNotesHistory') : t('openCaseNotesHistory')}
-              onClick={() => togglePanel('notes-history')}
-            >
-              <MessageIcon className="app-icon" />
-            </button>
-          </div>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label={notesPanelOpen ? t('closeCaseNotesHistory') : t('openCaseNotesHistory')}
+            title={notesPanelOpen ? t('closeCaseNotesHistory') : t('openCaseNotesHistory')}
+            onClick={() => togglePanel('notes')}
+          >
+            {notesPanelOpen ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+          </button>
         </div>
-        {activePanel !== 'notes-add' && activePanel !== 'notes-history' ? (
+        {!notesPanelOpen ? (
           <p className="empty-state">{t('caseNotesHint')}</p>
         ) : null}
-        {activePanel === 'notes-add' ? (
-          <form onSubmit={handleCommentSubmit} className="top-space">
-            <div className="form-group">
-              <label>{t('addCaseNote')}</label>
-              <textarea
-                value={commentDraft}
-                onChange={(e) => setCommentDraft(e.target.value)}
-                placeholder={t('addCaseNotePlaceholder')}
-                required
-              />
-            </div>
-            <button type="submit" className="button">{t('saveCaseNote')}</button>
-          </form>
-        ) : null}
-        {activePanel === 'notes-history' ? (
-          comments.length === 0 ? (
+        {notesPanelOpen ? (
+          <>
+          {comments.length === 0 ? (
             <p className="empty-state top-space">{t('caseNotesEmpty')}</p>
           ) : (
             <div className="record-list top-space">
@@ -704,7 +679,29 @@ const CaseDetails = () => {
                 </article>
               ))}
             </div>
-          )
+          )}
+          <button
+            type="button"
+            className="button button--secondary top-space"
+            onClick={() => setActivePanel((current) => (current === 'notes-add' ? 'notes' : 'notes-add'))}
+          >
+            {activePanel === 'notes-add' ? t('closeCaseNotesForm') : t('addCaseNote')}
+          </button>
+          </>
+        ) : null}
+        {activePanel === 'notes-add' ? (
+          <form onSubmit={handleCommentSubmit} className="top-space">
+            <div className="form-group">
+              <label>{t('addCaseNote')}</label>
+              <textarea
+                value={commentDraft}
+                onChange={(e) => setCommentDraft(e.target.value)}
+                placeholder={t('addCaseNotePlaceholder')}
+                required
+              />
+            </div>
+            <button type="submit" className="button">{t('saveCaseNote')}</button>
+          </form>
         ) : null}
       </section>
 
