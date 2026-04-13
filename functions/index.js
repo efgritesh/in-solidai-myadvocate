@@ -19,7 +19,7 @@ const googleAuth = new GoogleAuth({
 });
 
 const DEFAULT_VERTEX_LOCATION = 'global';
-const DEFAULT_VERTEX_MODEL = 'gemini-2.0-flash-001';
+const DEFAULT_VERTEX_MODEL = 'gemini-2.5-flash';
 const SUFFICIENT_TEXT_LENGTH = 120;
 
 function getProjectId() {
