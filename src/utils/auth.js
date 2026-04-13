@@ -18,6 +18,9 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
   const userRef = doc(db, 'users', user.uid);
   const userSnap = await getDoc(userRef);
   const preferredLanguage = extraData.preferredLanguage || getStoredLanguage();
+  const subscriptionPlan = extraData.subscriptionPlan || 'starter';
+  const premiumStatus = extraData.premiumStatus || 'inactive';
+  const premiumActive = extraData.premiumActive || false;
 
   if (!userSnap.exists()) {
     const baseProfile = {
@@ -28,6 +31,9 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
       createdAt: new Date().toISOString(),
       profileComplete: role === 'admin',
       preferredLanguage,
+      subscriptionPlan,
+      premiumStatus,
+      premiumActive,
     };
 
     await setDoc(userRef, { ...baseProfile, ...extraData });
@@ -46,7 +52,14 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
     });
   }
 
-  return { ...currentData, role: mergedRole, preferredLanguage: currentData.preferredLanguage || preferredLanguage };
+  return {
+    ...currentData,
+    role: mergedRole,
+    preferredLanguage: currentData.preferredLanguage || preferredLanguage,
+    subscriptionPlan: currentData.subscriptionPlan || subscriptionPlan,
+    premiumStatus: currentData.premiumStatus || premiumStatus,
+    premiumActive: typeof currentData.premiumActive === 'boolean' ? currentData.premiumActive : premiumActive,
+  };
 };
 
 export const loginWithEmail = async (email, password) => {

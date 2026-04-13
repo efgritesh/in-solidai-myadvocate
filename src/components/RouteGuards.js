@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import { ensureUserProfile, getRouteForRole } from '../utils/auth';
@@ -77,9 +77,16 @@ export const PublicOnlyRoute = ({ children }) => {
   return children;
 };
 
-export const ProtectedRoute = ({ children, allowedRoles = [], allowIncomplete = false }) => {
+export const ProtectedRoute = ({
+  children,
+  allowedRoles = [],
+  allowIncomplete = false,
+  requirePremium = false,
+  premiumFallback = '/premium',
+}) => {
   const { user, loading } = useAuthSession();
   const { profile, loading: profileLoading } = useResolvedProfile(user, loading);
+  const location = useLocation();
 
   if (loading || profileLoading) {
     return <LoadingState fullScreen label="Loading workspace..." />;
@@ -99,6 +106,12 @@ export const ProtectedRoute = ({ children, allowedRoles = [], allowIncomplete = 
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(profile.role)) {
     return <Navigate to={getRouteForRole(profile.role)} replace />;
+  }
+
+  if (requirePremium && !profile.premiumActive) {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`);
+    const separator = premiumFallback.includes('?') ? '&' : '?';
+    return <Navigate to={`${premiumFallback}${separator}next=${next}`} replace />;
   }
 
   return children;

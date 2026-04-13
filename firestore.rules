@@ -58,7 +58,18 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.role in ['admin', 'advocate'];
 
-      allow read, update: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.subscriptionPlan == resource.data.subscriptionPlan
+        && request.resource.data.premiumStatus == resource.data.premiumStatus
+        && request.resource.data.premiumActive == resource.data.premiumActive
+        && request.resource.data.premiumSource == resource.data.premiumSource
+        && request.resource.data.premiumBillingAmountInr == resource.data.premiumBillingAmountInr
+        && request.resource.data.premiumActivatedAt == resource.data.premiumActivatedAt
+        && request.resource.data.premiumRenewalDate == resource.data.premiumRenewalDate;
     }
 
     match /cases/{caseId} {

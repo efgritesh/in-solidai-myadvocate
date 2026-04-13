@@ -44,6 +44,26 @@ async function requireAdvocate(request) {
     throw new HttpsError('permission-denied', 'Only advocates can use drafting tools.');
   }
 
+  if (!userSnap.data()?.premiumActive) {
+    throw new HttpsError('failed-precondition', 'AI drafting is available only on the premium plan.');
+  }
+
+  return {
+    uid: request.auth.uid,
+    profile: userSnap.data(),
+  };
+}
+
+async function requireSignedInUser(request) {
+  if (!request.auth?.uid) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+
+  const userSnap = await db.collection('users').doc(request.auth.uid).get();
+  if (!userSnap.exists) {
+    throw new HttpsError('not-found', 'User profile not found.');
+  }
+
   return {
     uid: request.auth.uid,
     profile: userSnap.data(),
@@ -785,5 +805,36 @@ exports.publishDraftingOutput = onCall(async (request) => {
   return {
     documentId: documentRef.id,
     storagePath: publishedPath,
+  };
+});
+
+exports.activatePremiumSubscription = onCall(async (request) => {
+  const user = await requireSignedInUser(request);
+
+  if (user.profile.role !== 'advocate') {
+    throw new HttpsError('permission-denied', 'Only advocates can activate the premium plan.');
+  }
+
+  const billingAmountInr = Number(request.data?.billingAmountInr || 200);
+  const activatedAt = admin.firestore.Timestamp.now();
+  const renewalDate = admin.firestore.Timestamp.fromDate(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  );
+
+  await db.collection('users').doc(user.uid).update({
+    subscriptionPlan: 'premium_monthly',
+    premiumStatus: 'active',
+    premiumActive: true,
+    premiumSource: request.data?.source || 'dummy_checkout',
+    premiumBillingAmountInr: billingAmountInr,
+    premiumActivatedAt: activatedAt,
+    premiumRenewalDate: renewalDate,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return {
+    premiumActive: true,
+    subscriptionPlan: 'premium_monthly',
+    billingAmountInr,
   };
 });
