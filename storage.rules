@@ -19,6 +19,10 @@ service firebase.storage {
       return isAdvocate() && request.auth.uid == advocateId;
     }
 
+    function ownsUserPath(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
     function accessDocPath(token) {
       return /databases/(default)/documents/client_access/$(token);
     }
@@ -50,7 +54,7 @@ service firebase.storage {
     }
 
     match /drafting/{advocateId}/{filePath=**} {
-      allow read, write: if ownsAdvocateRecord(advocateId);
+      allow read, write: if ownsUserPath(advocateId);
     }
 
     match /client-access/{token}/{filePath=**} {
