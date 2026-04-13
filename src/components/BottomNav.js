@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { signOut } from 'firebase/auth';
@@ -27,6 +27,7 @@ const BottomNav = ({ items }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const mobileMenuRef = useRef(null);
   const { profile } = useCurrentUserProfile();
   const showPremiumBadge = profile?.role === 'advocate' && !profile?.premiumActive;
 
@@ -54,6 +55,12 @@ const BottomNav = ({ items }) => {
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!open && mobileMenuRef.current?.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -136,8 +143,8 @@ const BottomNav = ({ items }) => {
         aria-label={t('closeNavigation')}
         onClick={() => setOpen(false)}
       />
-      <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`} aria-hidden={!open}>
-        <div className="top-nav__drawer">
+      <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`} inert={open ? undefined : ''}>
+        <div className="top-nav__drawer" ref={mobileMenuRef}>
           <LanguageSelector className="top-nav__language top-nav__language--mobile" variant="icon" />
           {navItems.map((item) => {
             const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;

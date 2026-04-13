@@ -1,13 +1,30 @@
-import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { functions, storage } from '../firebase';
+import { auth, storage } from '../firebase';
 
-const createSessionCallable = httpsCallable(functions, 'createDraftingSession');
-const registerSourceCallable = httpsCallable(functions, 'registerDraftingSource');
-const extractSourcesCallable = httpsCallable(functions, 'extractDraftingSources');
-const generateOutputCallable = httpsCallable(functions, 'generateDraftingOutput');
-const exportDocxCallable = httpsCallable(functions, 'exportDraftingDocx');
-const publishOutputCallable = httpsCallable(functions, 'publishDraftingOutput');
+const FUNCTIONS_BASE = 'https://asia-south1-in-solidai-myadvocate.cloudfunctions.net';
+
+const postDraftingAction = async (endpoint, payload) => {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) {
+    throw new Error('You must be signed in to use AI drafting.');
+  }
+
+  const response = await fetch(`${FUNCTIONS_BASE}/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload || {}),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Drafting request failed.');
+  }
+
+  return data;
+};
 
 export const draftingTypeOptions = [
   { value: 'legal_notice', label: 'Legal notice' },
@@ -23,35 +40,12 @@ export const draftingTypeOptions = [
   { value: 'custom', label: 'Custom' },
 ];
 
-export const createDraftingSession = async (payload) => {
-  const response = await createSessionCallable(payload);
-  return response.data;
-};
-
-export const registerDraftingSource = async (payload) => {
-  const response = await registerSourceCallable(payload);
-  return response.data;
-};
-
-export const extractDraftingSources = async (payload) => {
-  const response = await extractSourcesCallable(payload);
-  return response.data;
-};
-
-export const generateDraftingOutput = async (payload) => {
-  const response = await generateOutputCallable(payload);
-  return response.data;
-};
-
-export const exportDraftingDocx = async (payload) => {
-  const response = await exportDocxCallable(payload);
-  return response.data;
-};
-
-export const publishDraftingOutput = async (payload) => {
-  const response = await publishOutputCallable(payload);
-  return response.data;
-};
+export const createDraftingSession = async (payload) => postDraftingAction('createDraftingSessionHttp', payload);
+export const registerDraftingSource = async (payload) => postDraftingAction('registerDraftingSourceHttp', payload);
+export const extractDraftingSources = async (payload) => postDraftingAction('extractDraftingSourcesHttp', payload);
+export const generateDraftingOutput = async (payload) => postDraftingAction('generateDraftingOutputHttp', payload);
+export const exportDraftingDocx = async (payload) => postDraftingAction('exportDraftingDocxHttp', payload);
+export const publishDraftingOutput = async (payload) => postDraftingAction('publishDraftingOutputHttp', payload);
 
 export const uploadDraftingFile = async ({ advocateId, sessionId, file }) => {
   const storagePath = `drafting/${advocateId}/sessions/${sessionId}/sources/${Date.now()}-${file.name}`;
