@@ -45,11 +45,15 @@ service firebase.storage {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
-    match /documents/{advocateId}/{fileName} {
+    match /documents/{advocateId}/{filePath=**} {
       allow read, write: if ownsAdvocateRecord(advocateId);
     }
 
-    match /client-access/{token}/{fileName} {
+    match /drafting/{advocateId}/{filePath=**} {
+      allow read, write: if ownsAdvocateRecord(advocateId);
+    }
+
+    match /client-access/{token}/{filePath=**} {
       allow read: if accessOpen(token) || ownsAccessToken(token);
       allow write: if accessOpen(token) || ownsAccessToken(token);
     }

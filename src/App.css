@@ -1115,6 +1115,79 @@ textarea {
   animation: spin 0.75s linear infinite;
 }
 
+.panel--accent {
+  border-color: #111111;
+}
+
+.supporting-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.inline-feedback {
+  margin: 10px 0 0;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.inline-feedback--error {
+  color: #9f1d1d;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button-row .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.button--secondary {
+  background: #ffffff;
+  color: #111111;
+  border: 1px solid var(--line);
+}
+
+.button--secondary:hover {
+  background: #f4f4f4;
+}
+
+.record-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.record-card textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.record-item--interactive {
+  cursor: pointer;
+}
+
+.record-item--interactive:hover {
+  border-color: #111111;
+}
+
+.empty-state-block {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+.top-space {
+  margin-top: 16px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1226,5 +1299,9 @@ textarea {
   .matter-row__progress {
     display: grid;
     justify-content: start;
+  }
+
+  .button-row .button {
+    width: auto;
   }
 }

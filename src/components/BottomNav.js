@@ -7,6 +7,7 @@ import {
   ClientsIcon,
   CloseIcon,
   DashboardIcon,
+  DraftingIcon,
   InfoIcon,
   MenuIcon,
 } from './AppIcons';
@@ -17,6 +18,7 @@ const defaultIcons = {
   '/dashboard': DashboardIcon,
   '/cases': CasesIcon,
   '/clients': ClientsIcon,
+  '/drafting': DraftingIcon,
 };
 
 const BottomNav = ({ items }) => {
@@ -30,6 +32,7 @@ const BottomNav = ({ items }) => {
         { to: '/dashboard', label: t('dashboard') },
         { to: '/cases', label: t('cases') },
         { to: '/clients', label: t('clients') },
+        { to: '/drafting', label: t('aiDraftingAssistant'), icon: DraftingIcon },
         { to: '/about', label: t('about'), icon: InfoIcon },
       ],
     [items, t]

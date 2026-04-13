@@ -23,7 +23,20 @@ const Documents = () => {
     }
     try {
       const querySnapshot = await getDocs(query(collection(db, 'documents'), where('advocate_id', '==', advocateId)));
-      setDocuments(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const resolvedDocuments = await Promise.all(
+        querySnapshot.docs.map(async (docItem) => {
+          const record = { id: docItem.id, ...docItem.data() };
+          if (!record.url && record.storage_path) {
+            try {
+              record.url = await getDownloadURL(ref(storage, record.storage_path));
+            } catch (error) {
+              record.url = '';
+            }
+          }
+          return record;
+        })
+      );
+      setDocuments(resolvedDocuments);
     } finally {
       setLoading(false);
     }
@@ -55,7 +68,9 @@ const Documents = () => {
         case_id: caseId,
         type,
         url,
+        storage_path: storageRef.fullPath,
         name: file.name,
+        mime_type: file.type || 'application/octet-stream',
         uploaded_by_role: 'advocate',
         client_access_token: caseRecord?.client_access_token || '',
       });

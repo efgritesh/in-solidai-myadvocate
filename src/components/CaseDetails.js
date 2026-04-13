@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink } from '../utils/caseAccess';
 import {
   CloseIcon,
+  DraftingIcon,
   EyeIcon,
   LockIcon,
   MessageIcon,
@@ -59,6 +60,7 @@ const buildSmsShareLink = (caseRecord) =>
 const CaseDetails = () => {
   const { t } = useTranslation();
   const { caseId } = useParams();
+  const navigate = useNavigate();
   const [caseRecord, setCaseRecord] = useState(null);
   const [payments, setPayments] = useState([]);
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
@@ -238,6 +240,15 @@ const CaseDetails = () => {
           >
             <EyeIcon className="app-icon" />
           </a>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t('openDraftingAssistant')}
+            title={t('openDraftingAssistant')}
+            onClick={() => navigate(`/drafting?caseId=${caseRecord.id}`)}
+          >
+            <DraftingIcon className="app-icon" />
+          </button>
           <button
             type="button"
             className={`icon-button${caseRecord.client_access_enabled ? '' : ' icon-button--danger'}`}

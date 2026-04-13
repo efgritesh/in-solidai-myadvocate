@@ -17,6 +17,7 @@ import Documents from './components/Documents';
 import Invite from './components/Invite';
 import CaseAccess from './components/CaseAccess';
 import About from './components/About';
+import DraftingAssistant from './components/DraftingAssistant';
 import { ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards';
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
         <Route path="/cases" element={<ProtectedRoute allowedRoles={['advocate']}><Cases /></ProtectedRoute>} />
         <Route path="/cases/:caseId" element={<ProtectedRoute allowedRoles={['advocate']}><CaseDetails /></ProtectedRoute>} />
         <Route path="/clients" element={<ProtectedRoute allowedRoles={['advocate']}><Clients /></ProtectedRoute>} />
+        <Route path="/drafting" element={<ProtectedRoute allowedRoles={['advocate']}><DraftingAssistant /></ProtectedRoute>} />
         <Route path="/hearings" element={<ProtectedRoute allowedRoles={['advocate']}><Hearings /></ProtectedRoute>} />
         <Route path="/payments" element={<ProtectedRoute allowedRoles={['advocate']}><Payments /></ProtectedRoute>} />
         <Route path="/documents" element={<ProtectedRoute allowedRoles={['advocate']}><Documents /></ProtectedRoute>} />

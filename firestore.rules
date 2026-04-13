@@ -91,6 +91,21 @@ service cloud.firestore {
       allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
     }
 
+    match /drafting_sessions/{sessionId} {
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
+    }
+
+    match /drafting_sources/{sourceId} {
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
+    }
+
+    match /drafting_outputs/{outputId} {
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
+    }
+
     match /client_access/{token} {
       allow read: if accessOpen(token) || ownsAccessToken(token);
       allow update, delete: if ownsAccessToken(token);
