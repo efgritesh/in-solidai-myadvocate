@@ -521,6 +521,12 @@ const DraftingAssistant = () => {
           <InfoIcon className="app-icon section-icon" />
         </div>
         <p className="supporting-copy">{t('aiDraftingDisclaimerBody')}</p>
+        {savingSetup || working ? (
+          <LoadingState
+            compact
+            label={savingSetup ? t('saving') : output ? t('processingDraftingRequest') : t('processing')}
+          />
+        ) : null}
         {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
       </section>
 

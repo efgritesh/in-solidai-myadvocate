@@ -10,6 +10,7 @@ import {
 
 const LanguageSelector = ({ token = '', mode = 'user', className = '', variant = 'inline' }) => {
   const { i18n, t } = useTranslation();
+  const currentLanguage = languageOptions.find((option) => option.value === (i18n.language || 'en')) || languageOptions[0];
 
   const handleChange = async (event) => {
     const nextLanguage = event.target.value;
@@ -28,7 +29,7 @@ const LanguageSelector = ({ token = '', mode = 'user', className = '', variant =
     <label className={`language-selector language-selector--${variant} ${className}`.trim()}>
       <span className="sr-only">{t('selectLanguage')}</span>
       {variant === 'icon' ? <GlobeIcon className="app-icon language-selector__icon" /> : null}
-      <select value={i18n.language || 'en'} onChange={handleChange} aria-label="Language">
+      <select value={i18n.language || 'en'} onChange={handleChange} aria-label={currentLanguage.label}>
         {languageOptions.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

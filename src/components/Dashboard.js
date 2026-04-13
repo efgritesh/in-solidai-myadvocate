@@ -8,6 +8,7 @@ import { seedAdvocateData } from '../utils/seedData';
 import LoadingState from './LoadingState';
 import { syncAdvocateClientAccess } from '../utils/clientAccessRecords';
 import { formatLifecycleDate, isHearingLifecycleStep } from '../utils/lifecycle';
+import { DraftingIcon } from './AppIcons';
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -186,6 +187,13 @@ const Dashboard = () => {
         <Link className="action-tile" to="/invite">
           <strong>{t('clientLinks')}</strong>
           <span>{t('shareSecureClientLinks')}</span>
+        </Link>
+        <Link className="action-tile action-tile--drafting" to="/drafting">
+          <div className="action-tile__header">
+            <DraftingIcon className="app-icon" />
+            <strong>{t('aiDraftingAssistant')}</strong>
+          </div>
+          <span>{t('dashboardDraftingCardSubtitle')}</span>
         </Link>
       </section>
       </>

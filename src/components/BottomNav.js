@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { signOut } from 'firebase/auth';
 import {
@@ -24,6 +24,7 @@ const defaultIcons = {
 const BottomNav = ({ items }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
 
   const navItems = useMemo(
@@ -46,6 +47,28 @@ const BottomNav = ({ items }) => {
     await signOut(auth);
     navigate('/login');
   };
+
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
 
   return (
     <nav className="top-nav" aria-label="Primary">
@@ -98,7 +121,15 @@ const BottomNav = ({ items }) => {
             </button>
           </div>
         </div>
-        <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`}>
+      </div>
+      <button
+        type="button"
+        className={`top-nav__scrim${open ? ' open' : ''}`}
+        aria-label={t('closeNavigation')}
+        onClick={() => setOpen(false)}
+      />
+      <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`} aria-hidden={!open}>
+        <div className="top-nav__drawer">
           <LanguageSelector className="top-nav__language top-nav__language--mobile" variant="icon" />
           {navItems.map((item) => {
             const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
