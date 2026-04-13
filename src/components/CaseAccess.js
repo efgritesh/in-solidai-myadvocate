@@ -8,17 +8,7 @@ import { db, storage } from '../firebase';
 import LanguageSelector from './LanguageSelector';
 import { getStoredClientLanguage } from '../utils/language';
 import { DocumentsIcon, PaymentsIcon, ShareIcon } from './AppIcons';
-
-const formatTimelineMonth = (value) => {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}$/.test(value)) {
-    const [year, month] = value.split('-');
-    return new Intl.DateTimeFormat('en-IN', { month: 'short', year: 'numeric' }).format(
-      new Date(Number(year), Number(month) - 1, 1)
-    );
-  }
-  return value;
-};
+import { formatLifecycleDate, formatLifecycleMonth, getLifecycleDisplayDate, isHearingLifecycleStep } from '../utils/lifecycle';
 
 const CaseAccess = () => {
   const { t, i18n } = useTranslation();
@@ -271,8 +261,10 @@ const CaseAccess = () => {
                     <strong>{step.title}</strong>
                     <span className="timeline-step__eta">
                       {step.status === 'done'
-                        ? `Recorded ${formatTimelineMonth(step.eta) || 'timeline reached'}`
-                        : `Tentative ${formatTimelineMonth(step.eta) || 'date to be updated'}`}
+                        ? `Recorded ${getLifecycleDisplayDate(step) || 'timeline reached'}`
+                        : isHearingLifecycleStep(step) && step.scheduled_date
+                          ? `Scheduled ${formatLifecycleDate(step.scheduled_date)}`
+                          : `Tentative ${formatLifecycleMonth(step.eta) || 'date to be updated'}`}
                     </span>
                     <p>
                       {step.status === 'done'
@@ -281,6 +273,7 @@ const CaseAccess = () => {
                           ? t('currentlyActiveInCase')
                           : t('upcomingCaseJourney')}
                     </p>
+                    {step.notes ? <p>{step.notes}</p> : null}
                   </div>
                 </article>
               ))}

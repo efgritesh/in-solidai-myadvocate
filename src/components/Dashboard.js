@@ -7,6 +7,7 @@ import PageShell from './PageShell';
 import { seedAdvocateData } from '../utils/seedData';
 import LoadingState from './LoadingState';
 import { syncAdvocateClientAccess } from '../utils/clientAccessRecords';
+import { formatLifecycleDate, isHearingLifecycleStep } from '../utils/lifecycle';
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -33,8 +34,7 @@ const Dashboard = () => {
         await seedAdvocateData(advocateId);
         await syncAdvocateClientAccess(advocateId);
 
-        const [hearingsSnap, casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
-          getDocs(query(collection(db, 'hearings'), where('advocate_id', '==', advocateId))),
+        const [casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
           getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
           getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
           getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
@@ -47,17 +47,20 @@ const Dashboard = () => {
         nextSevenDays.setDate(today.getDate() + 7);
 
         const caseRecords = casesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        const caseIdByNumber = caseRecords.reduce((lookup, caseRecord) => {
-          lookup[caseRecord.case_number] = caseRecord.id;
-          return lookup;
-        }, {});
-
-        const hearingRecords = hearingsSnap.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            case_doc_id: caseIdByNumber[doc.data().case_id] || '',
-          }))
+        const hearingRecords = caseRecords
+          .flatMap((caseRecord) =>
+            (caseRecord.lifecycle || [])
+              .filter((step) => isHearingLifecycleStep(step) && step.scheduled_date)
+              .map((step) => ({
+                id: `${caseRecord.id}-${step.id}`,
+                case_id: caseRecord.case_number,
+                case_doc_id: caseRecord.id,
+                date: step.scheduled_date,
+                description: step.notes || step.title,
+                purpose: step.title,
+                status: step.status,
+              }))
+          )
           .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const upcoming = hearingRecords.filter((hearing) => {
@@ -136,7 +139,7 @@ const Dashboard = () => {
                   <strong>{reminder.case_id}</strong>
                   <p>{reminder.description}</p>
                 </div>
-                <span className="badge">{reminder.date}</span>
+                <span className="badge">{formatLifecycleDate(reminder.date)}</span>
               </article>
             ))}
           </div>
@@ -164,7 +167,7 @@ const Dashboard = () => {
                   <strong>{hearing.case_id}</strong>
                   <p>{hearing.description}</p>
                 </div>
-                <span className="badge">{hearing.date}</span>
+                <span className="badge">{formatLifecycleDate(hearing.date)}</span>
               </article>
             ))}
           </div>

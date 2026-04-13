@@ -8,13 +8,14 @@ import { buildCaseAccessLink, createCaseAccessToken } from '../utils/caseAccess'
 import { ArrowRightIcon, CloseIcon, EyeIcon, MessageIcon, PlusIcon, WhatsAppIcon } from './AppIcons';
 import LoadingState from './LoadingState';
 import { syncAdvocateClientAccess, syncCaseAccessRecord } from '../utils/clientAccessRecords';
+import { createLifecycleStep, formatLifecycleDate, getLifecycleDisplayDate, isHearingLifecycleStep } from '../utils/lifecycle';
 
 const defaultLifecycle = [
-  { title: 'Initial consultation', eta: 'Apr 2026' },
-  { title: 'Draft petition and evidence set', eta: 'May 2026' },
-  { title: 'File before court', eta: 'Jun 2026' },
-  { title: 'Attend hearing and next directions', eta: 'Jul 2026' },
-  { title: 'Order follow-up and closure', eta: 'Aug 2026' },
+  { title: 'Initial consultation', eta: '2026-04', stage_type: 'general', scheduled_date: '', notes: '' },
+  { title: 'Draft petition and evidence set', eta: '2026-05', stage_type: 'general', scheduled_date: '', notes: '' },
+  { title: 'File before court', eta: '2026-06', stage_type: 'general', scheduled_date: '', notes: '' },
+  { title: 'Interim relief hearing', eta: '2026-07', stage_type: 'hearing', scheduled_date: '', notes: '' },
+  { title: 'Order follow-up and closure', eta: '2026-08', stage_type: 'general', scheduled_date: '', notes: '' },
 ];
 
 const lifecyclePresets = [
@@ -32,10 +33,15 @@ const lifecyclePresets = [
 const createLifecycle = (customSteps) => {
   const steps = customSteps.length ? customSteps : defaultLifecycle;
   return steps.map((step, index) => ({
-    id: `step-${index + 1}`,
-    title: step.title,
-    eta: step.eta || '',
-    status: index === 0 ? 'in_progress' : 'pending',
+    ...createLifecycleStep({
+      id: `step-${index + 1}`,
+      title: step.title,
+      eta: step.eta || '',
+      stageType: step.stage_type || 'general',
+      scheduledDate: step.scheduled_date || '',
+      notes: step.notes || '',
+      status: index === 0 ? 'in_progress' : 'pending',
+    }),
   }));
 };
 
@@ -49,17 +55,6 @@ const buildWhatsAppShareLink = (caseItem) =>
 
 const buildSmsShareLink = (caseItem) =>
   `sms:?&body=${encodeURIComponent(buildShareMessage(caseItem))}`;
-
-const formatTimelineMonth = (value) => {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}$/.test(value)) {
-    const [year, month] = value.split('-');
-    return new Intl.DateTimeFormat('en-IN', { month: 'short', year: 'numeric' }).format(
-      new Date(Number(year), Number(month) - 1, 1)
-    );
-  }
-  return value;
-};
 
 const Cases = () => {
   const { t, i18n } = useTranslation();
@@ -75,6 +70,9 @@ const Cases = () => {
   const [status, setStatus] = useState('Open');
   const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
   const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
+  const [selectedLifecycleDate, setSelectedLifecycleDate] = useState('');
+  const [selectedLifecycleType, setSelectedLifecycleType] = useState('general');
+  const [selectedLifecycleNotes, setSelectedLifecycleNotes] = useState('');
   const [lifecycleSteps, setLifecycleSteps] = useState(defaultLifecycle);
   const [loading, setLoading] = useState(true);
 
@@ -116,6 +114,7 @@ const Cases = () => {
           completedSteps,
           totalSteps,
           activeMilestone,
+          nextHearing: lifecycle.find((step) => isHearingLifecycleStep(step) && step.scheduled_date && step.status !== 'done'),
         };
       }),
     [cases]
@@ -133,9 +132,14 @@ const Cases = () => {
       {
         title: selectedLifecyclePreset,
         eta: selectedLifecycleEta,
+        stage_type: selectedLifecycleType,
+        scheduled_date: selectedLifecycleDate,
+        notes: selectedLifecycleNotes,
       },
     ]);
     setSelectedLifecycleEta('');
+    setSelectedLifecycleDate('');
+    setSelectedLifecycleNotes('');
   };
 
   const handleAddCase = async (e) => {
@@ -307,11 +311,26 @@ const Cases = () => {
               </select>
             </div>
             <div className="form-group">
+              <label>{t('lifecycleItemType')}:</label>
+              <select value={selectedLifecycleType} onChange={(e) => setSelectedLifecycleType(e.target.value)}>
+                <option value="general">{t('generalStage')}</option>
+                <option value="hearing">{t('hearingStage')}</option>
+              </select>
+            </div>
+            <div className="form-group">
               <label>{t('tentativeMonth')}:</label>
               <input
                 type="month"
                 value={selectedLifecycleEta}
                 onChange={(e) => setSelectedLifecycleEta(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('scheduledDate')}</label>
+              <input
+                type="date"
+                value={selectedLifecycleDate}
+                onChange={(e) => setSelectedLifecycleDate(e.target.value)}
               />
             </div>
             <div className="form-group full-span">
@@ -331,9 +350,29 @@ const Cases = () => {
                       value={step.eta}
                       onChange={(e) => updateLifecycleDraft(index, 'eta', e.target.value)}
                     />
+                    <select
+                      value={step.stage_type || 'general'}
+                      onChange={(e) => updateLifecycleDraft(index, 'stage_type', e.target.value)}
+                    >
+                      <option value="general">{t('generalStage')}</option>
+                      <option value="hearing">{t('hearingStage')}</option>
+                    </select>
+                    <input
+                      type="date"
+                      value={step.scheduled_date || ''}
+                      onChange={(e) => updateLifecycleDraft(index, 'scheduled_date', e.target.value)}
+                    />
                   </div>
                 ))}
               </div>
+            </div>
+            <div className="form-group full-span">
+              <label>{t('stageNotes')}</label>
+              <textarea
+                value={selectedLifecycleNotes}
+                onChange={(e) => setSelectedLifecycleNotes(e.target.value)}
+                placeholder={t('stageNotesPlaceholder')}
+              />
             </div>
             <div className="form-group full-span">
               <button
@@ -379,7 +418,13 @@ const Cases = () => {
                 </div>
                 <div className="matter-row__meta">
                   <span>{caseItem.next_step || t('noNextStepYet')}</span>
-                  <span>{caseItem.activeMilestone?.title || t('noLifecyclePlanned')}{caseItem.activeMilestone?.eta ? ` | ${formatTimelineMonth(caseItem.activeMilestone.eta)}` : ''}</span>
+                  <span>
+                    {caseItem.activeMilestone?.title || t('noLifecyclePlanned')}
+                    {getLifecycleDisplayDate(caseItem.activeMilestone) ? ` | ${getLifecycleDisplayDate(caseItem.activeMilestone)}` : ''}
+                  </span>
+                  {caseItem.nextHearing ? (
+                    <span>{t('nextHearingLabel')} {caseItem.nextHearing.title} | {formatLifecycleDate(caseItem.nextHearing.scheduled_date)}</span>
+                  ) : null}
                 </div>
                 <div className="progress-strip matter-row__progress">
                   <span>{caseItem.completedSteps}/{caseItem.totalSteps} {t('milestonesComplete')}</span>

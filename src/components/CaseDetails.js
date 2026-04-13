@@ -18,6 +18,7 @@ import {
 } from './AppIcons';
 import LoadingState from './LoadingState';
 import { syncCaseAccessPayment, syncCaseAccessRecord } from '../utils/clientAccessRecords';
+import { createLifecycleStep, formatLifecycleDate, isHearingLifecycleStep, sortLifecycleForCase } from '../utils/lifecycle';
 
 const lifecyclePresets = [
   'Initial consultation',
@@ -66,6 +67,9 @@ const CaseDetails = () => {
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
   const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
   const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
+  const [selectedLifecycleType, setSelectedLifecycleType] = useState('general');
+  const [selectedLifecycleDate, setSelectedLifecycleDate] = useState('');
+  const [selectedLifecycleNotes, setSelectedLifecycleNotes] = useState('');
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -115,8 +119,9 @@ const CaseDetails = () => {
     const lifecycle = (caseRecord.lifecycle || []).map((step) =>
       step.id === stepId ? { ...step, status: nextStatus } : step
     );
-    await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
-    await syncCaseAccessRecord({ ...caseRecord, lifecycle });
+    const sortedLifecycle = sortLifecycleForCase(lifecycle);
+    await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle: sortedLifecycle });
+    await syncCaseAccessRecord({ ...caseRecord, lifecycle: sortedLifecycle });
     await loadCase();
   };
 
@@ -135,12 +140,15 @@ const CaseDetails = () => {
     const currentLifecycle = caseRecord.lifecycle || [];
     const firstPendingIndex = currentLifecycle.findIndex((step) => step.status === 'pending');
     const insertAt = firstPendingIndex === -1 ? currentLifecycle.length : firstPendingIndex;
-    const nextStep = {
+    const nextStep = createLifecycleStep({
       id: `step-${Date.now()}`,
       title: selectedLifecyclePreset,
       eta: selectedLifecycleEta,
+      scheduledDate: selectedLifecycleDate,
+      stageType: selectedLifecycleType,
+      notes: selectedLifecycleNotes,
       status: 'pending',
-    };
+    });
     const lifecycle = [
       ...currentLifecycle.slice(0, insertAt),
       nextStep,
@@ -149,6 +157,8 @@ const CaseDetails = () => {
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
     await syncCaseAccessRecord({ ...caseRecord, lifecycle });
     setSelectedLifecycleEta('');
+    setSelectedLifecycleDate('');
+    setSelectedLifecycleNotes('');
     await loadCase();
   };
 
@@ -334,10 +344,27 @@ const CaseDetails = () => {
               <option key={preset} value={preset}>{preset}</option>
             ))}
           </select>
+          <select value={selectedLifecycleType} onChange={(e) => setSelectedLifecycleType(e.target.value)}>
+            <option value="general">{t('generalStage')}</option>
+            <option value="hearing">{t('hearingStage')}</option>
+          </select>
           <input
             type="month"
             value={selectedLifecycleEta}
             onChange={(e) => setSelectedLifecycleEta(e.target.value)}
+          />
+          <input
+            type="date"
+            value={selectedLifecycleDate}
+            onChange={(e) => setSelectedLifecycleDate(e.target.value)}
+          />
+        </div>
+        <div className="form-group top-space">
+          <label>{t('stageNotes')}</label>
+          <textarea
+            value={selectedLifecycleNotes}
+            onChange={(e) => setSelectedLifecycleNotes(e.target.value)}
+            placeholder={t('stageNotesPlaceholder')}
           />
         </div>
         <div className="lifecycle-editor">
@@ -346,6 +373,9 @@ const CaseDetails = () => {
               <div className="planning-stack">
                 <div>
                   <strong>{t('stepNumber', { count: index + 1 })}</strong>
+                  {isHearingLifecycleStep(step) && step.scheduled_date ? (
+                    <p className="case-status-text">{t('hearingOn')} {formatLifecycleDate(step.scheduled_date)}</p>
+                  ) : null}
                 </div>
                 <input
                   type="text"
@@ -353,10 +383,27 @@ const CaseDetails = () => {
                   onChange={(e) => updateLifecycleField(step.id, 'title', e.target.value)}
                   placeholder={t('stepTitle')}
                 />
+                <select
+                  value={step.stage_type || 'general'}
+                  onChange={(e) => updateLifecycleField(step.id, 'stage_type', e.target.value)}
+                >
+                  <option value="general">{t('generalStage')}</option>
+                  <option value="hearing">{t('hearingStage')}</option>
+                </select>
                 <input
                   type="month"
                   value={step.eta || ''}
                   onChange={(e) => updateLifecycleField(step.id, 'eta', e.target.value)}
+                />
+                <input
+                  type="date"
+                  value={step.scheduled_date || ''}
+                  onChange={(e) => updateLifecycleField(step.id, 'scheduled_date', e.target.value)}
+                />
+                <textarea
+                  value={step.notes || ''}
+                  onChange={(e) => updateLifecycleField(step.id, 'notes', e.target.value)}
+                  placeholder={t('stageNotesPlaceholder')}
                 />
               </div>
               <select value={step.status} onChange={(e) => updateLifecycleStatus(step.id, e.target.value)}>

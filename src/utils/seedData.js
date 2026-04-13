@@ -8,6 +8,7 @@ import {
   syncCaseAccessPayment,
   syncCaseAccessRecord,
 } from './clientAccessRecords';
+import { createLifecycleStep } from './lifecycle';
 
 const formatDate = (date) => date.toISOString().split('T')[0];
 
@@ -18,11 +19,39 @@ const dateAfter = (days) => {
 };
 
 const buildLifecycle = (overrides = {}) => [
-  { id: 'consultation', title: 'Initial consultation', eta: overrides.consultationEta || 'Apr 2026', status: overrides.consultation || 'done' },
-  { id: 'drafting', title: 'Draft petition and evidence set', eta: overrides.draftingEta || 'May 2026', status: overrides.drafting || 'in_progress' },
-  { id: 'filing', title: 'File before court', eta: overrides.filingEta || 'Jun 2026', status: overrides.filing || 'pending' },
-  { id: 'hearing', title: 'Attend hearing and next directions', eta: overrides.hearingEta || 'Jul 2026', status: overrides.hearing || 'pending' },
-  { id: 'closure', title: 'Order follow-up and closure', eta: overrides.closureEta || 'Aug 2026', status: overrides.closure || 'pending' },
+  createLifecycleStep({
+    id: 'consultation',
+    title: 'Initial consultation',
+    eta: overrides.consultationEta || '2026-04',
+    status: overrides.consultation || 'done',
+  }),
+  createLifecycleStep({
+    id: 'drafting',
+    title: 'Draft petition and evidence set',
+    eta: overrides.draftingEta || '2026-05',
+    status: overrides.drafting || 'in_progress',
+  }),
+  createLifecycleStep({
+    id: 'filing',
+    title: 'File before court',
+    eta: overrides.filingEta || '2026-06',
+    status: overrides.filing || 'pending',
+  }),
+  createLifecycleStep({
+    id: 'hearing',
+    title: overrides.hearingTitle || 'Interim relief hearing',
+    eta: overrides.hearingEta || '2026-07',
+    status: overrides.hearing || 'pending',
+    stageType: 'hearing',
+    scheduledDate: overrides.hearingDate || '',
+    notes: overrides.hearingNotes || '',
+  }),
+  createLifecycleStep({
+    id: 'closure',
+    title: 'Order follow-up and closure',
+    eta: overrides.closureEta || '2026-08',
+    status: overrides.closure || 'pending',
+  }),
 ];
 
 const advocateClients = (advocateId) => [
@@ -44,7 +73,13 @@ const advocateCases = (advocateId) => [
     court: 'Delhi District Court',
     summary: 'Civil recovery matter involving unpaid commercial dues and interim relief.',
     next_step: 'File reply bundle and supporting invoice set.',
-    lifecycle: buildLifecycle({ consultation: 'done', drafting: 'done', filing: 'in_progress' }),
+    lifecycle: buildLifecycle({
+      consultation: 'done',
+      drafting: 'done',
+      filing: 'in_progress',
+      hearingDate: dateAfter(1),
+      hearingNotes: 'Reply filing and interim relief hearing',
+    }),
     client_access_token: createCaseAccessToken('DEL-CIV-204/2026'),
     client_access_enabled: true,
   },
@@ -60,7 +95,13 @@ const advocateCases = (advocateId) => [
     court: 'Family Court Bengaluru',
     summary: 'Family matter currently at counselling and settlement review stage.',
     next_step: 'Collect counselling note and update filing pack.',
-    lifecycle: buildLifecycle({ consultation: 'done', drafting: 'in_progress' }),
+    lifecycle: buildLifecycle({
+      consultation: 'done',
+      drafting: 'in_progress',
+      hearingTitle: 'Counselling progress hearing',
+      hearingDate: dateAfter(3),
+      hearingNotes: 'Counselling progress review',
+    }),
     client_access_token: createCaseAccessToken('BLR-FAM-118/2026'),
     client_access_enabled: true,
   },
@@ -76,30 +117,17 @@ const advocateCases = (advocateId) => [
     court: 'Commercial Court Mumbai',
     summary: 'Commercial dispute with current hearing preparation underway.',
     next_step: 'Prepare final argument note and chronology.',
-    lifecycle: buildLifecycle({ consultation: 'done', drafting: 'done', filing: 'done', hearing: 'in_progress' }),
+    lifecycle: buildLifecycle({
+      consultation: 'done',
+      drafting: 'done',
+      filing: 'done',
+      hearing: 'in_progress',
+      hearingTitle: 'Arguments hearing',
+      hearingDate: dateAfter(5),
+      hearingNotes: 'Arguments on maintainability',
+    }),
     client_access_token: createCaseAccessToken('MUM-COM-077/2026'),
     client_access_enabled: true,
-  },
-];
-
-const advocateHearings = (advocateId) => [
-  {
-    advocate_id: advocateId,
-    case_id: 'DEL-CIV-204/2026',
-    date: dateAfter(1),
-    description: 'Reply filing and interim relief hearing',
-  },
-  {
-    advocate_id: advocateId,
-    case_id: 'BLR-FAM-118/2026',
-    date: dateAfter(3),
-    description: 'Counselling progress review',
-  },
-  {
-    advocate_id: advocateId,
-    case_id: 'MUM-COM-077/2026',
-    date: dateAfter(5),
-    description: 'Arguments on maintainability',
   },
 ];
 
@@ -215,13 +243,12 @@ const seedCollectionIfEmpty = async (collectionName, fieldName, fieldValue, reco
 export const seedAdvocateData = async (advocateId) => {
   if (!advocateId) return;
 
-const seedKey = `seeded_${advocateId}_advocate_v6`;
+const seedKey = `seeded_${advocateId}_advocate_v7`;
   if (localStorage.getItem(seedKey) === 'true') return;
 
   const cases = advocateCases(advocateId);
   await seedCollectionIfEmpty('clients', 'advocate_id', advocateId, advocateClients(advocateId));
   const seededCases = await seedCollectionIfEmpty('cases', 'advocate_id', advocateId, cases);
-  await seedCollectionIfEmpty('hearings', 'advocate_id', advocateId, advocateHearings(advocateId));
   const seededPayments = await seedCollectionIfEmpty('payments', 'advocate_id', advocateId, advocatePayments(advocateId, cases));
   const seededDocuments = await seedCollectionIfEmpty('documents', 'advocate_id', advocateId, advocateDocuments(advocateId, cases));
   const seededComments = await seedCollectionIfEmpty('comments', 'advocate_id', advocateId, advocateComments(advocateId, cases));
