@@ -462,7 +462,10 @@ async function generateWithVertex(prompt) {
     throw new Error('Could not obtain a Google access token for AI generation.');
   }
 
-  const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+  const serviceHost = location === 'global'
+    ? 'https://aiplatform.googleapis.com'
+    : `https://${location}-aiplatform.googleapis.com`;
+  const endpoint = `${serviceHost}/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
