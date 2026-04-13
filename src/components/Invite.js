@@ -77,7 +77,7 @@ const Invite = () => {
                   </a>
                   <a
                     className="icon-button"
-                    href={buildCaseAccessLink(caseItem.client_access_token)}
+                    href={`${buildCaseAccessLink(caseItem.client_access_token)}?preview=1`}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={t('previewClientCaseView')}

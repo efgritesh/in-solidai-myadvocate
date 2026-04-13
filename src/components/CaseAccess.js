@@ -3,7 +3,7 @@ import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { useDropzone } from 'react-dropzone';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { db, storage } from '../firebase';
 import LanguageSelector from './LanguageSelector';
 import { getStoredClientLanguage } from '../utils/language';
@@ -13,6 +13,7 @@ import { formatLifecycleDate, formatLifecycleMonth, getLifecycleDisplayDate, isH
 const CaseAccess = () => {
   const { t, i18n } = useTranslation();
   const { token } = useParams();
+  const location = useLocation();
   const [caseRecord, setCaseRecord] = useState(null);
   const [payments, setPayments] = useState([]);
   const [documents, setDocuments] = useState([]);
@@ -21,6 +22,10 @@ const CaseAccess = () => {
   const [paymentForm, setPaymentForm] = useState({ amount: '', description: '' });
   const [status, setStatus] = useState('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const previewMode = useMemo(
+    () => new URLSearchParams(location.search).get('preview') === '1',
+    [location.search]
+  );
 
   const loadCase = useCallback(async () => {
     if (!token) return;
@@ -107,7 +112,7 @@ const CaseAccess = () => {
     await loadCase();
   };
 
-  const { getRootProps, getInputProps } = useDropzone({ onDrop });
+  const { getRootProps, getInputProps } = useDropzone({ onDrop, disabled: previewMode });
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
@@ -243,6 +248,12 @@ const CaseAccess = () => {
             </div>
           </section>
 
+          {previewMode ? (
+            <section className="panel panel--accent">
+              <p className="supporting-copy">{t('previewModeNotice')}</p>
+            </section>
+          ) : null}
+
           <section className="panel">
             <div className="section-heading">
               <div>
@@ -305,6 +316,7 @@ const CaseAccess = () => {
                   <label>{t('amountPaid')}:</label>
                   <input
                     type="number"
+                    disabled={previewMode}
                     value={paymentForm.amount}
                     onChange={(e) => setPaymentForm((current) => ({ ...current, amount: e.target.value }))}
                     required
@@ -314,13 +326,14 @@ const CaseAccess = () => {
                   <label>{t('paymentNote')}:</label>
                   <input
                     type="text"
+                    disabled={previewMode}
                     placeholder={t('paymentNotePlaceholder')}
                     value={paymentForm.description}
                     onChange={(e) => setPaymentForm((current) => ({ ...current, description: e.target.value }))}
                   />
                 </div>
               </div>
-              <button type="submit" className="button">{t('submitPaymentUpdate')}</button>
+              <button type="submit" className="button" disabled={previewMode}>{t('submitPaymentUpdate')}</button>
             </form>
           </section>
 
@@ -345,10 +358,10 @@ const CaseAccess = () => {
                 </article>
               ))}
             </div>
-            <div className="dropzone top-space" {...getRootProps()}>
+            <div className={`dropzone top-space${previewMode ? ' dropzone--disabled' : ''}`} {...getRootProps()}>
               <input {...getInputProps()} />
               <p>{t('tapToUploadCaseDoc')}</p>
-              <small>{t('clientUploadHint')}</small>
+              <small>{previewMode ? t('previewModeUploadHint') : t('clientUploadHint')}</small>
             </div>
           </section>
 
@@ -374,9 +387,9 @@ const CaseAccess = () => {
             <form onSubmit={handleCommentSubmit} className="top-space">
               <div className="form-group">
                 <label>{t('addMessageForAdvocate')}:</label>
-                <textarea value={comment} onChange={(e) => setComment(e.target.value)} required />
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} required disabled={previewMode} />
               </div>
-              <button type="submit" className="button">{t('sendMessage')}</button>
+              <button type="submit" className="button" disabled={previewMode}>{t('sendMessage')}</button>
             </form>
           </section>
         </main>

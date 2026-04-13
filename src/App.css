@@ -207,6 +207,11 @@ textarea {
   cursor: pointer;
 }
 
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .screen-actions .button {
   width: auto;
   min-width: 96px;
@@ -516,6 +521,11 @@ textarea {
   cursor: pointer;
 }
 
+.dropzone--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .dropzone p,
 .dropzone small {
   margin: 0;
@@ -551,11 +561,19 @@ textarea {
   gap: 8px;
 }
 
-.lifecycle-row--card {
-  padding: 14px;
+.lifecycle-row--card,
+.lifecycle-row--flat {
   border-radius: 18px;
   background: #ffffff;
   border: 1px solid var(--line);
+}
+
+.lifecycle-row--card {
+  padding: 14px;
+}
+
+.lifecycle-row--flat {
+  overflow: hidden;
 }
 
 .lifecycle-row span {
@@ -1272,13 +1290,24 @@ textarea {
 
 .lifecycle-row__summary {
   width: 100%;
-  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: none;
+  background: transparent;
   cursor: pointer;
   text-align: left;
 }
 
 .lifecycle-row__summary:hover {
-  border-color: #111111;
+  background: #fafafa;
+}
+
+.lifecycle-row__editor {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
 }
 
 .record-item--interactive {
@@ -1297,6 +1326,11 @@ textarea {
 
 .top-space {
   margin-top: 16px;
+}
+
+.record-item__meta {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .premium-pill {

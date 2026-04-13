@@ -58,6 +58,21 @@ const buildWhatsAppShareLink = (caseRecord) =>
 const buildSmsShareLink = (caseRecord) =>
   `sms:?&body=${encodeURIComponent(buildShareMessage(caseRecord))}`;
 
+const buildPreviewLink = (token) => `${buildCaseAccessLink(token)}?preview=1`;
+
+const formatDateTime = (value, locale = 'en-IN') => {
+  if (!value) return '';
+  const nextDate = new Date(value);
+  if (Number.isNaN(nextDate.getTime())) return '';
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(nextDate);
+};
+
 const CaseDetails = () => {
   const { t } = useTranslation();
   const { caseId } = useParams();
@@ -76,6 +91,7 @@ const CaseDetails = () => {
   const [clientDocuments, setClientDocuments] = useState([]);
   const [commentDraft, setCommentDraft] = useState('');
   const [loading, setLoading] = useState(true);
+  const locale = t('preferredLocale', { defaultValue: 'en-IN' });
 
   const loadCase = useCallback(async () => {
     if (!caseId) {
@@ -320,7 +336,7 @@ const CaseDetails = () => {
           </a>
           <a
             className="icon-button"
-            href={buildCaseAccessLink(caseRecord.client_access_token)}
+            href={buildPreviewLink(caseRecord.client_access_token)}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t('previewClientCaseView')}
@@ -388,7 +404,7 @@ const CaseDetails = () => {
             </div>
             <a
               className="icon-button"
-              href={buildCaseAccessLink(caseRecord.client_access_token)}
+              href={buildPreviewLink(caseRecord.client_access_token)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={t('previewClientCaseView')}
@@ -456,10 +472,10 @@ const CaseDetails = () => {
         )}
         <div className="lifecycle-editor">
           {(caseRecord.lifecycle || []).map((step, index) => (
-            <div key={step.id} className="lifecycle-row lifecycle-row--card">
+            <div key={step.id} className="lifecycle-row lifecycle-row--flat">
               <button
                 type="button"
-                className="record-item lifecycle-row__summary"
+                className="lifecycle-row__summary"
                 onClick={() => toggleLifecycleStep(step.id)}
               >
                 <div>
@@ -475,7 +491,7 @@ const CaseDetails = () => {
                 </div>
               </button>
               {expandedLifecycleStep === step.id ? (
-              <div className="planning-stack">
+              <div className="planning-stack lifecycle-row__editor">
                 <input
                   type="text"
                   value={step.title}
@@ -523,93 +539,109 @@ const CaseDetails = () => {
             <h2>{t('requestOrRecordFees')}</h2>
           </div>
           <div className="header-icon-group">
-            <PaymentsIcon className="app-icon section-icon" />
             <button
               type="button"
               className="icon-button icon-button--accent"
-              aria-label={activePanel === 'payments' ? t('closePaymentForm') : t('openPaymentForm')}
-              title={activePanel === 'payments' ? t('closePaymentForm') : t('openPaymentForm')}
-              onClick={() => togglePanel('payments')}
+              aria-label={activePanel === 'payments-add' ? t('closePaymentForm') : t('openPaymentForm')}
+              title={activePanel === 'payments-add' ? t('closePaymentForm') : t('openPaymentForm')}
+              onClick={() => togglePanel('payments-add')}
             >
-              {activePanel === 'payments' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+              {activePanel === 'payments-add' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={activePanel === 'payments-history' ? t('closePaymentHistory') : t('openPaymentHistory')}
+              title={activePanel === 'payments-history' ? t('closePaymentHistory') : t('openPaymentHistory')}
+              onClick={() => togglePanel('payments-history')}
+            >
+              <PaymentsIcon className="app-icon" />
             </button>
           </div>
         </div>
-        {activePanel === 'payments' ? (
-        <form onSubmit={handlePaymentSubmit}>
-          <div className="form-grid">
-            <div className="form-group">
-              <label>{t('amount')}:</label>
-              <input
-                type="number"
-                placeholder={t('amountInInr')}
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm((current) => ({ ...current, amount: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('date')}:</label>
-              <input
-                type="date"
-                value={paymentForm.date}
-                onChange={(e) => setPaymentForm((current) => ({ ...current, date: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('stage')}:</label>
-              <input
-                type="text"
-                placeholder="Filing, hearing, drafting, etc."
-                value={paymentForm.stage}
-                onChange={(e) => setPaymentForm((current) => ({ ...current, stage: e.target.value }))}
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('paymentMode')}:</label>
-              <select
-                value={paymentForm.requestedFromClient ? 'request' : 'recorded'}
-                onChange={(e) =>
-                  setPaymentForm((current) => ({
-                    ...current,
-                    requestedFromClient: e.target.value === 'request',
-                  }))
-                }
-              >
-                <option value="request">{t('requestFromClient')}</option>
-                <option value="recorded">{t('recordReceived')}</option>
-              </select>
-            </div>
-            <div className="form-group full-span">
-              <label>{t('description')}:</label>
-              <input
-                type="text"
-                placeholder={t('paymentPurpose')}
-                value={paymentForm.description}
-                onChange={(e) => setPaymentForm((current) => ({ ...current, description: e.target.value }))}
-                required
-              />
-            </div>
-          </div>
-          <button type="submit" className="button">
-            {paymentForm.requestedFromClient ? t('requestPayment') : t('savePayment')}
-          </button>
-        </form>
-        ) : (
+        {activePanel !== 'payments-add' && activePanel !== 'payments-history' ? (
           <p className="empty-state">{t('feeFormHint')}</p>
-        )}
-        <div className="record-list top-space">
-          {payments.map((payment) => (
-            <article key={payment.id} className="record-item">
-              <div>
-                <strong>{payment.description || payment.stage || t('caseFee')}</strong>
-                <p>{payment.stage || t('caseFee')} | {payment.date}</p>
+        ) : null}
+        {activePanel === 'payments-add' ? (
+          <form onSubmit={handlePaymentSubmit}>
+            <div className="form-grid">
+              <div className="form-group">
+                <label>{t('amount')}:</label>
+                <input
+                  type="number"
+                  placeholder={t('amountInInr')}
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm((current) => ({ ...current, amount: e.target.value }))}
+                  required
+                />
               </div>
-              <span className="badge">{formatCurrency(payment.amount)} | {payment.status || 'Paid'}</span>
-            </article>
-          ))}
-        </div>
+              <div className="form-group">
+                <label>{t('date')}:</label>
+                <input
+                  type="date"
+                  value={paymentForm.date}
+                  onChange={(e) => setPaymentForm((current) => ({ ...current, date: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('stage')}:</label>
+                <input
+                  type="text"
+                  placeholder="Filing, hearing, drafting, etc."
+                  value={paymentForm.stage}
+                  onChange={(e) => setPaymentForm((current) => ({ ...current, stage: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('paymentMode')}:</label>
+                <select
+                  value={paymentForm.requestedFromClient ? 'request' : 'recorded'}
+                  onChange={(e) =>
+                    setPaymentForm((current) => ({
+                      ...current,
+                      requestedFromClient: e.target.value === 'request',
+                    }))
+                  }
+                >
+                  <option value="request">{t('requestFromClient')}</option>
+                  <option value="recorded">{t('recordReceived')}</option>
+                </select>
+              </div>
+              <div className="form-group full-span">
+                <label>{t('description')}:</label>
+                <input
+                  type="text"
+                  placeholder={t('paymentPurpose')}
+                  value={paymentForm.description}
+                  onChange={(e) => setPaymentForm((current) => ({ ...current, description: e.target.value }))}
+                  required
+                />
+              </div>
+            </div>
+            <button type="submit" className="button">
+              {paymentForm.requestedFromClient ? t('requestPayment') : t('savePayment')}
+            </button>
+          </form>
+        ) : null}
+        {activePanel === 'payments-history' ? (
+          <div className="record-list top-space">
+            {payments.length === 0 ? (
+              <p className="empty-state">{t('paymentsEmpty')}</p>
+            ) : (
+              payments.map((payment) => (
+                <article key={payment.id} className="record-item record-item--stack">
+                  <div>
+                    <strong>{payment.description || payment.stage || t('caseFee')}</strong>
+                    <p>{payment.stage || t('caseFee')}</p>
+                    <p className="record-item__meta">{payment.date}</p>
+                  </div>
+                  <span className="badge">{formatCurrency(payment.amount)} | {payment.status || 'Paid'}</span>
+                </article>
+              ))
+            )}
+          </div>
+        ) : null}
       </section>
 
       <section className="panel">
@@ -618,32 +650,31 @@ const CaseDetails = () => {
             <p className="eyebrow">{t('comments')}</p>
             <h2>{t('caseNotes')}</h2>
           </div>
-          <button
-            type="button"
-            className="icon-button icon-button--accent"
-            aria-label={activePanel === 'notes' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
-            title={activePanel === 'notes' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
-            onClick={() => togglePanel('notes')}
-          >
-            {activePanel === 'notes' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
-          </button>
-        </div>
-        {comments.length === 0 ? (
-          <p className="empty-state">{t('caseNotesEmpty')}</p>
-        ) : (
-          <div className="record-list">
-            {comments.map((commentItem) => (
-              <article key={commentItem.id} className="record-item record-item--stack">
-                <div>
-                  <strong>{commentItem.author_name || commentItem.author_role}</strong>
-                  <p>{commentItem.message}</p>
-                </div>
-                <span className="badge">{commentItem.author_role}</span>
-              </article>
-            ))}
+          <div className="header-icon-group">
+            <button
+              type="button"
+              className="icon-button icon-button--accent"
+              aria-label={activePanel === 'notes-add' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
+              title={activePanel === 'notes-add' ? t('closeCaseNotesForm') : t('openCaseNotesForm')}
+              onClick={() => togglePanel('notes-add')}
+            >
+              {activePanel === 'notes-add' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={activePanel === 'notes-history' ? t('closeCaseNotesHistory') : t('openCaseNotesHistory')}
+              title={activePanel === 'notes-history' ? t('closeCaseNotesHistory') : t('openCaseNotesHistory')}
+              onClick={() => togglePanel('notes-history')}
+            >
+              <MessageIcon className="app-icon" />
+            </button>
           </div>
-        )}
-        {activePanel === 'notes' ? (
+        </div>
+        {activePanel !== 'notes-add' && activePanel !== 'notes-history' ? (
+          <p className="empty-state">{t('caseNotesHint')}</p>
+        ) : null}
+        {activePanel === 'notes-add' ? (
           <form onSubmit={handleCommentSubmit} className="top-space">
             <div className="form-group">
               <label>{t('addCaseNote')}</label>
@@ -656,6 +687,24 @@ const CaseDetails = () => {
             </div>
             <button type="submit" className="button">{t('saveCaseNote')}</button>
           </form>
+        ) : null}
+        {activePanel === 'notes-history' ? (
+          comments.length === 0 ? (
+            <p className="empty-state top-space">{t('caseNotesEmpty')}</p>
+          ) : (
+            <div className="record-list top-space">
+              {comments.map((commentItem) => (
+                <article key={commentItem.id} className="record-item record-item--stack">
+                  <div>
+                    <strong>{commentItem.author_name || commentItem.author_role}</strong>
+                    <p className="record-item__meta">{formatDateTime(commentItem.created_at, locale)}</p>
+                    <p>{commentItem.message}</p>
+                  </div>
+                  <span className="badge">{commentItem.author_role}</span>
+                </article>
+              ))}
+            </div>
+          )
         ) : null}
       </section>
 
