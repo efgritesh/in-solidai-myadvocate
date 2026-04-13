@@ -604,7 +604,7 @@ exports.createDraftingSession = onCall(async (request) => {
   };
 });
 
-exports.createDraftingSessionHttp = onRequest(async (request, response) => {
+exports.createDraftingSessionHttp = onRequest({ invoker: 'public' }, async (request, response) => {
   try {
     const user = await getHttpUser(request, response);
     if (!user) return;
@@ -696,7 +696,7 @@ exports.registerDraftingSource = onCall(async (request) => {
   };
 });
 
-exports.registerDraftingSourceHttp = onRequest(async (request, response) => {
+exports.registerDraftingSourceHttp = onRequest({ invoker: 'public' }, async (request, response) => {
   try {
     const user = await getHttpUser(request, response);
     if (!user) return;
@@ -845,7 +845,7 @@ exports.extractDraftingSources = onCall(async (request) => {
   };
 });
 
-exports.extractDraftingSourcesHttp = onRequest(async (request, response) => {
+exports.extractDraftingSourcesHttp = onRequest({ invoker: 'public' }, async (request, response) => {
   try {
     const user = await getHttpUser(request, response);
     if (!user) return;
@@ -978,7 +978,7 @@ exports.generateDraftingOutput = onCall(async (request) => {
   }
 });
 
-exports.generateDraftingOutputHttp = onRequest(async (request, response) => {
+exports.generateDraftingOutputHttp = onRequest({ invoker: 'public' }, async (request, response) => {
   try {
     const user = await getHttpUser(request, response);
     if (!user) return;
@@ -1073,7 +1073,7 @@ exports.exportDraftingDocx = onCall(async (request) => {
   };
 });
 
-exports.exportDraftingDocxHttp = onRequest(async (request, response) => {
+exports.exportDraftingDocxHttp = onRequest({ invoker: 'public' }, async (request, response) => {
   try {
     const user = await getHttpUser(request, response);
     if (!user) return;
@@ -1175,7 +1175,7 @@ exports.publishDraftingOutput = onCall(async (request) => {
   };
 });
 
-exports.publishDraftingOutputHttp = onRequest(async (request, response) => {
+exports.publishDraftingOutputHttp = onRequest({ invoker: 'public' }, async (request, response) => {
   try {
     const user = await getHttpUser(request, response);
     if (!user) return;
