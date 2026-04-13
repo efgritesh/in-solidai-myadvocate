@@ -12,11 +12,10 @@ const AdminDashboard = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
-    admins: 0,
-    advocates: 0,
-    clients: 0,
-    cases: 0,
-    payments: 0,
+    admins: 1,
+    alerts: 0,
+    checks: 2,
+    environment: 1,
   });
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,20 +31,15 @@ const AdminDashboard = () => {
       try {
         await seedAdminData(adminId);
 
-        const [usersSnap, casesSnap, paymentsSnap, alertsSnap] = await Promise.all([
-          getDocs(collection(db, 'users')),
-          getDocs(collection(db, 'cases')),
-          getDocs(collection(db, 'payments')),
+        const [alertsSnap] = await Promise.all([
           getDocs(query(collection(db, 'system_alerts'), where('admin_id', '==', adminId))),
         ]);
 
-        const users = usersSnap.docs.map((docItem) => docItem.data());
         setStats({
-          admins: users.filter((user) => user.role === 'admin').length,
-          advocates: users.filter((user) => user.role === 'advocate').length,
-          clients: users.filter((user) => user.role === 'client').length,
-          cases: casesSnap.size,
-          payments: paymentsSnap.size,
+          admins: 1,
+          alerts: alertsSnap.size,
+          checks: 2,
+          environment: 1,
         });
         setAlerts(alertsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
       } finally {
@@ -80,16 +74,16 @@ const AdminDashboard = () => {
           <span>{t('admins')}</span>
         </article>
         <article className="stat-card">
-          <strong>{stats.advocates}</strong>
-          <span>{t('advocates')}</span>
+          <strong>{stats.alerts}</strong>
+          <span>{t('systemAlerts')}</span>
         </article>
         <article className="stat-card">
-          <strong>{stats.clients}</strong>
-          <span>{t('clients')}</span>
+          <strong>{stats.checks}</strong>
+          <span>{t('operations')}</span>
         </article>
         <article className="stat-card">
-          <strong>{stats.cases}</strong>
-          <span>{t('cases')}</span>
+          <strong>{stats.environment}</strong>
+          <span>{t('live')}</span>
         </article>
       </section>
 
@@ -131,7 +125,7 @@ const AdminDashboard = () => {
           <article className="record-item">
             <div>
               <strong>{t('paymentsTracked')}</strong>
-              <p>{t('paymentsTrackedSummary', { count: stats.payments })}</p>
+              <p>{t('adminDataIsolationSummary')}</p>
             </div>
             <span className="badge">{t('live')}</span>
           </article>

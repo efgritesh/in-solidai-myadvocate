@@ -16,6 +16,7 @@ import {
   WhatsAppIcon,
 } from './AppIcons';
 import LoadingState from './LoadingState';
+import { syncCaseAccessPayment, syncCaseAccessRecord } from '../utils/clientAccessRecords';
 
 const lifecyclePresets = [
   'Initial consultation',
@@ -80,13 +81,15 @@ const CaseDetails = () => {
       }
 
       const nextCase = { id: caseSnap.id, ...caseSnap.data() };
-      const paymentSnap = await getDocs(
-        query(
-          collection(db, 'payments'),
-          where('advocate_id', '==', auth.currentUser?.uid || ''),
-          where('case_id', '==', nextCase.case_number)
-        )
-      );
+      const paymentSnap = nextCase.client_access_token
+        ? await getDocs(collection(db, 'client_access', nextCase.client_access_token, 'payments'))
+        : await getDocs(
+            query(
+              collection(db, 'payments'),
+              where('advocate_id', '==', auth.currentUser?.uid || ''),
+              where('case_id', '==', nextCase.case_number)
+            )
+          );
 
       setCaseRecord(nextCase);
       setPayments(paymentSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
@@ -111,6 +114,7 @@ const CaseDetails = () => {
       step.id === stepId ? { ...step, status: nextStatus } : step
     );
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
+    await syncCaseAccessRecord({ ...caseRecord, lifecycle });
     await loadCase();
   };
 
@@ -120,6 +124,7 @@ const CaseDetails = () => {
       step.id === stepId ? { ...step, [key]: value } : step
     );
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
+    await syncCaseAccessRecord({ ...caseRecord, lifecycle });
     await loadCase();
   };
 
@@ -140,6 +145,7 @@ const CaseDetails = () => {
       ...currentLifecycle.slice(insertAt),
     ];
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
+    await syncCaseAccessRecord({ ...caseRecord, lifecycle });
     setSelectedLifecycleEta('');
     await loadCase();
   };
@@ -149,6 +155,10 @@ const CaseDetails = () => {
     await updateDoc(doc(db, 'cases', caseRecord.id), {
       client_access_enabled: !caseRecord.client_access_enabled,
     });
+    await syncCaseAccessRecord({
+      ...caseRecord,
+      client_access_enabled: !caseRecord.client_access_enabled,
+    });
     await loadCase();
   };
 
@@ -156,7 +166,7 @@ const CaseDetails = () => {
     e.preventDefault();
     if (!caseRecord) return;
 
-    await addDoc(collection(db, 'payments'), {
+    const paymentPayload = {
       advocate_id: auth.currentUser?.uid,
       case_id: caseRecord.case_number,
       amount: parseFloat(paymentForm.amount),
@@ -166,7 +176,10 @@ const CaseDetails = () => {
       status: paymentForm.requestedFromClient ? 'Requested' : 'Paid',
       requested_from_client: paymentForm.requestedFromClient,
       client_access_token: caseRecord.client_access_token,
-    });
+    };
+
+    const paymentRef = await addDoc(collection(db, 'payments'), paymentPayload);
+    await syncCaseAccessPayment(caseRecord.client_access_token, paymentPayload, paymentRef.id);
 
     setPaymentForm(emptyPaymentForm);
     await loadCase();

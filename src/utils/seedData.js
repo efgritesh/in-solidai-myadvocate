@@ -1,6 +1,13 @@
 import { addDoc, collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { createCaseAccessToken } from './caseAccess';
+import {
+  syncAdvocateClientAccess,
+  syncCaseAccessComment,
+  syncCaseAccessDocument,
+  syncCaseAccessPayment,
+  syncCaseAccessRecord,
+} from './clientAccessRecords';
 
 const formatDate = (date) => date.toISOString().split('T')[0];
 
@@ -194,25 +201,54 @@ const seedCollectionIfEmpty = async (collectionName, fieldName, fieldValue, reco
   const snapshot = await getDocs(query(collectionRef, where(fieldName, '==', fieldValue)));
 
   if (snapshot.empty) {
+    const docs = [];
     for (const record of records) {
-      await addDoc(collectionRef, record);
+      const docRef = await addDoc(collectionRef, record);
+      docs.push({ id: docRef.id, ...record });
     }
+    return docs;
   }
+
+  return snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
 };
 
 export const seedAdvocateData = async (advocateId) => {
   if (!advocateId) return;
 
-const seedKey = `seeded_${advocateId}_advocate_v5`;
+const seedKey = `seeded_${advocateId}_advocate_v6`;
   if (localStorage.getItem(seedKey) === 'true') return;
 
   const cases = advocateCases(advocateId);
   await seedCollectionIfEmpty('clients', 'advocate_id', advocateId, advocateClients(advocateId));
-  await seedCollectionIfEmpty('cases', 'advocate_id', advocateId, cases);
+  const seededCases = await seedCollectionIfEmpty('cases', 'advocate_id', advocateId, cases);
   await seedCollectionIfEmpty('hearings', 'advocate_id', advocateId, advocateHearings(advocateId));
-  await seedCollectionIfEmpty('payments', 'advocate_id', advocateId, advocatePayments(advocateId, cases));
-  await seedCollectionIfEmpty('documents', 'advocate_id', advocateId, advocateDocuments(advocateId, cases));
-  await seedCollectionIfEmpty('comments', 'advocate_id', advocateId, advocateComments(advocateId, cases));
+  const seededPayments = await seedCollectionIfEmpty('payments', 'advocate_id', advocateId, advocatePayments(advocateId, cases));
+  const seededDocuments = await seedCollectionIfEmpty('documents', 'advocate_id', advocateId, advocateDocuments(advocateId, cases));
+  const seededComments = await seedCollectionIfEmpty('comments', 'advocate_id', advocateId, advocateComments(advocateId, cases));
+
+  for (const caseRecord of seededCases) {
+    await syncCaseAccessRecord(caseRecord);
+  }
+
+  for (const payment of seededPayments) {
+    if (payment.client_access_token) {
+      await syncCaseAccessPayment(payment.client_access_token, payment, payment.id);
+    }
+  }
+
+  for (const documentRecord of seededDocuments) {
+    if (documentRecord.client_access_token) {
+      await syncCaseAccessDocument(documentRecord.client_access_token, documentRecord, documentRecord.id);
+    }
+  }
+
+  for (const comment of seededComments) {
+    if (comment.client_access_token) {
+      await syncCaseAccessComment(comment.client_access_token, comment, comment.id);
+    }
+  }
+
+  await syncAdvocateClientAccess(advocateId);
 
   localStorage.setItem(seedKey, 'true');
 };

@@ -9,23 +9,47 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(uid);
     }
 
+    function userRole(uid) {
+      return get(userDocPath(uid)).data.role;
+    }
+
+    function isAdvocate() {
+      return signedIn()
+        && exists(userDocPath(request.auth.uid))
+        && userRole(request.auth.uid) == 'advocate';
+    }
+
     function isAdmin() {
       return signedIn()
         && exists(userDocPath(request.auth.uid))
-        && get(userDocPath(request.auth.uid)).data.role == 'admin';
+        && userRole(request.auth.uid) == 'admin';
     }
 
     function ownsAdvocateRecord(advocateId) {
-      return signedIn() && (request.auth.uid == advocateId || isAdmin());
+      return isAdvocate() && request.auth.uid == advocateId;
     }
 
-    function hasPublicToken(resourceData) {
-      return resourceData.client_access_token is string;
+    function accessDocPath(token) {
+      return /databases/$(database)/documents/client_access/$(token);
     }
 
-    function hasClientAccessToken(data) {
-      return data.client_access_token is string
-        && data.case_id is string;
+    function accessDocExists(token) {
+      return exists(accessDocPath(token));
+    }
+
+    function accessDocData(token) {
+      return get(accessDocPath(token)).data;
+    }
+
+    function accessOpen(token) {
+      return accessDocExists(token)
+        && accessDocData(token).enabled == true
+        && accessDocData(token).status != 'Closed';
+    }
+
+    function ownsAccessToken(token) {
+      return accessDocExists(token)
+        && ownsAdvocateRecord(accessDocData(token).advocate_id);
     }
 
     match /users/{userId} {
@@ -34,63 +58,94 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.role in ['admin', 'advocate'];
 
-      allow read, update: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow read, update: if signedIn() && request.auth.uid == userId;
     }
 
     match /cases/{caseId} {
-      allow create: if signedIn()
-        && request.resource.data.advocate_id == request.auth.uid;
-
-      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
-        || hasPublicToken(resource.data);
-
-      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
     }
 
     match /clients/{clientId} {
-      allow read, create, update, delete: if ownsAdvocateRecord(
-        request.method == 'create' ? request.resource.data.advocate_id : resource.data.advocate_id
-      );
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
     }
 
     match /hearings/{hearingId} {
-      allow read, create, update, delete: if ownsAdvocateRecord(
-        request.method == 'create' ? request.resource.data.advocate_id : resource.data.advocate_id
-      );
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
     }
 
     match /payments/{paymentId} {
-      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
-        || hasClientAccessToken(resource.data);
-
-      allow create: if (signedIn() && request.resource.data.advocate_id == request.auth.uid)
-        || (!signedIn() && hasClientAccessToken(request.resource.data));
-
-      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
     }
 
     match /documents/{documentId} {
-      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
-        || hasClientAccessToken(resource.data);
-
-      allow create: if (signedIn() && request.resource.data.advocate_id == request.auth.uid)
-        || (!signedIn() && hasClientAccessToken(request.resource.data));
-
-      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
     }
 
     match /comments/{commentId} {
-      allow read: if ownsAdvocateRecord(resource.data.advocate_id)
-        || hasClientAccessToken(resource.data);
+      allow read, update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
+    }
 
-      allow create: if (signedIn() && request.resource.data.advocate_id == request.auth.uid)
-        || (!signedIn() && hasClientAccessToken(request.resource.data));
+    match /client_access/{token} {
+      allow read: if accessOpen(token) || ownsAccessToken(token);
+      allow update, delete: if ownsAccessToken(token);
+      allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
 
-      allow update, delete: if ownsAdvocateRecord(resource.data.advocate_id);
+      match /payments/{paymentId} {
+        allow read: if accessOpen(token) || ownsAccessToken(token);
+
+        allow create: if ownsAccessToken(token)
+          || (
+            !signedIn()
+            && accessOpen(token)
+            && request.resource.data.advocate_id == accessDocData(token).advocate_id
+            && request.resource.data.case_id == accessDocData(token).case_number
+            && request.resource.data.status == 'Client Submitted'
+            && request.resource.data.requested_from_client == false
+          );
+
+        allow update, delete: if ownsAccessToken(token);
+      }
+
+      match /documents/{documentId} {
+        allow read: if accessOpen(token) || ownsAccessToken(token);
+
+        allow create: if ownsAccessToken(token)
+          || (
+            !signedIn()
+            && accessOpen(token)
+            && request.resource.data.advocate_id == accessDocData(token).advocate_id
+            && request.resource.data.case_id == accessDocData(token).case_number
+            && request.resource.data.uploaded_by_role == 'client'
+          );
+
+        allow update, delete: if ownsAccessToken(token);
+      }
+
+      match /comments/{commentId} {
+        allow read: if accessOpen(token) || ownsAccessToken(token);
+
+        allow create: if ownsAccessToken(token)
+          || (
+            !signedIn()
+            && accessOpen(token)
+            && request.resource.data.advocate_id == accessDocData(token).advocate_id
+            && request.resource.data.case_id == accessDocData(token).case_number
+            && request.resource.data.author_role == 'client'
+          );
+
+        allow update, delete: if ownsAccessToken(token);
+      }
     }
 
     match /system_alerts/{alertId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read, update, delete: if isAdmin() && resource.data.admin_id == request.auth.uid;
+      allow create: if isAdmin() && request.resource.data.admin_id == request.auth.uid;
     }
   }
 }

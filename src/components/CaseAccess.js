@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { useDropzone } from 'react-dropzone';
@@ -37,23 +37,23 @@ const CaseAccess = () => {
     setErrorMessage('');
 
     try {
-      const caseSnap = await getDocs(query(collection(db, 'cases'), where('client_access_token', '==', token)));
-      if (caseSnap.empty) {
+      const accessSnap = await getDoc(doc(db, 'client_access', token));
+      if (!accessSnap.exists()) {
         setStatus('not_found');
         return;
       }
 
-      const nextCase = { id: caseSnap.docs[0].id, ...caseSnap.docs[0].data() };
-      if (!nextCase.client_access_enabled || nextCase.status === 'Closed') {
+      const nextCase = { id: accessSnap.id, ...accessSnap.data() };
+      if (!nextCase.enabled || nextCase.status === 'Closed') {
         setCaseRecord(nextCase);
         setStatus('closed');
         return;
       }
 
       const [paymentsSnap, documentsSnap, commentsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'payments'), where('client_access_token', '==', token))),
-        getDocs(query(collection(db, 'documents'), where('client_access_token', '==', token))),
-        getDocs(query(collection(db, 'comments'), where('client_access_token', '==', token))),
+        getDocs(collection(db, 'client_access', token, 'payments')),
+        getDocs(collection(db, 'client_access', token, 'documents')),
+        getDocs(collection(db, 'client_access', token, 'comments')),
       ]);
 
       setCaseRecord(nextCase);
@@ -99,11 +99,11 @@ const CaseAccess = () => {
     if (!caseRecord) return;
 
     for (const file of acceptedFiles) {
-      const storageRef = ref(storage, `case-access/${caseRecord.case_number}/${Date.now()}-${file.name}`);
+      const storageRef = ref(storage, `client-access/${token}/${Date.now()}-${file.name}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      await addDoc(collection(db, 'documents'), {
+      await addDoc(collection(db, 'client_access', token, 'documents'), {
         advocate_id: caseRecord.advocate_id,
         case_id: caseRecord.case_number,
         type: 'Client Upload',
@@ -123,7 +123,7 @@ const CaseAccess = () => {
     e.preventDefault();
     if (!caseRecord || !comment.trim()) return;
 
-    await addDoc(collection(db, 'comments'), {
+    await addDoc(collection(db, 'client_access', token, 'comments'), {
       advocate_id: caseRecord.advocate_id,
       case_id: caseRecord.case_number,
       author_role: 'client',
@@ -141,7 +141,7 @@ const CaseAccess = () => {
     e.preventDefault();
     if (!caseRecord) return;
 
-    await addDoc(collection(db, 'payments'), {
+    await addDoc(collection(db, 'client_access', token, 'payments'), {
       advocate_id: caseRecord.advocate_id,
       case_id: caseRecord.case_number,
       amount: parseFloat(paymentForm.amount),

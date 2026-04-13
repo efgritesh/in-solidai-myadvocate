@@ -7,6 +7,7 @@ import PageShell from './PageShell';
 import { buildCaseAccessLink, createCaseAccessToken } from '../utils/caseAccess';
 import { ArrowRightIcon, CloseIcon, EyeIcon, MessageIcon, PlusIcon, WhatsAppIcon } from './AppIcons';
 import LoadingState from './LoadingState';
+import { syncAdvocateClientAccess, syncCaseAccessRecord } from '../utils/clientAccessRecords';
 
 const defaultLifecycle = [
   { title: 'Initial consultation', eta: 'Apr 2026' },
@@ -92,7 +93,15 @@ const Cases = () => {
   };
 
   useEffect(() => {
-    fetchCases();
+    const loadCases = async () => {
+      const advocateId = auth.currentUser?.uid;
+      if (advocateId) {
+        await syncAdvocateClientAccess(advocateId);
+      }
+      await fetchCases();
+    };
+
+    loadCases();
   }, []);
 
   const caseSummaries = useMemo(
@@ -150,7 +159,9 @@ const Cases = () => {
       }))
       .filter((step) => step.title);
 
-    await addDoc(collection(db, 'cases'), {
+    const clientAccessToken = createCaseAccessToken(caseNumber);
+
+    const caseDocRef = await addDoc(collection(db, 'cases'), {
       advocate_id: advocateId,
       case_number: caseNumber,
       client_name: clientName,
@@ -160,7 +171,24 @@ const Cases = () => {
       next_step: nextStep,
       status,
       client_access_enabled: true,
-      client_access_token: createCaseAccessToken(caseNumber),
+      client_access_token: clientAccessToken,
+      advocate_language: i18n.language || 'en',
+      client_language: matchedClient?.preferredLanguage || i18n.language || 'en',
+      lifecycle: createLifecycle(preparedLifecycle),
+    });
+
+    await syncCaseAccessRecord({
+      id: caseDocRef.id,
+      advocate_id: advocateId,
+      case_number: caseNumber,
+      client_name: clientName,
+      client_email: clientEmail,
+      client_phone: clientPhone,
+      summary,
+      next_step: nextStep,
+      status,
+      client_access_enabled: true,
+      client_access_token: clientAccessToken,
       advocate_language: i18n.language || 'en',
       client_language: matchedClient?.preferredLanguage || i18n.language || 'en',
       lifecycle: createLifecycle(preparedLifecycle),

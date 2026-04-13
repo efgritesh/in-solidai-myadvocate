@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
+import { syncCaseAccessPayment } from '../utils/clientAccessRecords';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -49,7 +50,7 @@ const Payments = () => {
     );
     const caseRecord = caseSnapshot.docs[0]?.data();
 
-    await addDoc(collection(db, 'payments'), {
+    const paymentPayload = {
       advocate_id: advocateId,
       case_id: caseId,
       amount: parseFloat(amount),
@@ -58,7 +59,13 @@ const Payments = () => {
       status: requestedFromClient ? 'Requested' : 'Paid',
       requested_from_client: requestedFromClient,
       client_access_token: caseRecord?.client_access_token || '',
-    });
+    };
+
+    const paymentRef = await addDoc(collection(db, 'payments'), paymentPayload);
+
+    if (caseRecord?.client_access_token) {
+      await syncCaseAccessPayment(caseRecord.client_access_token, paymentPayload, paymentRef.id);
+    }
 
     setCaseId('');
     setAmount('');

@@ -6,6 +6,7 @@ import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import { seedAdvocateData } from '../utils/seedData';
 import LoadingState from './LoadingState';
+import { syncAdvocateClientAccess } from '../utils/clientAccessRecords';
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ const Dashboard = () => {
 
       try {
         await seedAdvocateData(advocateId);
+        await syncAdvocateClientAccess(advocateId);
 
         const [hearingsSnap, casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
           getDocs(query(collection(db, 'hearings'), where('advocate_id', '==', advocateId))),

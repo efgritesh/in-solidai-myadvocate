@@ -1,0 +1,57 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath(uid) {
+      return /databases/(default)/documents/users/$(uid);
+    }
+
+    function isAdvocate() {
+      return signedIn()
+        && firestore.exists(userDocPath(request.auth.uid))
+        && firestore.get(userDocPath(request.auth.uid)).data.role == 'advocate';
+    }
+
+    function ownsAdvocateRecord(advocateId) {
+      return isAdvocate() && request.auth.uid == advocateId;
+    }
+
+    function accessDocPath(token) {
+      return /databases/(default)/documents/client_access/$(token);
+    }
+
+    function accessExists(token) {
+      return firestore.exists(accessDocPath(token));
+    }
+
+    function accessData(token) {
+      return firestore.get(accessDocPath(token)).data;
+    }
+
+    function accessOpen(token) {
+      return accessExists(token)
+        && accessData(token).enabled == true
+        && accessData(token).status != 'Closed';
+    }
+
+    function ownsAccessToken(token) {
+      return accessExists(token) && ownsAdvocateRecord(accessData(token).advocate_id);
+    }
+
+    match /profilePics/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /documents/{advocateId}/{fileName} {
+      allow read, write: if ownsAdvocateRecord(advocateId);
+    }
+
+    match /client-access/{token}/{fileName} {
+      allow read: if accessOpen(token) || ownsAccessToken(token);
+      allow write: if accessOpen(token) || ownsAccessToken(token);
+    }
+  }
+}

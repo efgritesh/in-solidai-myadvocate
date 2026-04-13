@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
+import { syncCaseAccessDocument } from '../utils/clientAccessRecords';
 
 const Documents = () => {
   const { t } = useTranslation();
@@ -49,7 +50,7 @@ const Documents = () => {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      await addDoc(collection(db, 'documents'), {
+      const documentRef = await addDoc(collection(db, 'documents'), {
         advocate_id: advocateId,
         case_id: caseId,
         type,
@@ -58,6 +59,17 @@ const Documents = () => {
         uploaded_by_role: 'advocate',
         client_access_token: caseRecord?.client_access_token || '',
       });
+
+      if (caseRecord?.client_access_token) {
+        await syncCaseAccessDocument(caseRecord.client_access_token, {
+          advocate_id: advocateId,
+          case_id: caseId,
+          type,
+          url,
+          name: file.name,
+          uploaded_by_role: 'advocate',
+        }, documentRef.id);
+      }
     }
 
     await fetchDocuments();

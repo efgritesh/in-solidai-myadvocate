@@ -131,6 +131,7 @@ const resources = {
       active: 'Active',
       paymentsTracked: 'Payments tracked',
       paymentsTrackedSummary: '{{count}} payment records are available across advocate and client views.',
+      adminDataIsolationSummary: 'Admin access is limited to admin-owned alerts and operational checks. Advocate-client matter data is intentionally isolated.',
       live: 'Live',
       clientAccessLinks: 'Client access links',
       clientAccessLinksSubtitle:
@@ -385,6 +386,7 @@ const resources = {
       active: 'सक्रिय',
       paymentsTracked: 'ट्रैक किए गए भुगतान',
       paymentsTrackedSummary: 'एडवोकेट और क्लाइंट व्यू में {{count}} भुगतान रिकॉर्ड उपलब्ध हैं।',
+      adminDataIsolationSummary: 'एडमिन एक्सेस केवल एडमिन के अपने अलर्ट और ऑपरेशनल जांच तक सीमित है। एडवोकेट-क्लाइंट डेटा जानबूझकर अलग रखा गया है।',
       live: 'लाइव',
       clientAccessLinks: 'क्लाइंट एक्सेस लिंक',
       clientAccessLinksSubtitle:
