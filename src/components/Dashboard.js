@@ -24,6 +24,7 @@ const Dashboard = () => {
     payments: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState('');
 
   useEffect(() => {
     const buildDashboardState = (casesSnap, clientsSnap, paymentsSnap) => {
@@ -79,25 +80,33 @@ const Dashboard = () => {
           getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
         ]);
         buildDashboardState(casesSnap, clientsSnap, paymentsSnap);
+        setDashboardError('');
         setLoading(false);
 
-        await seedAdvocateData(advocateId);
-        await syncAdvocateClientAccess(advocateId);
+        try {
+          await seedAdvocateData(advocateId);
+          await syncAdvocateClientAccess(advocateId);
 
-        const [freshCases, freshClients, freshPayments] = await Promise.all([
-          getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
-          getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
-          getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
-        ]);
+          const [freshCases, freshClients, freshPayments] = await Promise.all([
+            getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
+            getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
+            getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
+          ]);
 
-        buildDashboardState(freshCases, freshClients, freshPayments);
+          buildDashboardState(freshCases, freshClients, freshPayments);
+        } catch (backgroundError) {
+          console.error('Dashboard background sync failed', backgroundError);
+        }
+      } catch (error) {
+        console.error('Dashboard load failed', error);
+        setDashboardError(error.message || 'Unable to load the dashboard right now.');
       } finally {
         setLoading(false);
       }
     };
 
     loadDashboard();
-  }, []);
+  }, [t]);
 
   return (
     <PageShell
@@ -106,6 +115,7 @@ const Dashboard = () => {
     >
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
       <>
+      {dashboardError ? <p className="inline-feedback inline-feedback--error">{dashboardError}</p> : null}
       <section className="hero-card">
         <div>
           <p className="eyebrow">{t('todayAtAGlance')}</p>
