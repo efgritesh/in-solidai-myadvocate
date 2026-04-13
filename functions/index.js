@@ -99,14 +99,25 @@ async function activatePremiumForUser({ uid, profile, data }) {
   };
 }
 
-function applyCors(response) {
-  response.set('Access-Control-Allow-Origin', 'https://in-solidai-myadvocate.web.app');
+const ALLOWED_HTTP_ORIGINS = new Set([
+  'https://in-solidai-myadvocate.web.app',
+  'https://iadvocate.solidai.in',
+]);
+
+function applyCors(request, response) {
+  const requestOrigin = request.headers.origin || '';
+  const allowedOrigin = ALLOWED_HTTP_ORIGINS.has(requestOrigin)
+    ? requestOrigin
+    : 'https://in-solidai-myadvocate.web.app';
+
+  response.set('Vary', 'Origin');
+  response.set('Access-Control-Allow-Origin', allowedOrigin);
   response.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
   response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
 async function getHttpUser(request, response) {
-  applyCors(response);
+  applyCors(request, response);
 
   if (request.method === 'OPTIONS') {
     response.status(204).send('');
@@ -1238,9 +1249,7 @@ exports.activatePremiumSubscription = onCall(async (request) => {
 });
 
 exports.activatePremiumSubscriptionHttp = onRequest(async (request, response) => {
-  response.set('Access-Control-Allow-Origin', 'https://in-solidai-myadvocate.web.app');
-  response.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  applyCors(request, response);
 
   if (request.method === 'OPTIONS') {
     response.status(204).send('');
