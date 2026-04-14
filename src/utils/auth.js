@@ -4,7 +4,7 @@ import {
   signInWithRedirect,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { getStoredLanguage } from './language';
 import { isAdvocateDraftReady } from './draftingProfiles';
@@ -88,17 +88,22 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
     currentData.officeAddress !== normalizedProfile.officeAddress ||
     currentData.enrollmentNumber !== normalizedProfile.enrollmentNumber
   ) {
-    await updateDoc(userRef, {
-      email: normalizedProfile.email,
-      name: normalizedProfile.name,
-      role: mergedRole,
-      preferredLanguage: normalizedProfile.preferredLanguage,
-      phone: normalizedProfile.phone,
-      officeAddress: normalizedProfile.officeAddress,
-      address: normalizedProfile.address,
-      enrollmentNumber: normalizedProfile.enrollmentNumber,
-      profileComplete: normalizedProfile.profileComplete,
-    });
+    await setDoc(
+      userRef,
+      {
+        ...currentData,
+        email: normalizedProfile.email,
+        name: normalizedProfile.name,
+        role: mergedRole,
+        preferredLanguage: normalizedProfile.preferredLanguage,
+        phone: normalizedProfile.phone,
+        officeAddress: normalizedProfile.officeAddress,
+        address: normalizedProfile.address,
+        enrollmentNumber: normalizedProfile.enrollmentNumber,
+        profileComplete: normalizedProfile.profileComplete,
+      },
+      { merge: false },
+    );
   }
 
   return normalizedProfile;
