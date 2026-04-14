@@ -102,13 +102,6 @@ const ProfileSetup = () => {
         ...currentProfile,
         uid: currentProfile.uid || user.uid,
         role: currentProfile.role || userRole,
-        subscriptionPlan: currentProfile.subscriptionPlan || 'starter',
-        premiumStatus: currentProfile.premiumStatus || 'inactive',
-        premiumActive: typeof currentProfile.premiumActive === 'boolean' ? currentProfile.premiumActive : false,
-        premiumSource: currentProfile.premiumSource || null,
-        premiumBillingAmountInr: currentProfile.premiumBillingAmountInr || null,
-        premiumActivatedAt: currentProfile.premiumActivatedAt || null,
-        premiumRenewalDate: currentProfile.premiumRenewalDate || null,
         ...nextProfile,
         profileComplete: userRole === 'admin' ? true : isAdvocateDraftReady(nextProfile),
       }, { merge: false });

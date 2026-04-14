@@ -1,4 +1,4 @@
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 export const APP_LANGUAGE_KEY = 'selectedLanguage';
@@ -30,6 +30,15 @@ export const setStoredClientLanguage = (token, language) => {
 export const saveCurrentUserLanguage = async (language) => {
   const userId = auth.currentUser?.uid;
   if (!userId) return;
-  await updateDoc(doc(db, 'users', userId), { preferredLanguage: language });
+  const userRef = doc(db, 'users', userId);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) return;
+  await setDoc(
+    userRef,
+    {
+      ...userSnap.data(),
+      preferredLanguage: language,
+    },
+    { merge: false },
+  );
 };
-
