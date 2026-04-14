@@ -155,6 +155,8 @@ const DraftingAssistant = () => {
     [cases, draftForm.caseId]
   );
 
+  const publishCaseId = currentSession?.case_id || draftForm.caseId || '';
+
   const availableCases = useMemo(() => {
     if (!draftForm.clientId) return cases;
     return cases.filter((caseRecord) => {
@@ -673,7 +675,7 @@ const DraftingAssistant = () => {
             <button type="button" className="button" onClick={handleSaveDraftEdits} disabled={working}>{t('saveDraft')}</button>
             <button type="button" className="button button--secondary" onClick={handleCopy}><CopyIcon className="app-icon" /><span>{t('copyText')}</span></button>
             <button type="button" className="button button--secondary" onClick={handleExport} disabled={working}>{t('exportDocx')}</button>
-            <button type="button" className="button button--secondary" onClick={handlePublish} disabled={working || !draftForm.caseId}>{t('publishToCaseDocuments')}</button>
+            <button type="button" className="button button--secondary" onClick={handlePublish} disabled={working || !publishCaseId}>{t('publishToCaseDocuments')}</button>
           </div>
           {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
         </section>

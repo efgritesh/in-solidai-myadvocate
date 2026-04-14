@@ -37,6 +37,7 @@ function App() {
         <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
         <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
         <Route path="/profile-setup" element={<ProtectedRoute allowIncomplete><ProfileSetup /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute allowedRoles={['advocate']}><ProfileSetup /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['advocate']}><Dashboard /></ProtectedRoute>} />
         <Route path="/admin-dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="/case-access/:token" element={<CaseAccess />} />
