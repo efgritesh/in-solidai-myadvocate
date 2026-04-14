@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from '../firebase';
@@ -9,6 +9,9 @@ import { isAdvocateDraftReady } from '../utils/draftingProfiles';
 
 const ProfileSetup = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fileInputRef = useRef(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [officeAddress, setOfficeAddress] = useState('');
@@ -19,7 +22,15 @@ const ProfileSetup = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState('advocate');
-  const navigate = useNavigate();
+  const [saving, setSaving] = useState(false);
+
+  const isProfileReview = location.pathname === '/profile';
+  const profileTitle = isProfileReview ? t('myProfile') : t('profileSetup');
+  const initials = useMemo(() => {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return 'IA';
+    return trimmed.charAt(0).toUpperCase();
+  }, [name]);
 
   const handleFileChange = (e) => {
     setProfilePic(e.target.files[0]);
@@ -60,9 +71,14 @@ const ProfileSetup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
+    setError('');
 
     try {
       const user = auth.currentUser;
+      const userRef = doc(db, 'users', user.uid);
+      const currentSnap = await getDoc(userRef);
+      const currentProfile = currentSnap.data() || {};
       let profilePicUrl = '';
 
       if (profilePic) {
@@ -82,34 +98,36 @@ const ProfileSetup = () => {
         preferredLanguage: localStorage.getItem('selectedLanguage') || 'en',
       };
 
-      await updateDoc(doc(db, 'users', user.uid), {
+      await setDoc(userRef, {
+        ...currentProfile,
+        uid: currentProfile.uid || user.uid,
+        role: currentProfile.role || userRole,
+        subscriptionPlan: currentProfile.subscriptionPlan || 'starter',
+        premiumStatus: currentProfile.premiumStatus || 'inactive',
+        premiumActive: typeof currentProfile.premiumActive === 'boolean' ? currentProfile.premiumActive : false,
+        premiumSource: currentProfile.premiumSource || null,
+        premiumBillingAmountInr: currentProfile.premiumBillingAmountInr || null,
+        premiumActivatedAt: currentProfile.premiumActivatedAt || null,
+        premiumRenewalDate: currentProfile.premiumRenewalDate || null,
         ...nextProfile,
         profileComplete: userRole === 'admin' ? true : isAdvocateDraftReady(nextProfile),
-      });
+      }, { merge: false });
 
-      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      const userSnap = await getDoc(userRef);
       const nextRole = userSnap.data()?.role || 'advocate';
       navigate(getRouteForRole(nextRole));
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   if (loading) {
     return (
       <div className="auth-screen">
-        <div className="auth-layout">
-          <section className="auth-hero auth-hero--dark">
-            <img
-              className="auth-hero__logo"
-              src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
-              alt="Supreme Court of India emblem"
-            />
-            <p className="eyebrow">{t('firstTimeSetup')}</p>
-            <h1>{t('profileSetup')}</h1>
-            <p className="auth-subtitle">{t('profileSubtitle')}</p>
-          </section>
-          <div className="auth-card">
+        <div className="auth-layout auth-layout--compact">
+          <div className="auth-card auth-card--profile">
             <p className="helper-text">{t('loadingWorkspace')}</p>
           </div>
         </div>
@@ -119,74 +137,100 @@ const ProfileSetup = () => {
 
   return (
     <div className="auth-screen">
-      <div className="auth-layout">
-        <section className="auth-hero auth-hero--dark">
-          <img
-            className="auth-hero__logo"
-            src="https://upload.wikimedia.org/wikipedia/commons/e/e6/Emblem_of_the_Supreme_Court_of_India.svg"
-            alt="Supreme Court of India emblem"
-          />
-          <p className="eyebrow">{t('firstTimeSetup')}</p>
-          <h1>{t('profileSetup')}</h1>
-          <p className="auth-subtitle">{t('profileSubtitle')}</p>
-        </section>
-        <div className="auth-card">
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>{t('name')}:</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
+      <div className="auth-layout auth-layout--compact">
+        <div className="auth-card auth-card--profile">
+          <div className="profile-editor">
+            <div className="profile-editor__header">
+              <div>
+                <p className="eyebrow">{isProfileReview ? t('myProfile') : t('firstTimeSetup')}</p>
+                <h1>{profileTitle}</h1>
+              </div>
             </div>
-            <div className="form-group">
-              <label>{t('phone')}:</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
+            <div className="profile-avatar">
+              <div className="profile-avatar__frame">
+                {existingProfilePicUrl ? (
+                  <img src={existingProfilePicUrl} alt={name || t('profilePic')} className="profile-avatar__image" />
+                ) : (
+                  <span className="profile-avatar__initials">{initials}</span>
+                )}
+                <button
+                  type="button"
+                  className="profile-avatar__edit"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label={t('changePhoto')}
+                >
+                  <svg viewBox="0 0 24 24" className="app-icon" aria-hidden="true">
+                    <path d="M12 20h9" />
+                    <path d="m16.5 3.5 4 4L7 21H3v-4z" />
+                  </svg>
+                </button>
+              </div>
+              <button type="button" className="inline-link" onClick={() => fileInputRef.current?.click()}>
+                {existingProfilePicUrl ? t('changePhoto') : t('uploadPhoto')}
+              </button>
             </div>
-            <div className="form-group">
-              <label>{t('enrollmentNumber')}:</label>
-              <input
-                type="text"
-                value={enrollmentNumber}
-                onChange={(e) => setEnrollmentNumber(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('email')}:</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('officeAddress')}:</label>
-              <textarea
-                value={officeAddress}
-                onChange={(e) => setOfficeAddress(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('profilePic')}:</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-              />
-            </div>
-            <button type="submit" className="button">{t('save')}</button>
-            {error ? <p className="error-text">{error}</p> : null}
-          </form>
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>{t('name')}:</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('phone')}:</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('enrollmentNumber')}:</label>
+                <input
+                  type="text"
+                  value={enrollmentNumber}
+                  onChange={(e) => setEnrollmentNumber(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('email')}:</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('officeAddress')}:</label>
+                <textarea
+                  value={officeAddress}
+                  onChange={(e) => setOfficeAddress(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>{t('profilePic')}:</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+                {profilePic ? <p className="helper-text top-space">{profilePic.name}</p> : null}
+              </div>
+              <button type="submit" className="button" disabled={saving}>
+                {saving ? t('saving') : t('save')}
+              </button>
+              {error ? <p className="error-text">{error}</p> : null}
+            </form>
+          </div>
         </div>
       </div>
     </div>

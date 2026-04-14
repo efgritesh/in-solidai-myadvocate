@@ -9,6 +9,7 @@ const isStandaloneMode = () =>
   window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
 const isIosBrowser = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
+const isAndroidBrowser = () => /android/i.test(window.navigator.userAgent || '');
 
 const AppEntry = () => {
   const { t } = useTranslation();
@@ -19,7 +20,7 @@ const AppEntry = () => {
   const shouldShowInstallFirst = useMemo(() => {
     if (isStandaloneMode()) return false;
     if (localStorage.getItem(INSTALL_DISMISSED_KEY) === '1') return false;
-    return Boolean(installPrompt) || isIosBrowser();
+    return Boolean(installPrompt) || isIosBrowser() || isAndroidBrowser();
   }, [installPrompt]);
 
   useEffect(() => {
