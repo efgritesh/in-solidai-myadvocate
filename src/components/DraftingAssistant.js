@@ -54,6 +54,17 @@ const workflowLabels = {
   failed: 'Needs attention',
 };
 
+const findClientIdForCaseRecord = (caseRecord, clientList = []) => {
+  if (!caseRecord) return '';
+  if (caseRecord.client_id) return caseRecord.client_id;
+  const matchedClient = clientList.find((client) =>
+    client.name === caseRecord.client_name ||
+    (client.email && client.email === caseRecord.client_email) ||
+    (client.phone && client.phone === caseRecord.client_phone)
+  );
+  return matchedClient?.id || '';
+};
+
 const DraftingAssistant = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -81,17 +92,6 @@ const DraftingAssistant = () => {
     () => sessions.find((session) => session.id === sessionParam) || null,
     [sessionParam, sessions]
   );
-
-  const findClientIdForCase = useCallback((caseRecord, clientList = clients) => {
-    if (!caseRecord) return '';
-    if (caseRecord.client_id) return caseRecord.client_id;
-    const matchedClient = clientList.find((client) =>
-      client.name === caseRecord.client_name ||
-      (client.email && client.email === caseRecord.client_email) ||
-      (client.phone && client.phone === caseRecord.client_phone)
-    );
-    return matchedClient?.id || '';
-  }, [clients]);
 
   const activeClient = useMemo(
     () => clients.find((client) => client.id === draftForm.clientId) || null,
@@ -155,7 +155,7 @@ const DraftingAssistant = () => {
       const selectedSession = sessionParam ? nextSessions.find((session) => session.id === sessionParam) || null : null;
       if (selectedSession) {
         setDraftForm({
-          clientId: selectedSession.client_id || findClientIdForCase(nextCases.find((caseRecord) => caseRecord.id === selectedSession.case_id) || null, nextClients),
+          clientId: selectedSession.client_id || findClientIdForCaseRecord(nextCases.find((caseRecord) => caseRecord.id === selectedSession.case_id) || null, nextClients),
           caseId: selectedSession.case_id || '',
           instructions: selectedSession.instructions || '',
         });
@@ -165,7 +165,7 @@ const DraftingAssistant = () => {
       } else {
         const selectedCase = nextCases.find((caseRecord) => caseRecord.id === caseParam) || null;
         setDraftForm({
-          clientId: findClientIdForCase(selectedCase, nextClients),
+          clientId: findClientIdForCaseRecord(selectedCase, nextClients),
           caseId: selectedCase?.id || '',
           instructions: selectedCase ? `${t('draftingCasePrefillInstructions')} ${selectedCase.case_number}.` : '',
         });
@@ -179,7 +179,7 @@ const DraftingAssistant = () => {
     } finally {
       setLoading(false);
     }
-  }, [advocateId, caseParam, fetchArtifacts, findClientIdForCase, sessionParam, t]);
+  }, [advocateId, caseParam, fetchArtifacts, sessionParam, t]);
 
   useEffect(() => {
     loadWorkspace();
@@ -627,7 +627,7 @@ const DraftingAssistant = () => {
                 setDraftForm((current) => ({
                   ...current,
                   caseId: event.target.value,
-                  clientId: findClientIdForCase(selectedCase) || current.clientId,
+                  clientId: findClientIdForCaseRecord(selectedCase, clients) || current.clientId,
                 }));
               }}
             >
