@@ -3,6 +3,7 @@ const { Storage } = require('@google-cloud/storage');
 const vision = require('@google-cloud/vision');
 const pdfParse = require('pdf-parse');
 const { GoogleAuth } = require('google-auth-library');
+const crypto = require('crypto');
 const { Document, HeadingLevel, Packer, Paragraph, TextRun } = require('docx');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -389,6 +390,88 @@ function formatTimestamp(value) {
     return value.toDate().toISOString();
   }
   return String(value);
+}
+
+function createCaseAccessToken(seed = '') {
+  const normalizedSeed = String(seed || 'case').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
+  return `${normalizedSeed}-${crypto.randomBytes(8).toString('hex')}`;
+}
+
+function buildClientAccessSnapshot(caseRecord = {}) {
+  return {
+    advocate_id: caseRecord.advocate_id,
+    case_id: caseRecord.id || '',
+    case_number: caseRecord.case_number || '',
+    client_name: caseRecord.client_name || '',
+    client_email: caseRecord.client_email || '',
+    client_phone: caseRecord.client_phone || '',
+    advocate_language: caseRecord.advocate_language || 'en',
+    client_language: caseRecord.client_language || caseRecord.advocate_language || 'en',
+    status: caseRecord.status || 'Open',
+    enabled: caseRecord.client_access_enabled !== false,
+    summary: caseRecord.summary || '',
+    next_step: caseRecord.next_step || '',
+    lifecycle: caseRecord.lifecycle || [],
+    court: caseRecord.court || '',
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function buildStandaloneCaseNumber(session = {}) {
+  const year = new Date().getFullYear();
+  const clientSlug = (session.client_name || 'client')
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toUpperCase()
+    .slice(0, 6) || 'CLIENT';
+  const suffix = Date.now().toString().slice(-4);
+  return `IADV-DRAFT-${clientSlug}-${suffix}/${year}`;
+}
+
+async function ensureSessionCaseForPublish(session, advocate) {
+  if (session.case_id) {
+    return getOwnedCase(session.case_id, advocate.uid);
+  }
+
+  const caseNumber = session.case_number || buildStandaloneCaseNumber(session);
+  const clientSnapshot = session.client_profile_snapshot || {};
+  const advocateLanguage = advocate.profile.preferredLanguage || 'en';
+  const clientLanguage = clientSnapshot.preferredLanguage || advocateLanguage;
+  const clientAccessToken = createCaseAccessToken(caseNumber);
+  const summary = session.instructions?.trim() || 'AI drafting workflow created from a standalone drafting session.';
+  const nextStep = 'Review drafted document and continue matter setup.';
+
+  const casePayload = {
+    advocate_id: advocate.uid,
+    client_id: session.client_id || '',
+    case_number: caseNumber,
+    client_name: session.client_name || clientSnapshot.name || '',
+    client_email: clientSnapshot.email || '',
+    client_phone: clientSnapshot.phone || '',
+    summary,
+    next_step: nextStep,
+    court: session.case_snapshot?.court || '',
+    place: session.case_snapshot?.place || '',
+    police_station: session.case_snapshot?.policeStation || '',
+    status: 'Open',
+    client_access_enabled: true,
+    client_access_token: clientAccessToken,
+    advocate_language: advocateLanguage,
+    client_language: clientLanguage,
+    lifecycle: session.case_snapshot?.lifecycle || [],
+  };
+
+  const caseRef = await db.collection('cases').add(casePayload);
+  const createdCase = { id: caseRef.id, ...casePayload };
+
+  await db.collection('client_access').doc(clientAccessToken).set(buildClientAccessSnapshot(createdCase), { merge: true });
+  await db.collection('drafting_sessions').doc(session.id).update({
+    case_id: createdCase.id,
+    case_number: createdCase.case_number,
+    case_snapshot: buildCaseSnapshot(createdCase),
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return createdCase;
 }
 
 function getGsUriForPath(storagePath) {
@@ -1358,7 +1441,7 @@ exports.publishDraftingOutput = onCall(async (request) => {
   const advocate = await requireAdvocate(request);
   const data = request.data || {};
   const session = await getOwnedSession(data.sessionId, advocate.uid);
-  const caseRecord = await getOwnedCase(session.case_id, advocate.uid);
+  const caseRecord = await ensureSessionCaseForPublish(session, advocate);
   const outputSnap = await db.collection('drafting_outputs').doc(data.outputId).get();
 
   if (!outputSnap.exists) {
@@ -1419,7 +1502,7 @@ exports.publishDraftingOutputHttp = onRequest({ invoker: 'public' }, async (requ
 
     const data = request.body || {};
     const session = await getOwnedSession(data.sessionId, advocate.uid);
-    const caseRecord = await getOwnedCase(session.case_id, advocate.uid);
+    const caseRecord = await ensureSessionCaseForPublish(session, advocate);
     const outputSnap = await db.collection('drafting_outputs').doc(data.outputId).get();
 
     if (!outputSnap.exists) {

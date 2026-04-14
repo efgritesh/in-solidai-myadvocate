@@ -155,7 +155,7 @@ const DraftingAssistant = () => {
     [cases, draftForm.caseId]
   );
 
-  const publishCaseId = currentSession?.case_id || draftForm.caseId || '';
+  const canPublishDraft = Boolean(currentSession?.id && output?.id);
 
   const availableCases = useMemo(() => {
     if (!draftForm.clientId) return cases;
@@ -435,13 +435,36 @@ const DraftingAssistant = () => {
     }
   };
 
-  const openSession = (sessionId) => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.set('sessionId', sessionId);
-      next.delete('view');
-      return next;
-    });
+  const openSession = async (sessionId) => {
+    if (!sessionId) return;
+
+    setWorking(true);
+    try {
+      const session = sessions.find((item) => item.id === sessionId) || null;
+      const { nextOutput } = await fetchArtifacts(sessionId, advocateId);
+      setOutput(nextOutput);
+      setValidationFields(nextOutput?.fact_validation_fields || []);
+
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set('sessionId', sessionId);
+        if (session?.case_id) {
+          next.set('caseId', session.case_id);
+        }
+
+        if (nextOutput) {
+          next.set('view', nextOutput.fact_validation_required ? 'validate' : 'review');
+        } else {
+          next.delete('view');
+        }
+
+        return next;
+      });
+    } catch (error) {
+      setStatusMessage(error.message || 'Unable to resume this drafting workflow.');
+    } finally {
+      setWorking(false);
+    }
   };
 
   const clearSessionParams = () => {
@@ -675,7 +698,7 @@ const DraftingAssistant = () => {
             <button type="button" className="button" onClick={handleSaveDraftEdits} disabled={working}>{t('saveDraft')}</button>
             <button type="button" className="button button--secondary" onClick={handleCopy}><CopyIcon className="app-icon" /><span>{t('copyText')}</span></button>
             <button type="button" className="button button--secondary" onClick={handleExport} disabled={working}>{t('exportDocx')}</button>
-            <button type="button" className="button button--secondary" onClick={handlePublish} disabled={working || !publishCaseId}>{t('publishToCaseDocuments')}</button>
+            <button type="button" className="button button--secondary" onClick={handlePublish} disabled={working || !canPublishDraft}>{t('publishToCaseDocuments')}</button>
           </div>
           {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
         </section>
