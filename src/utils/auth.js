@@ -17,8 +17,34 @@ export const roleRoutes = {
 const GOOGLE_ROLE_KEY = 'pendingGoogleRole';
 export const GOOGLE_FLOW_KEY = 'pendingGoogleFlow';
 export const GOOGLE_FORCE_PROFILE_SETUP_KEY = 'forceProfileSetupAfterGoogleSignup';
+const PERSISTED_GOOGLE_ROLE_KEY = 'persistedGoogleRole';
+const PERSISTED_GOOGLE_FLOW_KEY = 'persistedGoogleFlow';
+const PERSISTED_GOOGLE_FORCE_PROFILE_SETUP_KEY = 'persistedForceProfileSetupAfterGoogleSignup';
 
 export const getRouteForRole = (role) => roleRoutes[role] || '/dashboard';
+
+const getStoredGoogleRole = () =>
+  sessionStorage.getItem(GOOGLE_ROLE_KEY) ||
+  localStorage.getItem(PERSISTED_GOOGLE_ROLE_KEY) ||
+  'advocate';
+
+const getStoredGoogleFlow = () =>
+  sessionStorage.getItem(GOOGLE_FLOW_KEY) ||
+  localStorage.getItem(PERSISTED_GOOGLE_FLOW_KEY) ||
+  'login';
+
+export const shouldForceGoogleProfileSetup = () =>
+  sessionStorage.getItem(GOOGLE_FORCE_PROFILE_SETUP_KEY) === '1' ||
+  localStorage.getItem(PERSISTED_GOOGLE_FORCE_PROFILE_SETUP_KEY) === '1';
+
+export const clearPendingGoogleState = () => {
+  sessionStorage.removeItem(GOOGLE_ROLE_KEY);
+  sessionStorage.removeItem(GOOGLE_FLOW_KEY);
+  sessionStorage.removeItem(GOOGLE_FORCE_PROFILE_SETUP_KEY);
+  localStorage.removeItem(PERSISTED_GOOGLE_ROLE_KEY);
+  localStorage.removeItem(PERSISTED_GOOGLE_FLOW_KEY);
+  localStorage.removeItem(PERSISTED_GOOGLE_FORCE_PROFILE_SETUP_KEY);
+};
 
 const normalizeAdvocateProfile = (profile = {}, user = null) => {
   const normalized = {
@@ -129,8 +155,11 @@ export const loginWithGoogle = async (roleHint = 'advocate', flowType = 'login')
   console.log('[auth] loginWithGoogle:start', { roleHint, flowType });
   sessionStorage.setItem(GOOGLE_ROLE_KEY, roleHint);
   sessionStorage.setItem(GOOGLE_FLOW_KEY, flowType);
+  localStorage.setItem(PERSISTED_GOOGLE_ROLE_KEY, roleHint);
+  localStorage.setItem(PERSISTED_GOOGLE_FLOW_KEY, flowType);
   if (flowType === 'signup') {
     sessionStorage.setItem(GOOGLE_FORCE_PROFILE_SETUP_KEY, '1');
+    localStorage.setItem(PERSISTED_GOOGLE_FORCE_PROFILE_SETUP_KEY, '1');
   }
   await signInWithRedirect(auth, googleProvider);
   return null;
@@ -143,20 +172,19 @@ export const consumeGoogleRedirect = async () => {
     console.log('[auth] consumeGoogleRedirect:none');
     return null;
   }
-  const roleHint = sessionStorage.getItem(GOOGLE_ROLE_KEY) || 'advocate';
-  const flowType = sessionStorage.getItem(GOOGLE_FLOW_KEY) || 'login';
+  const roleHint = getStoredGoogleRole();
+  const flowType = getStoredGoogleFlow();
   console.log('[auth] consumeGoogleRedirect:result', {
     uid: userCredential.user?.uid || null,
     email: userCredential.user?.email || null,
     roleHint,
     flowType,
   });
-  sessionStorage.removeItem(GOOGLE_ROLE_KEY);
-  sessionStorage.removeItem(GOOGLE_FLOW_KEY);
   const profile = await ensureUserProfile(userCredential.user, roleHint, {
     role: roleHint,
     profileComplete: roleHint === 'admin' ? true : false,
   });
+  clearPendingGoogleState();
   console.log('[auth] consumeGoogleRedirect:profile', {
     uid: userCredential.user?.uid || null,
     role: profile?.role || null,
@@ -164,4 +192,36 @@ export const consumeGoogleRedirect = async () => {
     preferredLanguage: profile?.preferredLanguage || null,
   });
   return { user: userCredential.user, profile, flowType };
+};
+
+export const resolveGoogleProfileFromStoredState = async (user) => {
+  const hasStoredFlow =
+    Boolean(sessionStorage.getItem(GOOGLE_FLOW_KEY)) ||
+    Boolean(localStorage.getItem(PERSISTED_GOOGLE_FLOW_KEY));
+
+  if (!user || !hasStoredFlow) {
+    return null;
+  }
+
+  const roleHint = getStoredGoogleRole();
+  const flowType = getStoredGoogleFlow();
+  console.log('[auth] resolveGoogleProfileFromStoredState:start', {
+    uid: user?.uid || null,
+    email: user?.email || null,
+    roleHint,
+    flowType,
+  });
+
+  const profile = await ensureUserProfile(user, roleHint, {
+    role: roleHint,
+    profileComplete: roleHint === 'admin' ? true : false,
+  });
+
+  console.log('[auth] resolveGoogleProfileFromStoredState:profile', {
+    uid: user?.uid || null,
+    role: profile?.role || null,
+    profileComplete: profile?.profileComplete || false,
+  });
+
+  return { profile, roleHint, flowType };
 };

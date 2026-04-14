@@ -3,10 +3,12 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import {
+  clearPendingGoogleState,
   consumeGoogleRedirect,
   ensureUserProfile,
   getRouteForRole,
-  GOOGLE_FORCE_PROFILE_SETUP_KEY,
+  resolveGoogleProfileFromStoredState,
+  shouldForceGoogleProfileSetup,
 } from '../utils/auth';
 import LoadingState from './LoadingState';
 
@@ -83,6 +85,21 @@ const useResolvedProfile = (user, loading) => {
 
     ensureUserProfile(user)
       .then((profile) => {
+        return resolveGoogleProfileFromStoredState(user).then((storedGoogleResult) => {
+          const resolvedProfile = storedGoogleResult?.profile || profile;
+          if (storedGoogleResult?.flowType !== 'signup') {
+            clearPendingGoogleState();
+          }
+          console.log('[route-guard] ensureUserProfile:resolved', {
+            uid: user?.uid || null,
+            usedStoredGoogleState: Boolean(storedGoogleResult),
+            role: resolvedProfile?.role || null,
+            profileComplete: resolvedProfile?.profileComplete || false,
+          });
+          return resolvedProfile;
+        });
+      })
+      .then((profile) => {
         console.log('[route-guard] ensureUserProfile:done', {
           uid: user?.uid || null,
           role: profile?.role || null,
@@ -119,7 +136,7 @@ export const PublicOnlyRoute = ({ children }) => {
   }
 
   if (user && profile) {
-    const forceProfileSetup = sessionStorage.getItem(GOOGLE_FORCE_PROFILE_SETUP_KEY) === '1';
+    const forceProfileSetup = shouldForceGoogleProfileSetup();
     const target = forceProfileSetup ? '/profile-setup' : profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup';
     console.log('[route-guard] PublicOnlyRoute:redirect', {
       uid: user?.uid || null,

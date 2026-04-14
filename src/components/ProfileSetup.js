@@ -4,7 +4,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from '../firebase';
-import { getRouteForRole, GOOGLE_FORCE_PROFILE_SETUP_KEY } from '../utils/auth';
+import { clearPendingGoogleState, getRouteForRole } from '../utils/auth';
 import { isAdvocateDraftReady } from '../utils/draftingProfiles';
 
 const ProfileSetup = () => {
@@ -37,7 +37,7 @@ const ProfileSetup = () => {
   };
 
   useEffect(() => {
-    sessionStorage.removeItem(GOOGLE_FORCE_PROFILE_SETUP_KEY);
+    clearPendingGoogleState();
   }, []);
 
   useEffect(() => {
