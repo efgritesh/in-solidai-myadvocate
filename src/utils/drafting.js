@@ -20,7 +20,9 @@ const postDraftingAction = async (endpoint, payload) => {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || 'Drafting request failed.');
+    const error = new Error(data.error || 'Drafting request failed.');
+    error.status = response.status;
+    throw error;
   }
 
   return data;

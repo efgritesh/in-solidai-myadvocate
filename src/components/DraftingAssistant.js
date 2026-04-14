@@ -184,8 +184,18 @@ const DraftingAssistant = () => {
     return created.sessionId;
   }, [cases, sessionParam, setSearchParams, setup]);
 
-  const runAutomaticPipeline = useCallback(async (sessionId) => {
-    await extractDraftingSources({ sessionId });
+  const runAutomaticPipeline = useCallback(async (sessionId, options = {}) => {
+    const { sourceIds = [], skipExtraction = false } = options;
+    if (!skipExtraction) {
+      try {
+        await extractDraftingSources(sourceIds.length ? { sessionId, sourceIds } : { sessionId });
+      } catch (error) {
+        if (error.status !== 412) {
+          throw error;
+        }
+      }
+    }
+
     const { nextSources } = await loadSessionArtifacts(sessionId, advocateId);
     if (!nextSources.some((source) => (source.reviewed_text || source.raw_extracted_text || '').trim())) {
       setShowSourceReview(true);
@@ -228,7 +238,7 @@ const DraftingAssistant = () => {
       const sessionId = await ensureSession();
       await registerDraftingSource({ sessionId, sourceType: 'typed_text', typedText, label: t('typedNotes'), name: t('typedNotes') });
       setTypedText('');
-      await runAutomaticPipeline(sessionId);
+      await runAutomaticPipeline(sessionId, { skipExtraction: true });
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
@@ -242,9 +252,10 @@ const DraftingAssistant = () => {
     setStatusMessage('Uploading and preparing your draft.');
     try {
       const sessionId = await ensureSession();
+      const sourceIds = [];
       for (const file of acceptedFiles) {
         const upload = await uploadDraftingFile({ advocateId, sessionId, file });
-        await registerDraftingSource({
+        const registered = await registerDraftingSource({
           sessionId,
           sourceType: 'uploaded_file',
           name: file.name,
@@ -253,8 +264,11 @@ const DraftingAssistant = () => {
           storagePath: upload.storagePath,
           url: upload.url,
         });
+        if (registered?.sourceId) {
+          sourceIds.push(registered.sourceId);
+        }
       }
-      await runAutomaticPipeline(sessionId);
+      await runAutomaticPipeline(sessionId, { sourceIds });
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
@@ -269,8 +283,8 @@ const DraftingAssistant = () => {
     setStatusMessage('Using the selected case document as a drafting source.');
     try {
       const sessionId = await ensureSession();
-      await registerDraftingSource({ sessionId, sourceType: 'existing_document', existingDocumentId: documentId });
-      await runAutomaticPipeline(sessionId);
+      const registered = await registerDraftingSource({ sessionId, sourceType: 'existing_document', existingDocumentId: documentId });
+      await runAutomaticPipeline(sessionId, { sourceIds: registered?.sourceId ? [registered.sourceId] : [] });
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
