@@ -112,7 +112,19 @@ const ProfileSetup = () => {
 
       const userSnap = await getDoc(userRef);
       const nextRole = userSnap.data()?.role || 'advocate';
-      navigate(nextRole === 'advocate' ? '/dashboard' : getRouteForRole(nextRole));
+      const target = nextRole === 'advocate' ? '/dashboard' : getRouteForRole(nextRole);
+      clearPendingGoogleState();
+      console.log('[profile-setup] save:redirect', {
+        uid: user.uid,
+        nextRole,
+        target,
+      });
+      navigate(target, { replace: true });
+      window.setTimeout(() => {
+        if (window.location.pathname !== target) {
+          window.location.assign(target);
+        }
+      }, 50);
     } catch (err) {
       setError(err.message);
     } finally {
