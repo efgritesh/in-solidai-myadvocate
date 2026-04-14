@@ -54,6 +54,18 @@ const workflowLabels = {
   failed: 'Needs attention',
 };
 
+const createProgressState = (overrides = {}) => ({
+  active: false,
+  stageKey: 'idle',
+  stageLabel: '',
+  detail: '',
+  currentStep: 0,
+  totalSteps: 4,
+  uploadedFiles: 0,
+  estimatedTokens: 0,
+  ...overrides,
+});
+
 const findClientIdForCaseRecord = (caseRecord, clientList = []) => {
   if (!caseRecord) return '';
   if (caseRecord.client_id) return caseRecord.client_id;
@@ -87,6 +99,7 @@ const DraftingAssistant = () => {
   const [output, setOutput] = useState(null);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [validationFields, setValidationFields] = useState([]);
+  const [progress, setProgress] = useState(createProgressState());
 
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === sessionParam) || null,
@@ -128,7 +141,7 @@ const DraftingAssistant = () => {
     };
   }, []);
 
-  const loadWorkspace = useCallback(async () => {
+  const loadWorkspace = useCallback(async (targetSessionId = sessionParam) => {
     if (!advocateId) {
       setLoading(false);
       return;
@@ -152,7 +165,7 @@ const DraftingAssistant = () => {
       setClients(nextClients);
       setSessions(nextSessions);
 
-      const selectedSession = sessionParam ? nextSessions.find((session) => session.id === sessionParam) || null : null;
+      const selectedSession = targetSessionId ? nextSessions.find((session) => session.id === targetSessionId) || null : null;
       if (selectedSession) {
         setDraftForm({
           clientId: selectedSession.client_id || findClientIdForCaseRecord(nextCases.find((caseRecord) => caseRecord.id === selectedSession.case_id) || null, nextClients),
@@ -249,6 +262,36 @@ const DraftingAssistant = () => {
     return created.sessionId;
   }, [buildSessionPatch, draftForm.caseId, draftForm.clientId, draftForm.instructions, sessionParam, setSearchParams]);
 
+  const estimatePromptTokens = useCallback(() => {
+    const instructionTokens = Math.ceil((draftForm.instructions || '').trim().length / 4);
+    const contextTokens = activeCase ? 180 : 90;
+    const fileTokens = selectedFiles.length * 320;
+    return instructionTokens + contextTokens + fileTokens;
+  }, [activeCase, draftForm.instructions, selectedFiles.length]);
+
+  const updateProgressStage = useCallback((stageKey, currentStep, detail, overrides = {}) => {
+    const stageMap = {
+      session: t('draftingProgressSession'),
+      upload: t('draftingProgressUpload'),
+      extract: t('draftingProgressExtract'),
+      generate: t('draftingProgressGenerate'),
+      validate: t('draftingProgressValidate'),
+    };
+
+    setProgress((current) => createProgressState({
+      ...current,
+      active: true,
+      stageKey,
+      stageLabel: stageMap[stageKey] || '',
+      detail,
+      currentStep,
+      totalSteps: 4,
+      uploadedFiles: selectedFiles.length,
+      estimatedTokens: estimatePromptTokens(),
+      ...overrides,
+    }));
+  }, [estimatePromptTokens, selectedFiles.length, t]);
+
   const startDrafting = async () => {
     if (!draftForm.clientId) {
       setStatusMessage(t('selectClientBeforeDrafting'));
@@ -260,10 +303,15 @@ const DraftingAssistant = () => {
     }
 
     setWorking(true);
-    setStatusMessage('Preparing your draft.');
+    setStatusMessage(t('draftingPreparing'));
+    updateProgressStage('session', 1, t('draftingProgressSessionDetail'));
     try {
       const sessionId = await ensureSession();
       const sourceIds = [];
+
+      if (selectedFiles.length) {
+        updateProgressStage('upload', 2, t('draftingProgressUploadDetail', { count: selectedFiles.length }));
+      }
 
       for (const file of selectedFiles) {
         const upload = await uploadDraftingFile({ advocateId, sessionId, file });
@@ -280,12 +328,20 @@ const DraftingAssistant = () => {
       }
 
       if (sourceIds.length) {
+        updateProgressStage('extract', 3, t('draftingProgressExtractDetail', { count: sourceIds.length }));
         await extractDraftingSources({ sessionId, sourceIds });
       }
 
+      updateProgressStage('generate', 4, t('draftingProgressGenerateDetail'));
       const generation = await generateDraftingOutput({ sessionId });
-      await loadWorkspace();
+      const { nextOutput } = await fetchArtifacts(sessionId, advocateId);
+      setOutput(nextOutput);
+      setValidationFields(nextOutput?.fact_validation_fields || []);
       setSelectedFiles([]);
+      await loadWorkspace(sessionId);
+      if (generation.requiresValidation) {
+        updateProgressStage('validate', 4, t('draftingProgressValidateDetail'));
+      }
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set('sessionId', sessionId);
@@ -294,6 +350,12 @@ const DraftingAssistant = () => {
       });
     } catch (error) {
       setStatusMessage(error.message);
+      setProgress((current) => createProgressState({
+        ...current,
+        active: true,
+        stageLabel: t('draftingProgressFailed'),
+        detail: error.message,
+      }));
     } finally {
       setWorking(false);
     }
@@ -422,7 +484,10 @@ const DraftingAssistant = () => {
       await Promise.all(updates);
 
       const generation = await generateDraftingOutput({ sessionId: currentSession.id });
-      await loadWorkspace();
+      const { nextOutput } = await fetchArtifacts(currentSession.id, advocateId);
+      setOutput(nextOutput);
+      setValidationFields(nextOutput?.fact_validation_fields || []);
+      await loadWorkspace(currentSession.id);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set('view', generation.requiresValidation ? 'validate' : 'review');
@@ -502,14 +567,21 @@ const DraftingAssistant = () => {
             <InfoIcon className="app-icon section-icon" />
           </div>
           <p className="helper-text">{t('factValidationHint')}</p>
-          <div className="form-grid top-space">
-            {validationFields.map((field) => (
-              <div key={field.key} className="form-group">
-                <label>{field.label}</label>
-                <input type="text" value={field.value || ''} onChange={(event) => handleValidationChange(field.key, event.target.value)} />
-              </div>
-            ))}
-          </div>
+          {validationFields.length ? (
+            <div className="form-grid top-space">
+              {validationFields.map((field) => (
+                <div key={field.key} className="form-group">
+                  <label>{field.label}</label>
+                  <input type="text" value={field.value || ''} onChange={(event) => handleValidationChange(field.key, event.target.value)} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="record-card top-space">
+              <strong>{t('draftingNoValidationFieldsTitle')}</strong>
+              <p className="helper-text">{t('draftingNoValidationFieldsBody')}</p>
+            </div>
+          )}
           <div className="button-row top-space">
             <button type="button" className="button" onClick={handleFactValidation} disabled={working}>{working ? t('generatingDraft') : t('applyFactsAndContinue')}</button>
             <button type="button" className="button button--secondary" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', 'review'); return next; })}>{t('skipToDraftReview')}</button>
@@ -571,7 +643,20 @@ const DraftingAssistant = () => {
             <span className="badge">{currentSession ? workflowLabels[currentSession.status] || currentSession.status : t('readyToStart')}</span>
           </div>
         </div>
-        {working ? <LoadingState compact label={statusMessage || t('processing')} /> : statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
+        {(working || progress.active) ? (
+          <div className="record-card">
+            <strong>{progress.stageLabel || t('processingDraftingRequest')}</strong>
+            <p className="helper-text">{progress.detail || statusMessage || t('processingDraftingRequest')}</p>
+            <div className="workflow-defaults">
+              <span>{t('draftingProgressStepLabel', { current: progress.currentStep || 1, total: progress.totalSteps || 4 })}</span>
+              <span>{t('draftingProgressFilesLabel', { count: progress.uploadedFiles || 0 })}</span>
+              <span>{t('draftingProgressEstimatedTokensLabel', { count: progress.estimatedTokens || estimatePromptTokens() })}</span>
+            </div>
+            {working ? <LoadingState compact label={statusMessage || t('processing')} /> : null}
+          </div>
+        ) : null}
+        {!progress.active && working ? <LoadingState compact label={statusMessage || t('processing')} /> : null}
+        {!working && statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
       </section>
 
       {sessions.length ? (
