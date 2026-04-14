@@ -54,7 +54,7 @@ service firebase.storage {
     }
 
     match /clients/{advocateId}/{filePath=**} {
-      allow read, write: if ownsAdvocateRecord(advocateId);
+      allow read, write: if ownsUserPath(advocateId);
     }
 
     match /drafting/{advocateId}/{filePath=**} {
