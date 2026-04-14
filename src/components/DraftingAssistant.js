@@ -54,6 +54,45 @@ const workflowLabels = {
   failed: 'Needs attention',
 };
 
+const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const applyValidatedFactsToDraft = (draftText = '', fields = [], t) => {
+  let nextText = draftText || '';
+
+  fields.forEach((field) => {
+    const trimmedValue = (field.value || '').trim();
+    if (!trimmedValue || !field.placeholder) {
+      return;
+    }
+
+    const placeholderPattern = new RegExp(`\\[${escapeRegExp(field.placeholder)}\\]`, 'gi');
+    nextText = nextText.replace(placeholderPattern, trimmedValue);
+  });
+
+  const unresolved = fields
+    .filter((field) => !(field.value || '').trim())
+    .map((field) => field.label);
+
+  const footerLines = [
+    '',
+    '---',
+    '',
+    t('draftingReviewFooterTitle'),
+    unresolved.length
+      ? `${t('draftingReviewFooterPending')} ${unresolved.join(', ')}.`
+      : t('draftingReviewFooterClean'),
+  ];
+
+  const reviewMarkerPattern = /\n---\n\nAdvocate review note:[\s\S]*$/i;
+  if (reviewMarkerPattern.test(nextText)) {
+    nextText = nextText.replace(reviewMarkerPattern, footerLines.join('\n'));
+  } else {
+    nextText = `${nextText.trim()}\n${footerLines.join('\n')}`;
+  }
+
+  return nextText.trim();
+};
+
 const createProgressState = (overrides = {}) => ({
   active: false,
   stageKey: 'idle',
@@ -445,9 +484,9 @@ const DraftingAssistant = () => {
   };
 
   const handleFactValidation = async () => {
-    if (!currentSession) return;
+    if (!currentSession || !output?.id) return;
     setWorking(true);
-    setStatusMessage('Validating key facts and refreshing the draft.');
+    setStatusMessage(t('draftingValidationSaving'));
     try {
       const validatedFacts = validationFields.reduce((accumulator, field) => {
         accumulator[field.key] = field.value || '';
@@ -483,14 +522,37 @@ const DraftingAssistant = () => {
       }
       await Promise.all(updates);
 
-      const generation = await generateDraftingOutput({ sessionId: currentSession.id });
-      const { nextOutput } = await fetchArtifacts(currentSession.id, advocateId);
-      setOutput(nextOutput);
-      setValidationFields(nextOutput?.fact_validation_fields || []);
+      const patchedDraftText = applyValidatedFactsToDraft(
+        output.edited_text || output.generated_text || '',
+        validationFields,
+        t
+      );
+
+      await Promise.all([
+        updateDoc(doc(db, 'drafting_outputs', output.id), {
+          edited_text: patchedDraftText,
+          fact_validation_required: false,
+          fact_validation_completed_at: new Date(),
+          updated_at: new Date(),
+        }),
+        updateDoc(doc(db, 'drafting_sessions', currentSession.id), {
+          status: 'completed',
+          updated_at: new Date(),
+        }),
+      ]);
+
+      setOutput((current) => ({
+        ...current,
+        edited_text: patchedDraftText,
+        fact_validation_required: false,
+        fact_validation_completed_at: new Date(),
+      }));
+      setProgress(createProgressState());
+      setStatusMessage(t('draftingValidationComplete'));
       await loadWorkspace(currentSession.id);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
-        next.set('view', generation.requiresValidation ? 'validate' : 'review');
+        next.set('view', 'review');
         return next;
       });
     } catch (error) {
