@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 const useCurrentUserProfile = () => {
@@ -10,14 +10,7 @@ const useCurrentUserProfile = () => {
   });
 
   useEffect(() => {
-    let unsubscribeProfile = null;
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (unsubscribeProfile) {
-        unsubscribeProfile();
-        unsubscribeProfile = null;
-      }
-
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setState({ profile: null, loading: false });
         return;
@@ -25,25 +18,20 @@ const useCurrentUserProfile = () => {
 
       setState((current) => ({ ...current, loading: true }));
 
-      unsubscribeProfile = onSnapshot(
-        doc(db, 'users', user.uid),
-        (snapshot) => {
-          setState({
-            profile: snapshot.exists() ? snapshot.data() : null,
-            loading: false,
-          });
-        },
-        () => {
-          setState({ profile: null, loading: false });
-        }
-      );
+      try {
+        const snapshot = await getDoc(doc(db, 'users', user.uid));
+        setState({
+          profile: snapshot.exists() ? snapshot.data() : null,
+          loading: false,
+        });
+      } catch (error) {
+        console.error('Unable to load current user profile', error);
+        setState({ profile: null, loading: false });
+      }
     });
 
     return () => {
       unsubscribeAuth();
-      if (unsubscribeProfile) {
-        unsubscribeProfile();
-      }
     };
   }, []);
 
