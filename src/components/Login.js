@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getRouteForRole, loginWithEmail, loginWithGoogle } from '../utils/auth';
+import { consumeGoogleRedirect, getRouteForRole, loginWithEmail, loginWithGoogle } from '../utils/auth';
 import { saveCurrentUserLanguage, setStoredLanguage } from '../utils/language';
 import LanguageSelector from './LanguageSelector';
+import LoadingState from './LoadingState';
 
 const Login = () => {
   const { t, i18n } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(true);
   const navigate = useNavigate();
 
-  const completeLogin = async (profile) => {
+  const completeLogin = useCallback(async (profile) => {
     const nextLanguage = i18n.language || 'en';
     await i18n.changeLanguage(nextLanguage);
     setStoredLanguage(nextLanguage);
@@ -20,7 +22,31 @@ const Login = () => {
       await saveCurrentUserLanguage(nextLanguage);
     }
     navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
-  };
+  }, [i18n, navigate]);
+
+  useEffect(() => {
+    let active = true;
+
+    consumeGoogleRedirect()
+      .then(async (result) => {
+        if (!active || !result?.profile) return;
+        await completeLogin(result.profile);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err.message);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setGoogleLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [completeLogin]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,12 +64,15 @@ const Login = () => {
     setError('');
 
     try {
-      const { profile } = await loginWithGoogle('advocate');
-      await completeLogin(profile);
+      await loginWithGoogle('advocate');
     } catch (err) {
       setError(err.message);
     }
   };
+
+  if (googleLoading) {
+    return <LoadingState fullScreen label="Loading workspace..." />;
+  }
 
   return (
     <div className="auth-screen">

@@ -1,7 +1,8 @@
 import {
   createUserWithEmailAndPassword,
+  getRedirectResult,
+  signInWithRedirect,
   signInWithEmailAndPassword,
-  signInWithPopup,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
@@ -12,6 +13,8 @@ export const roleRoutes = {
   admin: '/admin-dashboard',
   advocate: '/dashboard',
 };
+
+const GOOGLE_ROLE_KEY = 'pendingGoogleRole';
 
 export const getRouteForRole = (role) => roleRoutes[role] || '/dashboard';
 
@@ -116,7 +119,16 @@ export const signupWithEmail = async ({ name, email, password, role }) => {
 };
 
 export const loginWithGoogle = async (roleHint = 'advocate') => {
-  const userCredential = await signInWithPopup(auth, googleProvider);
+  sessionStorage.setItem(GOOGLE_ROLE_KEY, roleHint);
+  await signInWithRedirect(auth, googleProvider);
+  return null;
+};
+
+export const consumeGoogleRedirect = async () => {
+  const userCredential = await getRedirectResult(auth);
+  if (!userCredential) return null;
+  const roleHint = sessionStorage.getItem(GOOGLE_ROLE_KEY) || 'advocate';
+  sessionStorage.removeItem(GOOGLE_ROLE_KEY);
   const profile = await ensureUserProfile(userCredential.user, roleHint, {
     role: roleHint,
     profileComplete: roleHint === 'admin' ? true : false,

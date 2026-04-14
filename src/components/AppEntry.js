@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getStoredLanguage } from '../utils/language';
 
-const INSTALL_DISMISSED_KEY = 'installPromptDismissed';
-
 const isStandaloneMode = () =>
   window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
@@ -19,7 +17,6 @@ const AppEntry = () => {
 
   const shouldShowInstallFirst = useMemo(() => {
     if (isStandaloneMode()) return false;
-    if (localStorage.getItem(INSTALL_DISMISSED_KEY) === '1') return false;
     return Boolean(installPrompt) || isIosBrowser() || isAndroidBrowser();
   }, [installPrompt]);
 
@@ -31,7 +28,6 @@ const AppEntry = () => {
     };
 
     const handleInstalled = () => {
-      localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
       setInstallPrompt(null);
       setInstallReady(true);
       const hasLanguage = Boolean(getStoredLanguage());
@@ -70,12 +66,6 @@ const AppEntry = () => {
     await installPrompt.userChoice.catch(() => null);
   };
 
-  const handleContinue = () => {
-    localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
-    const hasLanguage = Boolean(getStoredLanguage());
-    navigate(hasLanguage ? '/login' : '/language', { replace: true });
-  };
-
   return (
     <div className="auth-screen">
       <div className="auth-layout auth-layout--entry">
@@ -111,9 +101,6 @@ const AppEntry = () => {
                 {t('installAppButton')}
               </button>
             ) : null}
-            <button type="button" className="button button--secondary" onClick={handleContinue}>
-              {t('continueInBrowser')}
-            </button>
           </div>
         </div>
       </div>

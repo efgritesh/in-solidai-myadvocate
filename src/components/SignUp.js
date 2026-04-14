@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getRouteForRole, loginWithGoogle, signupWithEmail } from '../utils/auth';
+import { consumeGoogleRedirect, getRouteForRole, loginWithGoogle, signupWithEmail } from '../utils/auth';
 import { saveCurrentUserLanguage, setStoredLanguage } from '../utils/language';
 import LanguageSelector from './LanguageSelector';
+import LoadingState from './LoadingState';
 
 const SignUp = () => {
   const { t, i18n } = useTranslation();
@@ -16,10 +17,39 @@ const SignUp = () => {
     role: 'advocate',
   });
   const [error, setError] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(true);
 
   const updateField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
+
+  useEffect(() => {
+    let active = true;
+
+    consumeGoogleRedirect()
+      .then(async (result) => {
+        if (!active || !result?.profile) return;
+        const nextLanguage = i18n.language || 'en';
+        await i18n.changeLanguage(nextLanguage);
+        setStoredLanguage(nextLanguage);
+        await saveCurrentUserLanguage(nextLanguage);
+        navigate(result.profile.profileComplete ? getRouteForRole(result.profile.role) : '/profile-setup');
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err.message);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setGoogleLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [i18n, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,16 +76,15 @@ const SignUp = () => {
     setError('');
 
     try {
-      const { profile } = await loginWithGoogle(form.role);
-      const nextLanguage = i18n.language || 'en';
-      await i18n.changeLanguage(nextLanguage);
-      setStoredLanguage(nextLanguage);
-      await saveCurrentUserLanguage(nextLanguage);
-      navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
+      await loginWithGoogle(form.role);
     } catch (err) {
       setError(err.message);
     }
   };
+
+  if (googleLoading) {
+    return <LoadingState fullScreen label="Loading workspace..." />;
+  }
 
   return (
     <div className="auth-screen">

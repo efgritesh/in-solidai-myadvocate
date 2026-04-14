@@ -108,7 +108,7 @@ const ProfileSetup = () => {
 
       const userSnap = await getDoc(userRef);
       const nextRole = userSnap.data()?.role || 'advocate';
-      navigate(getRouteForRole(nextRole));
+      navigate(nextRole === 'advocate' ? '/dashboard' : getRouteForRole(nextRole));
     } catch (err) {
       setError(err.message);
     } finally {
