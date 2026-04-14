@@ -724,8 +724,29 @@ function parseAadhaarDetailsFromText(text) {
 async function extractAadhaarDetailsFromSource(source) {
   const extraction = await extractSourceText(source);
   const parsed = parseAadhaarDetailsFromText(extraction.reviewedText || extraction.rawText || '');
+  let aiMapped = null;
+
+  try {
+    aiMapped = await mapAadhaarDetailsWithVertex(extraction.reviewedText || extraction.rawText || '');
+  } catch (error) {
+    aiMapped = null;
+  }
+
+  const extracted = {
+    ...parsed.extracted,
+    ...(aiMapped || {}),
+    rawText: parsed.extracted.rawText,
+  };
+
+  const warnings = [
+    ...(parsed.warnings || []),
+    ...((aiMapped?.warnings || []).filter(Boolean)),
+  ].filter((value, index, list) => value && list.indexOf(value) === index);
+
   return {
-    ...parsed,
+    extracted,
+    warnings,
+    success: Boolean(extracted.aadhaarName || extracted.aadhaarNumber || extracted.address),
     extractionMethod: extraction.extractionMethod,
     usedOcr: extraction.usedOcr,
   };
@@ -864,6 +885,51 @@ async function generateWithVertex(prompt) {
     text,
     model,
     location,
+  };
+}
+
+function extractJsonObject(text = '') {
+  const trimmed = String(text || '').trim();
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch ? fencedMatch[1].trim() : trimmed;
+  const firstBrace = candidate.indexOf('{');
+  const lastBrace = candidate.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    throw new Error('AI response did not contain a JSON object.');
+  }
+  return JSON.parse(candidate.slice(firstBrace, lastBrace + 1));
+}
+
+async function mapAadhaarDetailsWithVertex(ocrText) {
+  const prompt = [
+    'Extract structured Aadhaar holder details from the OCR text below.',
+    'Return only a JSON object with these keys:',
+    'name, aadhaarName, aadhaarNumber, dateOfBirth, age, gender, address, warnings',
+    'Rules:',
+    '- Do not return any markdown.',
+    '- Do not confuse government headers with the person name.',
+    '- Ignore lines like Government of India, भारत सरकार, UIDAI, Unique Identification Authority of India, AADHAAR, Print Date.',
+    '- Pick the actual Aadhaar holder name only.',
+    '- Keep aadhaarNumber in grouped format like 1234 5678 9012 when possible.',
+    '- warnings must be an array of strings.',
+    '- Use empty string for unknown fields.',
+    '- If date of birth is available, return it in YYYY-MM-DD when possible, otherwise keep the exact OCR date string.',
+    '',
+    'OCR text:',
+    ocrText || '',
+  ].join('\n');
+
+  const result = await generateWithVertex(prompt);
+  const parsed = extractJsonObject(result.text);
+  return {
+    name: String(parsed.name || '').trim(),
+    aadhaarName: String(parsed.aadhaarName || parsed.name || '').trim(),
+    aadhaarNumber: String(parsed.aadhaarNumber || '').trim(),
+    dateOfBirth: String(parsed.dateOfBirth || '').trim(),
+    age: String(parsed.age || '').trim(),
+    gender: String(parsed.gender || '').trim(),
+    address: String(parsed.address || '').trim(),
+    warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map((item) => String(item).trim()).filter(Boolean) : [],
   };
 }
 
