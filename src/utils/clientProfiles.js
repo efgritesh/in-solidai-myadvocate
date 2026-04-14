@@ -1,6 +1,8 @@
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { addDoc, collection, doc, updateDoc } from 'firebase/firestore';
-import { db, storage } from '../firebase';
+import { auth, db, storage } from '../firebase';
+
+const FUNCTIONS_BASE = 'https://asia-south1-in-solidai-myadvocate.cloudfunctions.net';
 
 export const uploadClientAadhaarReference = async ({ advocateId, clientId, file }) => {
   if (!file) {
@@ -17,6 +19,55 @@ export const uploadClientAadhaarReference = async ({ advocateId, clientId, file 
     aadhaarReferencePath: storagePath,
     aadhaarReferenceUrl: url,
     aadhaarReferenceMimeType: file.type || 'application/octet-stream',
+  };
+};
+
+export const uploadClientAadhaarIntake = async ({ advocateId, file }) => {
+  if (!file) {
+    return null;
+  }
+
+  const storagePath = `clients/${advocateId}/intake/${Date.now()}-${file.name}`;
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(storageRef);
+
+  return {
+    storagePath,
+    url,
+    name: file.name,
+    mimeType: file.type || 'application/octet-stream',
+  };
+};
+
+export const extractAadhaarDetails = async ({ advocateId, file }) => {
+  if (!advocateId || !file) {
+    throw new Error('Aadhaar upload is required.');
+  }
+
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) {
+    throw new Error('You must be signed in to read Aadhaar details.');
+  }
+
+  const uploaded = await uploadClientAadhaarIntake({ advocateId, file });
+  const response = await fetch(`${FUNCTIONS_BASE}/extractAadhaarDetailsHttp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(uploaded),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Unable to read Aadhaar details.');
+  }
+
+  return {
+    ...data,
+    uploadedReference: uploaded,
   };
 };
 
@@ -44,4 +95,3 @@ export const updateClientProfile = async ({ clientId, advocateId, data, aadhaarF
 
   await updateDoc(doc(db, 'clients', clientId), patch);
 };
-

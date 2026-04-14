@@ -1425,6 +1425,15 @@ textarea {
   font-weight: 700;
 }
 
+.workflow-summary__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 .workflow-session {
   flex: 1;
   border: none;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, deleteDoc, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useDropzone } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -17,7 +17,7 @@ import {
   registerDraftingSource,
   uploadDraftingFile,
 } from '../utils/drafting';
-import { createClientProfile } from '../utils/clientProfiles';
+import { createClientProfile, extractAadhaarDetails } from '../utils/clientProfiles';
 import {
   genderOptions,
   isClientDraftReady,
@@ -134,11 +134,13 @@ const DraftingAssistant = () => {
   const [cases, setCases] = useState([]);
   const [clients, setClients] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [draftSources, setDraftSources] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [output, setOutput] = useState(null);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [validationFields, setValidationFields] = useState([]);
   const [progress, setProgress] = useState(createProgressState());
+  const [aadhaarStatus, setAadhaarStatus] = useState({ loading: false, success: false, warnings: [], rawText: '', error: '' });
 
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === sessionParam) || null,
@@ -156,6 +158,17 @@ const DraftingAssistant = () => {
   );
 
   const canPublishDraft = Boolean(currentSession?.id && output?.id);
+  const failedSources = useMemo(
+    () => draftSources.filter((source) => source.status === 'failed'),
+    [draftSources]
+  );
+  const promptPreviewText = useMemo(() => (
+    draftSources
+      .map((source) => (source.reviewed_text || source.raw_extracted_text || '').trim())
+      .filter(Boolean)
+      .join('\n\n---\n\n')
+      .slice(0, 4000)
+  ), [draftSources]);
 
   const availableCases = useMemo(() => {
     if (!draftForm.clientId) return cases;
@@ -213,7 +226,8 @@ const DraftingAssistant = () => {
           caseId: selectedSession.case_id || '',
           instructions: selectedSession.instructions || '',
         });
-        const { nextOutput } = await fetchArtifacts(selectedSession.id, advocateId);
+        const { nextSources, nextOutput } = await fetchArtifacts(selectedSession.id, advocateId);
+        setDraftSources(nextSources);
         setOutput(nextOutput);
         setValidationFields(nextOutput?.fact_validation_fields || []);
       } else {
@@ -223,6 +237,7 @@ const DraftingAssistant = () => {
           caseId: selectedCase?.id || '',
           instructions: selectedCase ? `${t('draftingCasePrefillInstructions')} ${selectedCase.case_number}.` : '',
         });
+        setDraftSources([]);
         setOutput(null);
         setValidationFields([]);
       }
@@ -333,6 +348,54 @@ const DraftingAssistant = () => {
     }));
   }, [estimatePromptTokens, selectedFiles.length, t]);
 
+  const applyAadhaarFields = useCallback((extracted = {}) => {
+    setClientForm((current) => ({
+      ...current,
+      name: current.name || extracted.name || extracted.aadhaarName || '',
+      aadhaarName: extracted.aadhaarName || current.aadhaarName || '',
+      aadhaarNumber: extracted.aadhaarNumber || current.aadhaarNumber || '',
+      dateOfBirth: extracted.dateOfBirth || current.dateOfBirth || '',
+      age: extracted.age || current.age || '',
+      gender: extracted.gender || current.gender || '',
+      address: extracted.address || current.address || '',
+    }));
+  }, []);
+
+  const handleAadhaarUpload = useCallback(async (file) => {
+    setAadhaarFile(file || null);
+    if (!file || !advocateId) {
+      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+      return;
+    }
+
+    setAadhaarStatus({ loading: true, success: false, warnings: [], rawText: '', error: '' });
+    try {
+      const result = await extractAadhaarDetails({ advocateId, file });
+      applyAadhaarFields(result.extracted);
+      setAadhaarStatus({
+        loading: false,
+        success: result.success,
+        warnings: result.warnings || [],
+        rawText: result.extracted?.rawText || '',
+        error: '',
+      });
+    } catch (error) {
+      setAadhaarStatus({
+        loading: false,
+        success: false,
+        warnings: [],
+        rawText: '',
+        error: error.message || t('aadhaarReadFailed'),
+      });
+    }
+  }, [advocateId, applyAadhaarFields, t]);
+
+  const handleSourceReviewChange = (sourceId, value) => {
+    setDraftSources((current) => current.map((source) => (
+      source.id === sourceId ? { ...source, reviewed_text: value } : source
+    )));
+  };
+
   const startDrafting = async () => {
     if (!draftForm.clientId) {
       setStatusMessage(t('selectClientBeforeDrafting'));
@@ -372,23 +435,20 @@ const DraftingAssistant = () => {
         updateProgressStage('extract', 3, t('draftingProgressExtractDetail', { count: sourceIds.length }));
         await extractDraftingSources({ sessionId, sourceIds });
       }
-
-      updateProgressStage('generate', 4, t('draftingProgressGenerateDetail'));
-      const generation = await generateDraftingOutput({ sessionId });
-      const { nextOutput } = await fetchArtifacts(sessionId, advocateId);
+      const { nextSources, nextOutput } = await fetchArtifacts(sessionId, advocateId);
+      setDraftSources(nextSources);
       setOutput(nextOutput);
       setValidationFields(nextOutput?.fact_validation_fields || []);
       setSelectedFiles([]);
       await loadWorkspace(sessionId);
-      if (generation.requiresValidation) {
-        updateProgressStage('validate', 4, t('draftingProgressValidateDetail'));
-      }
+      setProgress(createProgressState());
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set('sessionId', sessionId);
-        next.set('view', generation.requiresValidation ? 'validate' : 'review');
+        next.set('view', 'prepare');
         return next;
       });
+      setStatusMessage(t('draftingPromptReviewReady'));
     } catch (error) {
       setStatusMessage(error.message);
       setProgress((current) => createProgressState({
@@ -424,6 +484,7 @@ const DraftingAssistant = () => {
       });
       setClientForm(emptyClientForm);
       setAadhaarFile(null);
+      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
       setShowNewClientForm(false);
       await loadWorkspace();
       setDraftForm((current) => ({ ...current, clientId }));
@@ -441,7 +502,8 @@ const DraftingAssistant = () => {
     setWorking(true);
     try {
       const session = sessions.find((item) => item.id === sessionId) || null;
-      const { nextOutput } = await fetchArtifacts(sessionId, advocateId);
+      const { nextSources, nextOutput } = await fetchArtifacts(sessionId, advocateId);
+      setDraftSources(nextSources);
       setOutput(nextOutput);
       setValidationFields(nextOutput?.fact_validation_fields || []);
 
@@ -454,6 +516,8 @@ const DraftingAssistant = () => {
 
         if (nextOutput) {
           next.set('view', nextOutput.fact_validation_required ? 'validate' : 'review');
+        } else if (nextSources.length) {
+          next.set('view', 'prepare');
         } else {
           next.delete('view');
         }
@@ -493,6 +557,7 @@ const DraftingAssistant = () => {
         clearSessionParams();
         setDraftForm(emptyDraftForm);
         setOutput(null);
+        setDraftSources([]);
         setValidationFields([]);
       }
       await loadWorkspace();
@@ -587,6 +652,54 @@ const DraftingAssistant = () => {
     }
   };
 
+  const handleGenerateFromReview = async () => {
+    if (!currentSession?.id) return;
+    setWorking(true);
+    setStatusMessage(t('draftingPreparingPrompt'));
+    updateProgressStage('generate', 4, t('draftingProgressGenerateDetail'));
+
+    try {
+      await Promise.all(draftSources.map((source) => {
+        const reviewedText = (source.reviewed_text || '').trim();
+        if (reviewedText) {
+          return updateDoc(doc(db, 'drafting_sources', source.id), {
+            reviewed_text: reviewedText,
+            raw_extracted_text: source.raw_extracted_text || reviewedText,
+            extraction_method: source.extraction_method || 'manual_text',
+            status: 'ready_for_review',
+            error_message: deleteField(),
+            updated_at: new Date(),
+          });
+        }
+
+        return Promise.resolve();
+      }));
+
+      const generation = await generateDraftingOutput({ sessionId: currentSession.id });
+      const { nextSources, nextOutput } = await fetchArtifacts(currentSession.id, advocateId);
+      setDraftSources(nextSources);
+      setOutput(nextOutput);
+      setValidationFields(nextOutput?.fact_validation_fields || []);
+      await loadWorkspace(currentSession.id);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set('view', generation.requiresValidation ? 'validate' : 'review');
+        return next;
+      });
+      setProgress(createProgressState());
+    } catch (error) {
+      setStatusMessage(error.message);
+      setProgress((current) => createProgressState({
+        ...current,
+        active: true,
+        stageLabel: t('draftingProgressFailed'),
+        detail: error.message,
+      }));
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const handleSaveDraftEdits = async () => {
     if (!output?.id) return;
     setWorking(true);
@@ -636,6 +749,87 @@ const DraftingAssistant = () => {
 
   if (loading) {
     return <PageShell title={t('aiDraftingAssistant')} subtitle={t('aiDraftingSubtitle')} showBack><LoadingState label={t('loadingDraftingWorkspace')} /></PageShell>;
+  }
+
+  if (view === 'prepare' && currentSession) {
+    return (
+      <PageShell
+        title={t('reviewAiContext')}
+        subtitle={currentSession.case_number || activeClient?.name || t('aiDraftingSubtitle')}
+        showBack
+      >
+        <section className="panel workflow-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">{t('review')}</p>
+              <h2>{t('reviewBeforeAiDrafting')}</h2>
+            </div>
+            <InfoIcon className="app-icon section-icon" />
+          </div>
+          <div className="record-card">
+            <strong>{t('draftingPromptSummary')}</strong>
+            <p className="helper-text">{activeClient?.name || t('selectClient')}</p>
+            <p className="helper-text">{activeCase?.case_number || t('standaloneDraft')}</p>
+            <p className="helper-text">{draftForm.instructions || t('draftingInstructionsRequired')}</p>
+          </div>
+          <div className="record-list">
+            {draftSources.length ? draftSources.map((source) => (
+              <article key={source.id} className="record-card">
+                <strong>{source.name || source.label || t('untitledSource')}</strong>
+                <p className="helper-text">
+                  {source.status === 'failed'
+                    ? t('ocrFailedForSource')
+                    : source.extraction_method === 'vision_ocr'
+                      ? t('ocrReadSuccess')
+                      : t('textReadSuccess')}
+                </p>
+                {source.error_message ? <p className="inline-feedback inline-feedback--error">{source.error_message}</p> : null}
+                <textarea
+                  rows="6"
+                  value={source.reviewed_text || source.raw_extracted_text || ''}
+                  onChange={(event) => handleSourceReviewChange(source.id, event.target.value)}
+                  placeholder={source.status === 'failed' ? t('manualContextFallbackPlaceholder') : t('reviewedTextPlaceholder')}
+                />
+              </article>
+            )) : (
+              <div className="record-card">
+                <strong>{t('noSourceFilesAdded')}</strong>
+                <p className="helper-text">{t('draftingContextSubtitle')}</p>
+              </div>
+            )}
+          </div>
+          {promptPreviewText ? (
+            <div className="record-card">
+              <strong>{t('promptPreview')}</strong>
+              <textarea value={promptPreviewText} readOnly rows="8" />
+            </div>
+          ) : null}
+          {failedSources.length ? (
+            <p className="inline-feedback inline-feedback--error">
+              {t('ocrFailureManualFallbackHint')}
+            </p>
+          ) : null}
+          <div className="button-row top-space">
+            <button type="button" className="button" onClick={handleGenerateFromReview} disabled={working}>
+              {working ? t('generatingDraft') : t('sendToAiGenerateDraft')}
+            </button>
+          </div>
+          {(working || progress.active) ? (
+            <div className="record-card">
+              <strong>{progress.stageLabel || t('processingDraftingRequest')}</strong>
+              <p className="helper-text">{progress.detail || statusMessage || t('processingDraftingRequest')}</p>
+              <div className="workflow-defaults">
+                <span>{t('draftingProgressStepLabel', { current: progress.currentStep || 1, total: progress.totalSteps || 4 })}</span>
+                <span>{t('draftingProgressFilesLabel', { count: progress.uploadedFiles || draftSources.length || selectedFiles.length })}</span>
+                <span>{t('draftingProgressEstimatedTokensLabel', { count: progress.estimatedTokens || estimatePromptTokens() })}</span>
+              </div>
+              {working ? <LoadingState compact label={statusMessage || t('processing')} /> : null}
+            </div>
+          ) : null}
+          {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
+        </section>
+      </PageShell>
+    );
   }
 
   if (view === 'validate' && currentSession && output) {
@@ -727,22 +921,9 @@ const DraftingAssistant = () => {
             <p>{activeCase ? `${activeCase.case_number} | ${activeCase.summary || activeCase.next_step || ''}` : t('draftingContextSubtitle')}</p>
           </div>
           <div className="workflow-summary__meta">
-            <span className="badge">{currentSession ? workflowLabels[currentSession.status] || currentSession.status : t('readyToStart')}</span>
+            <span className="workflow-summary__status">{currentSession ? workflowLabels[currentSession.status] || currentSession.status : t('readyToStart')}</span>
           </div>
         </div>
-        {(working || progress.active) ? (
-          <div className="record-card">
-            <strong>{progress.stageLabel || t('processingDraftingRequest')}</strong>
-            <p className="helper-text">{progress.detail || statusMessage || t('processingDraftingRequest')}</p>
-            <div className="workflow-defaults">
-              <span>{t('draftingProgressStepLabel', { current: progress.currentStep || 1, total: progress.totalSteps || 4 })}</span>
-              <span>{t('draftingProgressFilesLabel', { count: progress.uploadedFiles || 0 })}</span>
-              <span>{t('draftingProgressEstimatedTokensLabel', { count: progress.estimatedTokens || estimatePromptTokens() })}</span>
-            </div>
-            {working ? <LoadingState compact label={statusMessage || t('processing')} /> : null}
-          </div>
-        ) : null}
-        {!progress.active && working ? <LoadingState compact label={statusMessage || t('processing')} /> : null}
         {!working && statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
       </section>
 
@@ -775,49 +956,63 @@ const DraftingAssistant = () => {
             <PlusIcon className="app-icon" />
           </button>
         </div>
-        <div className="form-grid">
-          <div className="form-group">
-            <label>{t('clientLabel')}</label>
-            <select
-              value={draftForm.clientId}
-              onChange={(event) => setDraftForm((current) => ({ ...current, clientId: event.target.value, caseId: '' }))}
-            >
-              <option value="">{t('selectClient')}</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name} {isClientDraftReady(client) ? '' : `(${t('draftProfileIncomplete')})`}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>{t('linkedMatter')}</label>
-            <select
-              value={draftForm.caseId}
-              onChange={(event) => {
-                const selectedCase = cases.find((caseRecord) => caseRecord.id === event.target.value) || null;
-                setDraftForm((current) => ({
-                  ...current,
-                  caseId: event.target.value,
-                  clientId: findClientIdForCaseRecord(selectedCase, clients) || current.clientId,
-                }));
-              }}
-            >
-              <option value="">{t('standaloneDraft')}</option>
-              {availableCases.map((caseRecord) => (
-                <option key={caseRecord.id} value={caseRecord.id}>{caseRecord.case_number} - {caseRecord.client_name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {activeClient && !isClientDraftReady(activeClient) ? (
-          <p className="inline-feedback inline-feedback--error">
-            {t('clientProfileIncompleteForDrafting')} <button type="button" className="text-link text-link--button" onClick={() => navigate(`/clients/${activeClient.id}?edit=1`)}>{t('openClientProfile')}</button>
-          </p>
+        {!showNewClientForm ? (
+          <>
+            <div className="form-grid">
+              <div className="form-group">
+                <label>{t('clientLabel')}</label>
+                <select
+                  value={draftForm.clientId}
+                  onChange={(event) => setDraftForm((current) => ({ ...current, clientId: event.target.value, caseId: '' }))}
+                >
+                  <option value="">{t('selectClient')}</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name} {isClientDraftReady(client) ? '' : `(${t('draftProfileIncomplete')})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>{t('linkedMatter')}</label>
+                <select
+                  value={draftForm.caseId}
+                  onChange={(event) => {
+                    const selectedCase = cases.find((caseRecord) => caseRecord.id === event.target.value) || null;
+                    setDraftForm((current) => ({
+                      ...current,
+                      caseId: event.target.value,
+                      clientId: findClientIdForCaseRecord(selectedCase, clients) || current.clientId,
+                    }));
+                  }}
+                >
+                  <option value="">{t('standaloneDraft')}</option>
+                  {availableCases.map((caseRecord) => (
+                    <option key={caseRecord.id} value={caseRecord.id}>{caseRecord.case_number} - {caseRecord.client_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {activeClient && !isClientDraftReady(activeClient) ? (
+              <p className="inline-feedback inline-feedback--error">
+                {t('clientProfileIncompleteForDrafting')} <button type="button" className="text-link text-link--button" onClick={() => navigate(`/clients/${activeClient.id}?edit=1`)}>{t('openClientProfile')}</button>
+              </p>
+            ) : null}
+          </>
         ) : null}
         {showNewClientForm ? (
           <form onSubmit={handleCreateClient} className="top-space">
             <div className="form-grid">
+              <div className="form-group full-span"><label>{t('aadhaarUploadPreferred')}</label><input type="file" accept="image/*,application/pdf" onChange={(event) => handleAadhaarUpload(event.target.files?.[0] || null)} /></div>
+              {aadhaarStatus.loading ? <p className="inline-feedback full-span">{t('aadhaarReading')}</p> : null}
+              {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
+              {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error full-span">{aadhaarStatus.error}</p> : null}
+              {aadhaarStatus.warnings.length ? (
+                <div className="record-card full-span">
+                  <strong>{t('aadhaarNeedsReview')}</strong>
+                  {aadhaarStatus.warnings.map((warning) => <p key={warning} className="helper-text">{warning}</p>)}
+                </div>
+              ) : null}
               <div className="form-group"><label>{t('name')}</label><input type="text" value={clientForm.name} onChange={(event) => setClientForm((current) => ({ ...current, name: event.target.value }))} required /></div>
               <div className="form-group"><label>{t('phone')}</label><input type="text" value={clientForm.phone} onChange={(event) => setClientForm((current) => ({ ...current, phone: event.target.value }))} required /></div>
               <div className="form-group"><label>{t('email')}</label><input type="email" value={clientForm.email} onChange={(event) => setClientForm((current) => ({ ...current, email: event.target.value }))} /></div>
@@ -830,7 +1025,7 @@ const DraftingAssistant = () => {
               <div className="form-group full-span"><label>{t('address')}</label><textarea value={clientForm.address} onChange={(event) => setClientForm((current) => ({ ...current, address: event.target.value }))} required /></div>
               <div className="form-group"><label>{t('aadhaarName')}</label><input type="text" value={clientForm.aadhaarName} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarName: event.target.value }))} required /></div>
               <div className="form-group"><label>{t('aadhaarNumber')}</label><input type="text" value={clientForm.aadhaarNumber} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarNumber: event.target.value }))} required /></div>
-              <div className="form-group full-span"><label>{t('aadhaarReference')}</label><input type="file" accept="image/*,application/pdf" onChange={(event) => setAadhaarFile(event.target.files?.[0] || null)} /></div>
+              {aadhaarStatus.rawText ? <div className="form-group full-span"><label>{t('aadhaarOcrPreview')}</label><textarea value={aadhaarStatus.rawText} readOnly rows="5" /></div> : null}
             </div>
             <button type="submit" className="button" disabled={working}>{t('addClientAndContinue')}</button>
           </form>
@@ -870,6 +1065,18 @@ const DraftingAssistant = () => {
         <div className="button-row top-space">
           <button type="button" className="button" onClick={startDrafting} disabled={working}>{working ? t('generatingDraft') : t('generateDraft')}</button>
         </div>
+        {(working || progress.active) ? (
+          <div className="record-card top-space">
+            <strong>{progress.stageLabel || t('processingDraftingRequest')}</strong>
+            <p className="helper-text">{progress.detail || statusMessage || t('processingDraftingRequest')}</p>
+            <div className="workflow-defaults">
+              <span>{t('draftingProgressStepLabel', { current: progress.currentStep || 1, total: progress.totalSteps || 4 })}</span>
+              <span>{t('draftingProgressFilesLabel', { count: progress.uploadedFiles || selectedFiles.length })}</span>
+              <span>{t('draftingProgressEstimatedTokensLabel', { count: progress.estimatedTokens || estimatePromptTokens() })}</span>
+            </div>
+            {working ? <LoadingState compact label={statusMessage || t('processing')} /> : null}
+          </div>
+        ) : null}
       </section>
 
       {output ? (

@@ -650,6 +650,87 @@ async function extractSourceText(source) {
   throw new Error('This file type is not supported for drafting yet.');
 }
 
+function parseAadhaarDetailsFromText(text) {
+  const cleanedText = cleanExtractedText(text || '');
+  const rawLines = cleanedText.split('\n').map((line) => line.trim()).filter(Boolean);
+  const lines = rawLines.map((line) => line.replace(/\s{2,}/g, ' '));
+  const lowerText = cleanedText.toLowerCase();
+
+  const aadhaarNumberMatch = cleanedText.match(/\b\d{4}\s?\d{4}\s?\d{4}\b/);
+  const dobMatch = cleanedText.match(/\b(\d{2}[/-]\d{2}[/-]\d{4})\b/);
+  const yobMatch =
+    cleanedText.match(/(?:year of birth|yob)[:\s-]*(\d{4})/i) ||
+    cleanedText.match(/(?:जन्म वर्ष)[:\s-]*(\d{4})/i);
+  const genderMatch = cleanedText.match(/\b(Male|Female|Other|पुरुष|महिला|अन्य)\b/i);
+
+  const nameCandidates = lines.filter((line) => {
+    const lowerLine = line.toLowerCase();
+    if (line.length < 3 || /\d{4}/.test(line)) return false;
+    if (
+      lowerLine.includes('government of india') ||
+      lowerLine.includes('unique identification authority') ||
+      lowerLine.includes('आधार') ||
+      lowerLine.includes('aadhaar') ||
+      lowerLine.includes('dob') ||
+      lowerLine.includes('year of birth') ||
+      lowerLine.includes('male') ||
+      lowerLine.includes('female') ||
+      lowerLine.includes('address') ||
+      lowerLine.includes('vid') ||
+      lowerLine.includes('downloaded')
+    ) {
+      return false;
+    }
+    return /^[a-zA-Z.\-'\s]+$|^[\u0900-\u097F.\-'\s]+$/u.test(line);
+  });
+
+  const addressIndex = lines.findIndex((line) => /^address\b[:\-]?/i.test(line) || /^पता[:\-]?/i.test(line));
+  const addressLines = addressIndex >= 0 ? lines.slice(addressIndex, Math.min(addressIndex + 4, lines.length)) : [];
+  const normalizedAddress = addressLines
+    .join(' ')
+    .replace(/^address[:\s-]*/i, '')
+    .replace(/^पता[:\s-]*/i, '')
+    .trim();
+
+  const dateOfBirth = dobMatch ? dobMatch[1].replace(/\//g, '-') : '';
+  const age = !dateOfBirth && yobMatch ? String(Math.max(0, new Date().getFullYear() - Number(yobMatch[1]))) : '';
+
+  const extracted = {
+    name: nameCandidates[0] || '',
+    aadhaarName: nameCandidates[0] || '',
+    aadhaarNumber: aadhaarNumberMatch ? aadhaarNumberMatch[0].replace(/\s+/g, ' ').trim() : '',
+    dateOfBirth,
+    age,
+    gender: genderMatch ? genderMatch[1] : '',
+    address: normalizedAddress,
+    rawText: cleanedText,
+  };
+
+  const warnings = [];
+  if (!extracted.aadhaarName) warnings.push('Name could not be confidently read from the Aadhaar document.');
+  if (!extracted.aadhaarNumber) warnings.push('Aadhaar number could not be confidently read from the Aadhaar document.');
+  if (!extracted.dateOfBirth && !extracted.age && !lowerText.includes('year of birth') && !lowerText.includes('dob')) {
+    warnings.push('Date of birth or year of birth could not be confidently read.');
+  }
+  if (!extracted.address) warnings.push('Address could not be confidently read from the Aadhaar document.');
+
+  return {
+    extracted,
+    warnings,
+    success: Boolean(extracted.aadhaarName || extracted.aadhaarNumber || extracted.address),
+  };
+}
+
+async function extractAadhaarDetailsFromSource(source) {
+  const extraction = await extractSourceText(source);
+  const parsed = parseAadhaarDetailsFromText(extraction.reviewedText || extraction.rawText || '');
+  return {
+    ...parsed,
+    extractionMethod: extraction.extractionMethod,
+    usedOcr: extraction.usedOcr,
+  };
+}
+
 function buildPrompt({ session, caseRecord, sources }) {
   const draftType = session.custom_draft_type?.trim() || session.draft_type || 'legal draft';
   const language = session.output_language === 'hi' ? 'Hindi' : 'English';
@@ -1223,6 +1304,34 @@ exports.extractDraftingSourcesHttp = onRequest({ invoker: 'public' }, async (req
     response.status(200).json({ results, readyCount, ocrCount });
   } catch (error) {
     response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to extract drafting sources.' });
+  }
+});
+
+exports.extractAadhaarDetailsHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const user = await getHttpUser(request, response);
+    if (!user) return;
+    if (user.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can read Aadhaar details.' });
+      return;
+    }
+
+    const data = request.body || {};
+    const source = {
+      advocate_id: user.uid,
+      session_id: 'aadhaar-intake',
+      id: 'aadhaar-intake',
+      source_type: 'uploaded_file',
+      name: data.name || '',
+      mime_type: data.mimeType || '',
+      storage_path: data.storagePath || '',
+      url: data.url || '',
+    };
+
+    const result = await extractAadhaarDetailsFromSource(source);
+    response.status(200).json(result);
+  } catch (error) {
+    response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to read Aadhaar details.' });
   }
 });
 

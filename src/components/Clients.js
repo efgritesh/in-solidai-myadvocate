@@ -6,7 +6,7 @@ import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
 import { ArrowRightIcon, CloseIcon, PlusIcon } from './AppIcons';
-import { createClientProfile } from '../utils/clientProfiles';
+import { createClientProfile, extractAadhaarDetails } from '../utils/clientProfiles';
 import {
   buildClientDraftingSummary,
   genderOptions,
@@ -38,6 +38,7 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAddClientForm, setShowAddClientForm] = useState(false);
+  const [aadhaarStatus, setAadhaarStatus] = useState({ loading: false, success: false, warnings: [], rawText: '', error: '' });
   const advocateId = auth.currentUser?.uid || '';
 
   const updateField = (key, value) => {
@@ -84,10 +85,53 @@ const Clients = () => {
 
       setForm(emptyClientForm);
       setAadhaarFile(null);
+      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
       setShowAddClientForm(false);
       await fetchClients();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const applyAadhaarFields = (extracted = {}) => {
+    setForm((current) => ({
+      ...current,
+      name: current.name || extracted.name || extracted.aadhaarName || '',
+      aadhaarName: extracted.aadhaarName || current.aadhaarName || '',
+      aadhaarNumber: extracted.aadhaarNumber || current.aadhaarNumber || '',
+      dateOfBirth: extracted.dateOfBirth || current.dateOfBirth || '',
+      age: extracted.age || current.age || '',
+      gender: extracted.gender || current.gender || '',
+      address: extracted.address || current.address || '',
+    }));
+  };
+
+  const handleAadhaarUpload = async (file) => {
+    setAadhaarFile(file || null);
+    if (!file || !advocateId) {
+      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+      return;
+    }
+
+    setAadhaarStatus({ loading: true, success: false, warnings: [], rawText: '', error: '' });
+    try {
+      const result = await extractAadhaarDetails({ advocateId, file });
+      applyAadhaarFields(result.extracted);
+      setAadhaarStatus({
+        loading: false,
+        success: result.success,
+        warnings: result.warnings || [],
+        rawText: result.extracted?.rawText || '',
+        error: '',
+      });
+    } catch (error) {
+      setAadhaarStatus({
+        loading: false,
+        success: false,
+        warnings: [],
+        rawText: '',
+        error: error.message || t('aadhaarReadFailed'),
+      });
     }
   };
 
@@ -118,6 +162,19 @@ const Clients = () => {
             {showAddClientForm ? (
               <form onSubmit={handleAddClient}>
                 <div className="form-grid">
+                  <div className="form-group full-span">
+                    <label>{t('aadhaarUploadPreferred')}:</label>
+                    <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
+                  </div>
+                  {aadhaarStatus.loading ? <p className="inline-feedback full-span">{t('aadhaarReading')}</p> : null}
+                  {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
+                  {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error full-span">{aadhaarStatus.error}</p> : null}
+                  {aadhaarStatus.warnings.length ? (
+                    <div className="record-card full-span">
+                      <strong>{t('aadhaarNeedsReview')}</strong>
+                      {aadhaarStatus.warnings.map((warning) => <p key={warning} className="helper-text">{warning}</p>)}
+                    </div>
+                  ) : null}
                   <div className="form-group">
                     <label>{t('name')}:</label>
                     <input type="text" value={form.name} onChange={(e) => updateField('name', e.target.value)} required />
@@ -173,10 +230,12 @@ const Clients = () => {
                     <label>{t('aadhaarNumber')}:</label>
                     <input type="text" value={form.aadhaarNumber} onChange={(e) => updateField('aadhaarNumber', e.target.value)} required />
                   </div>
-                  <div className="form-group full-span">
-                    <label>{t('aadhaarReference')}:</label>
-                    <input type="file" accept="image/*,application/pdf" onChange={(e) => setAadhaarFile(e.target.files?.[0] || null)} />
-                  </div>
+                  {aadhaarStatus.rawText ? (
+                    <div className="form-group full-span">
+                      <label>{t('aadhaarOcrPreview')}:</label>
+                      <textarea value={aadhaarStatus.rawText} readOnly rows="5" />
+                    </div>
+                  ) : null}
                 </div>
                 <button type="submit" className="button" disabled={saving}>{saving ? t('saving') : t('addClient')}</button>
               </form>
