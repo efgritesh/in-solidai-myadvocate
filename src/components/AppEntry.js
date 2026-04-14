@@ -14,6 +14,7 @@ const AppEntry = () => {
   const navigate = useNavigate();
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installReady, setInstallReady] = useState(isStandaloneMode());
+  const [showManualInstallHelp, setShowManualInstallHelp] = useState(false);
 
   const shouldShowInstallFirst = useMemo(() => {
     if (isStandaloneMode()) return false;
@@ -60,7 +61,10 @@ const AppEntry = () => {
   }, [installReady, navigate, shouldShowInstallFirst]);
 
   const handleInstall = async () => {
-    if (!installPrompt) return;
+    if (!installPrompt) {
+      setShowManualInstallHelp(true);
+      return;
+    }
 
     installPrompt.prompt();
     await installPrompt.userChoice.catch(() => null);
@@ -95,12 +99,16 @@ const AppEntry = () => {
               <p className="helper-text">{t('installAppIosBody')}</p>
             </div>
           ) : null}
+          {showManualInstallHelp && isAndroidBrowser() && !installPrompt ? (
+            <div className="record-card top-space">
+              <strong>{t('installAppAndroidTitle')}</strong>
+              <p className="helper-text">{t('installAppAndroidBody')}</p>
+            </div>
+          ) : null}
           <div className="button-row top-space">
-            {installPrompt ? (
-              <button type="button" className="button" onClick={handleInstall}>
-                {t('installAppButton')}
-              </button>
-            ) : null}
+            <button type="button" className="button" onClick={handleInstall}>
+              {t('installAppButton')}
+            </button>
           </div>
         </div>
       </div>

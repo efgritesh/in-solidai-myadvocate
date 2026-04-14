@@ -12,6 +12,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(true);
+  const [googlePending, setGooglePending] = useState(false);
   const navigate = useNavigate();
 
   const completeLogin = useCallback(async (profile) => {
@@ -62,16 +63,18 @@ const Login = () => {
 
   const handleGoogleLogin = async () => {
     setError('');
+    setGooglePending(true);
 
     try {
-      await loginWithGoogle('advocate');
+      await loginWithGoogle('advocate', 'login');
     } catch (err) {
       setError(err.message);
+      setGooglePending(false);
     }
   };
 
-  if (googleLoading) {
-    return <LoadingState fullScreen label="Loading workspace..." />;
+  if (googleLoading || googlePending) {
+    return <LoadingState fullScreen label={googlePending ? 'Continuing with Google...' : 'Loading workspace...'} />;
   }
 
   return (

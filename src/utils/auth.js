@@ -15,6 +15,8 @@ export const roleRoutes = {
 };
 
 const GOOGLE_ROLE_KEY = 'pendingGoogleRole';
+export const GOOGLE_FLOW_KEY = 'pendingGoogleFlow';
+export const GOOGLE_FORCE_PROFILE_SETUP_KEY = 'forceProfileSetupAfterGoogleSignup';
 
 export const getRouteForRole = (role) => roleRoutes[role] || '/dashboard';
 
@@ -118,8 +120,12 @@ export const signupWithEmail = async ({ name, email, password, role }) => {
   return { user: userCredential.user, profile };
 };
 
-export const loginWithGoogle = async (roleHint = 'advocate') => {
+export const loginWithGoogle = async (roleHint = 'advocate', flowType = 'login') => {
   sessionStorage.setItem(GOOGLE_ROLE_KEY, roleHint);
+  sessionStorage.setItem(GOOGLE_FLOW_KEY, flowType);
+  if (flowType === 'signup') {
+    sessionStorage.setItem(GOOGLE_FORCE_PROFILE_SETUP_KEY, '1');
+  }
   await signInWithRedirect(auth, googleProvider);
   return null;
 };
@@ -128,10 +134,12 @@ export const consumeGoogleRedirect = async () => {
   const userCredential = await getRedirectResult(auth);
   if (!userCredential) return null;
   const roleHint = sessionStorage.getItem(GOOGLE_ROLE_KEY) || 'advocate';
+  const flowType = sessionStorage.getItem(GOOGLE_FLOW_KEY) || 'login';
   sessionStorage.removeItem(GOOGLE_ROLE_KEY);
+  sessionStorage.removeItem(GOOGLE_FLOW_KEY);
   const profile = await ensureUserProfile(userCredential.user, roleHint, {
     role: roleHint,
     profileComplete: roleHint === 'admin' ? true : false,
   });
-  return { user: userCredential.user, profile };
+  return { user: userCredential.user, profile, flowType };
 };

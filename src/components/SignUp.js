@@ -18,6 +18,7 @@ const SignUp = () => {
   });
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(true);
+  const [googlePending, setGooglePending] = useState(false);
 
   const updateField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -74,16 +75,18 @@ const SignUp = () => {
 
   const handleGoogleSignup = async () => {
     setError('');
+    setGooglePending(true);
 
     try {
-      await loginWithGoogle(form.role);
+      await loginWithGoogle(form.role, 'signup');
     } catch (err) {
       setError(err.message);
+      setGooglePending(false);
     }
   };
 
-  if (googleLoading) {
-    return <LoadingState fullScreen label="Loading workspace..." />;
+  if (googleLoading || googlePending) {
+    return <LoadingState fullScreen label={googlePending ? 'Continuing with Google...' : 'Loading workspace...'} />;
   }
 
   return (

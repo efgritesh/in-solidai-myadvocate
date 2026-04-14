@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
-import { ensureUserProfile, getRouteForRole } from '../utils/auth';
+import { ensureUserProfile, getRouteForRole, GOOGLE_FORCE_PROFILE_SETUP_KEY } from '../utils/auth';
 import LoadingState from './LoadingState';
 
 const useAuthSession = () => {
@@ -70,7 +70,8 @@ export const PublicOnlyRoute = ({ children }) => {
   }
 
   if (user && profile) {
-    const target = profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup';
+    const forceProfileSetup = sessionStorage.getItem(GOOGLE_FORCE_PROFILE_SETUP_KEY) === '1';
+    const target = forceProfileSetup ? '/profile-setup' : profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup';
     return <Navigate to={target} replace />;
   }
 
