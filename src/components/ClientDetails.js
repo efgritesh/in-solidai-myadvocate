@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
-import { ArrowRightIcon, CasesIcon, CloseIcon, DocumentsIcon, PaymentsIcon, PlusIcon } from './AppIcons';
+import { ArrowRightIcon, CasesIcon, CloseIcon, DocumentsIcon, LockIcon, PaymentsIcon } from './AppIcons';
 import { updateClientProfile } from '../utils/clientProfiles';
 import {
   buildClientDraftingSummary,
@@ -18,13 +18,14 @@ const ClientDetails = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { clientId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [client, setClient] = useState(null);
   const [relatedCases, setRelatedCases] = useState([]);
   const [relatedPayments, setRelatedPayments] = useState([]);
   const [relatedDocuments, setRelatedDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
+  const [showEdit, setShowEdit] = useState(searchParams.get('edit') === '1');
   const [aadhaarFile, setAadhaarFile] = useState(null);
   const [form, setForm] = useState({
     name: '',
@@ -120,6 +121,10 @@ const ClientDetails = () => {
     loadClientDetails();
   }, [loadClientDetails]);
 
+  useEffect(() => {
+    setShowEdit(searchParams.get('edit') === '1');
+  }, [searchParams]);
+
   const handleSave = async (event) => {
     event.preventDefault();
     if (!client) return;
@@ -136,6 +141,11 @@ const ClientDetails = () => {
       });
       setAadhaarFile(null);
       setShowEdit(false);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete('edit');
+        return next;
+      });
       await loadClientDetails();
     } finally {
       setSaving(false);
@@ -184,11 +194,19 @@ const ClientDetails = () => {
           <button
             type="button"
             className="icon-button icon-button--accent"
-            onClick={() => setShowEdit((current) => !current)}
+            onClick={() => setSearchParams((current) => {
+              const next = new URLSearchParams(current);
+              if (showEdit) {
+                next.delete('edit');
+              } else {
+                next.set('edit', '1');
+              }
+              return next;
+            })}
             aria-label={showEdit ? t('closeEditClientProfile') : t('editClientProfile')}
             title={showEdit ? t('closeEditClientProfile') : t('editClientProfile')}
           >
-            {showEdit ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+            {showEdit ? <CloseIcon className="app-icon" /> : <LockIcon className="app-icon" />}
           </button>
         </div>
 
@@ -282,4 +300,3 @@ const ClientDetails = () => {
 };
 
 export default ClientDetails;
-

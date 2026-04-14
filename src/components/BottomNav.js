@@ -9,6 +9,7 @@ import {
   DashboardIcon,
   DraftingIcon,
   InfoIcon,
+  LockIcon,
   MenuIcon,
 } from './AppIcons';
 import { auth } from '../firebase';
@@ -20,6 +21,7 @@ const defaultIcons = {
   '/cases': CasesIcon,
   '/clients': ClientsIcon,
   '/drafting': DraftingIcon,
+  '/profile-setup': LockIcon,
 };
 
 const BottomNav = ({ items }) => {
@@ -37,6 +39,7 @@ const BottomNav = ({ items }) => {
         { to: '/dashboard', label: t('dashboard') },
         { to: '/cases', label: t('cases') },
         { to: '/clients', label: t('clients') },
+        { to: '/profile-setup', label: t('myProfile'), icon: LockIcon },
         { to: '/drafting', label: t('aiDraftingAssistant'), icon: DraftingIcon },
         { to: '/about', label: t('about'), icon: InfoIcon },
       ],

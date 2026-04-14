@@ -640,7 +640,7 @@ const DraftingAssistant = () => {
         </div>
         {activeClient && !isClientDraftReady(activeClient) ? (
           <p className="inline-feedback inline-feedback--error">
-            {t('clientProfileIncompleteForDrafting')} <button type="button" className="text-link text-link--button" onClick={() => navigate(`/clients/${activeClient.id}`)}>{t('openClientProfile')}</button>
+            {t('clientProfileIncompleteForDrafting')} <button type="button" className="text-link text-link--button" onClick={() => navigate(`/clients/${activeClient.id}?edit=1`)}>{t('openClientProfile')}</button>
           </p>
         ) : null}
         {showNewClientForm ? (
