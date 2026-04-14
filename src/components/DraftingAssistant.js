@@ -9,7 +9,6 @@ import LoadingState from './LoadingState';
 import { ArrowRightIcon, CasesIcon, CopyIcon, DeleteIcon, DocumentsIcon, InfoIcon, PlusIcon } from './AppIcons';
 import {
   createDraftingSession,
-  draftingTypeOptions,
   exportDraftingDocx,
   extractDraftingSources,
   generateDraftingOutput,
@@ -18,12 +17,38 @@ import {
   registerDraftingSource,
   uploadDraftingFile,
 } from '../utils/drafting';
+import { createClientProfile } from '../utils/clientProfiles';
+import {
+  genderOptions,
+  isClientDraftReady,
+  relationLabelOptions,
+} from '../utils/draftingProfiles';
 
-const emptySetup = { caseId: '', draftType: 'legal_notice', customDraftType: '', outputLanguage: 'en', instructions: '' };
+const emptyDraftForm = {
+  clientId: '',
+  caseId: '',
+  instructions: '',
+};
+
+const emptyClientForm = {
+  name: '',
+  phone: '',
+  email: '',
+  preferredLanguage: 'en',
+  relationLabel: 'S/o',
+  relationName: '',
+  age: '',
+  dateOfBirth: '',
+  gender: 'Male',
+  address: '',
+  aadhaarName: '',
+  aadhaarNumber: '',
+};
+
 const workflowLabels = {
   draft: 'Ready to start',
   extracting: 'Reading source files',
-  ready_for_review: 'Review source text',
+  ready_for_review: 'Validate key facts',
   generating: 'Preparing first draft',
   completed: 'Draft ready',
   failed: 'Needs attention',
@@ -35,29 +60,63 @@ const DraftingAssistant = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const sessionParam = searchParams.get('sessionId') || '';
   const caseParam = searchParams.get('caseId') || '';
-  const reviewMode = searchParams.get('view') === 'review';
+  const view = searchParams.get('view') || '';
   const advocateId = auth.currentUser?.uid || '';
 
-  const [setup, setSetup] = useState(emptySetup);
+  const [draftForm, setDraftForm] = useState(emptyDraftForm);
+  const [clientForm, setClientForm] = useState(emptyClientForm);
+  const [aadhaarFile, setAadhaarFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [cases, setCases] = useState([]);
+  const [clients, setClients] = useState([]);
   const [sessions, setSessions] = useState([]);
-  const [existingDocuments, setExistingDocuments] = useState([]);
-  const [sources, setSources] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [output, setOutput] = useState(null);
-  const [typedText, setTypedText] = useState('');
-  const [activeCase, setActiveCase] = useState(null);
-  const [showAssumptions, setShowAssumptions] = useState(false);
-  const [showSourceReview, setShowSourceReview] = useState(false);
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [validationFields, setValidationFields] = useState([]);
 
-  const draftTypeLabel = useCallback((draftType, customDraftType) => {
-    if (draftType === 'custom') return customDraftType?.trim() || 'Custom draft';
-    return draftingTypeOptions.find((option) => option.value === draftType)?.label || 'Legal draft';
-  }, []);
+  const currentSession = useMemo(
+    () => sessions.find((session) => session.id === sessionParam) || null,
+    [sessionParam, sessions]
+  );
 
-  const fetchSessionArtifacts = useCallback(async (sessionId, ownerId = auth.currentUser?.uid) => {
+  const findClientIdForCase = useCallback((caseRecord, clientList = clients) => {
+    if (!caseRecord) return '';
+    if (caseRecord.client_id) return caseRecord.client_id;
+    const matchedClient = clientList.find((client) =>
+      client.name === caseRecord.client_name ||
+      (client.email && client.email === caseRecord.client_email) ||
+      (client.phone && client.phone === caseRecord.client_phone)
+    );
+    return matchedClient?.id || '';
+  }, [clients]);
+
+  const activeClient = useMemo(
+    () => clients.find((client) => client.id === draftForm.clientId) || null,
+    [clients, draftForm.clientId]
+  );
+
+  const activeCase = useMemo(
+    () => cases.find((caseRecord) => caseRecord.id === draftForm.caseId) || null,
+    [cases, draftForm.caseId]
+  );
+
+  const availableCases = useMemo(() => {
+    if (!draftForm.clientId) return cases;
+    return cases.filter((caseRecord) => {
+      if (caseRecord.client_id) return caseRecord.client_id === draftForm.clientId;
+      const matchedClient = clients.find((client) => client.id === draftForm.clientId);
+      return (
+        caseRecord.client_name === matchedClient?.name ||
+        (matchedClient?.phone && caseRecord.client_phone === matchedClient.phone) ||
+        (matchedClient?.email && caseRecord.client_email === matchedClient.email)
+      );
+    });
+  }, [cases, clients, draftForm.clientId]);
+
+  const fetchArtifacts = useCallback(async (sessionId, ownerId = auth.currentUser?.uid) => {
     if (!sessionId || !ownerId) return { nextSources: [], nextOutput: null };
     const [sourcesSnapshot, outputSnapshot] = await Promise.all([
       getDocs(query(collection(db, 'drafting_sources'), where('session_id', '==', sessionId), where('advocate_id', '==', ownerId))),
@@ -69,191 +128,144 @@ const DraftingAssistant = () => {
     };
   }, []);
 
-  const loadSessionArtifacts = useCallback(async (sessionId, ownerId = auth.currentUser?.uid) => {
-    const { nextSources, nextOutput } = await fetchSessionArtifacts(sessionId, ownerId);
-    setSources(nextSources);
-    setOutput(nextOutput);
-    return { nextSources, nextOutput };
-  }, [fetchSessionArtifacts]);
-
-  const clearSessionParams = useCallback(() => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete('sessionId');
-      next.delete('view');
-      return next;
-    });
-  }, [setSearchParams]);
-
   const loadWorkspace = useCallback(async () => {
     if (!advocateId) {
       setLoading(false);
       return;
     }
+
     setLoading(true);
     try {
-      const [casesSnapshot, sessionsSnapshot] = await Promise.all([
+      const [casesSnapshot, clientsSnapshot, sessionsSnapshot] = await Promise.all([
         getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
+        getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
         getDocs(query(collection(db, 'drafting_sessions'), where('advocate_id', '==', advocateId))),
       ]);
+
       const nextCases = casesSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      const nextClients = clientsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       const nextSessions = sessionsSnapshot.docs
         .map((item) => ({ id: item.id, ...item.data() }))
         .sort((left, right) => (right.updated_at?.seconds || 0) - (left.updated_at?.seconds || 0));
+
       setCases(nextCases);
+      setClients(nextClients);
       setSessions(nextSessions);
 
       const selectedSession = sessionParam ? nextSessions.find((session) => session.id === sessionParam) || null : null;
-      const selectedCase = nextCases.find((caseRecord) => caseRecord.id === (selectedSession?.case_id || caseParam)) || null;
-      setActiveCase(selectedCase);
-
       if (selectedSession) {
-        setSetup({
+        setDraftForm({
+          clientId: selectedSession.client_id || findClientIdForCase(nextCases.find((caseRecord) => caseRecord.id === selectedSession.case_id) || null, nextClients),
           caseId: selectedSession.case_id || '',
-          draftType: selectedSession.draft_type || 'legal_notice',
-          customDraftType: selectedSession.custom_draft_type || '',
-          outputLanguage: selectedSession.output_language || selectedCase?.client_language || 'en',
           instructions: selectedSession.instructions || '',
         });
-        await loadSessionArtifacts(selectedSession.id, advocateId);
+        const { nextOutput } = await fetchArtifacts(selectedSession.id, advocateId);
+        setOutput(nextOutput);
+        setValidationFields(nextOutput?.fact_validation_fields || []);
       } else {
-        setSources([]);
-        setOutput(null);
-        setSetup({
+        const selectedCase = nextCases.find((caseRecord) => caseRecord.id === caseParam) || null;
+        setDraftForm({
+          clientId: findClientIdForCase(selectedCase, nextClients),
           caseId: selectedCase?.id || '',
-          draftType: 'legal_notice',
-          customDraftType: '',
-          outputLanguage: selectedCase?.client_language || 'en',
           instructions: selectedCase ? `${t('draftingCasePrefillInstructions')} ${selectedCase.case_number}.` : '',
         });
+        setOutput(null);
+        setValidationFields([]);
       }
+
       setStatusMessage('');
     } catch (error) {
       setStatusMessage(error.message || 'Unable to load the drafting workflow right now.');
     } finally {
       setLoading(false);
     }
-  }, [advocateId, caseParam, loadSessionArtifacts, sessionParam, t]);
+  }, [advocateId, caseParam, fetchArtifacts, findClientIdForCase, sessionParam, t]);
 
-  const loadCaseDocuments = useCallback(async () => {
-    const selectedCase = cases.find((caseRecord) => caseRecord.id === setup.caseId) || null;
-    setActiveCase(selectedCase);
-    if (!advocateId || !selectedCase?.case_number) {
-      setExistingDocuments([]);
-      return;
-    }
-    const docsSnapshot = await getDocs(query(collection(db, 'documents'), where('advocate_id', '==', advocateId)));
-    setExistingDocuments(docsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.case_id === selectedCase.case_number));
-  }, [advocateId, cases, setup.caseId]);
+  useEffect(() => {
+    loadWorkspace();
+  }, [loadWorkspace]);
 
-  useEffect(() => { loadWorkspace(); }, [loadWorkspace]);
-  useEffect(() => { loadCaseDocuments(); }, [loadCaseDocuments]);
-
-  const currentSession = useMemo(() => sessions.find((session) => session.id === sessionParam) || null, [sessionParam, sessions]);
-  const readySources = useMemo(() => sources.filter((source) => (source.reviewed_text || source.raw_extracted_text || '').trim()), [sources]);
-  const currentWorkflowLabel = workflowLabels[currentSession?.status] || 'Draft workflow';
+  const buildSessionPatch = useCallback(() => {
+    const client = clients.find((item) => item.id === draftForm.clientId) || null;
+    const caseRecord = cases.find((item) => item.id === draftForm.caseId) || null;
+    return {
+      client_id: client?.id || '',
+      client_name: client?.name || caseRecord?.client_name || '',
+      case_id: caseRecord?.id || '',
+      case_number: caseRecord?.case_number || '',
+      instructions: draftForm.instructions,
+      output_language: client?.preferredLanguage || caseRecord?.client_language || 'en',
+      client_profile_snapshot: client ? {
+        clientId: client.id,
+        name: client.name || '',
+        phone: client.phone || '',
+        email: client.email || '',
+        preferredLanguage: client.preferredLanguage || 'en',
+        relationLabel: client.relationLabel || '',
+        relationName: client.relationName || '',
+        age: client.age || '',
+        dateOfBirth: client.dateOfBirth || '',
+        gender: client.gender || '',
+        address: client.address || '',
+        aadhaarName: client.aadhaarName || '',
+        aadhaarNumber: client.aadhaarNumber || '',
+      } : {},
+      case_snapshot: caseRecord ? {
+        caseId: caseRecord.id,
+        caseNumber: caseRecord.case_number || '',
+        clientName: caseRecord.client_name || '',
+        court: caseRecord.court || '',
+        place: caseRecord.place || '',
+        policeStation: caseRecord.police_station || '',
+        status: caseRecord.status || '',
+        summary: caseRecord.summary || '',
+        nextStep: caseRecord.next_step || '',
+      } : {},
+      updated_at: new Date(),
+    };
+  }, [cases, clients, draftForm.caseId, draftForm.clientId, draftForm.instructions]);
 
   const ensureSession = useCallback(async () => {
-    const selectedCase = cases.find((caseRecord) => caseRecord.id === setup.caseId) || null;
     if (sessionParam) {
-      await updateDoc(doc(db, 'drafting_sessions', sessionParam), {
-        case_id: setup.caseId || '',
-        case_number: selectedCase?.case_number || '',
-        client_name: selectedCase?.client_name || '',
-        draft_type: setup.draftType,
-        custom_draft_type: setup.customDraftType,
-        output_language: setup.outputLanguage,
-        instructions: setup.instructions,
-        updated_at: new Date(),
-      });
+      await updateDoc(doc(db, 'drafting_sessions', sessionParam), buildSessionPatch());
       return sessionParam;
     }
+
     const created = await createDraftingSession({
-      caseId: setup.caseId || '',
-      draftType: setup.draftType,
-      customDraftType: setup.customDraftType,
-      outputLanguage: setup.outputLanguage,
-      instructions: setup.instructions,
+      clientId: draftForm.clientId,
+      caseId: draftForm.caseId,
+      draftType: 'auto',
+      customDraftType: '',
+      instructions: draftForm.instructions,
     });
+
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set('sessionId', created.sessionId);
-      if (setup.caseId) next.set('caseId', setup.caseId);
+      if (draftForm.caseId) next.set('caseId', draftForm.caseId);
       return next;
     });
+
     return created.sessionId;
-  }, [cases, sessionParam, setSearchParams, setup]);
+  }, [buildSessionPatch, draftForm.caseId, draftForm.clientId, draftForm.instructions, sessionParam, setSearchParams]);
 
-  const runAutomaticPipeline = useCallback(async (sessionId, options = {}) => {
-    const { sourceIds = [], skipExtraction = false } = options;
-    if (!skipExtraction) {
-      try {
-        await extractDraftingSources(sourceIds.length ? { sessionId, sourceIds } : { sessionId });
-      } catch (error) {
-        if (error.status !== 412) {
-          throw error;
-        }
-      }
-    }
-
-    const { nextSources } = await loadSessionArtifacts(sessionId, advocateId);
-    if (!nextSources.some((source) => (source.reviewed_text || source.raw_extracted_text || '').trim())) {
-      setShowSourceReview(true);
-      setStatusMessage('The source was uploaded, but the extracted text needs review before a draft can be prepared.');
+  const startDrafting = async () => {
+    if (!draftForm.clientId) {
+      setStatusMessage(t('selectClientBeforeDrafting'));
       return;
     }
-    await generateDraftingOutput({ sessionId });
-    await loadWorkspace();
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.set('sessionId', sessionId);
-      next.set('view', 'review');
-      return next;
-    });
-    setStatusMessage(t('draftingGenerationComplete'));
-  }, [advocateId, loadSessionArtifacts, loadWorkspace, setSearchParams, t]);
-
-  const applyAssumptions = async () => {
-    setWorking(true);
-    setStatusMessage('');
-    try {
-      await ensureSession();
-      await loadWorkspace();
-      setStatusMessage(currentSession ? t('draftingSetupSaved') : 'Default assumptions are ready.');
-    } catch (error) {
-      setStatusMessage(error.message);
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  const handleAddTypedText = async () => {
-    if (!typedText.trim()) {
-      setStatusMessage(t('draftingTypedTextRequired'));
+    if (!draftForm.instructions.trim()) {
+      setStatusMessage(t('draftingInstructionsRequired'));
       return;
     }
-    setWorking(true);
-    setStatusMessage('Preparing your draft from typed notes.');
-    try {
-      const sessionId = await ensureSession();
-      await registerDraftingSource({ sessionId, sourceType: 'typed_text', typedText, label: t('typedNotes'), name: t('typedNotes') });
-      setTypedText('');
-      await runAutomaticPipeline(sessionId, { skipExtraction: true });
-    } catch (error) {
-      setStatusMessage(error.message);
-    } finally {
-      setWorking(false);
-    }
-  };
 
-  const onDrop = useCallback(async (acceptedFiles) => {
-    if (!acceptedFiles.length) return;
     setWorking(true);
-    setStatusMessage('Uploading and preparing your draft.');
+    setStatusMessage('Preparing your draft.');
     try {
       const sessionId = await ensureSession();
       const sourceIds = [];
-      for (const file of acceptedFiles) {
+
+      for (const file of selectedFiles) {
         const upload = await uploadDraftingFile({ advocateId, sessionId, file });
         const registered = await registerDraftingSource({
           sessionId,
@@ -264,27 +276,55 @@ const DraftingAssistant = () => {
           storagePath: upload.storagePath,
           url: upload.url,
         });
-        if (registered?.sourceId) {
-          sourceIds.push(registered.sourceId);
-        }
+        if (registered?.sourceId) sourceIds.push(registered.sourceId);
       }
-      await runAutomaticPipeline(sessionId, { sourceIds });
+
+      if (sourceIds.length) {
+        await extractDraftingSources({ sessionId, sourceIds });
+      }
+
+      const generation = await generateDraftingOutput({ sessionId });
+      await loadWorkspace();
+      setSelectedFiles([]);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set('sessionId', sessionId);
+        next.set('view', generation.requiresValidation ? 'validate' : 'review');
+        return next;
+      });
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
       setWorking(false);
     }
-  }, [advocateId, ensureSession, runAutomaticPipeline]);
+  };
+
+  const onDrop = useCallback((acceptedFiles) => {
+    setSelectedFiles((current) => [...current, ...acceptedFiles]);
+  }, []);
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop, disabled: working });
 
-  const handleAttachExistingDocument = async (documentId) => {
+  const handleCreateClient = async (event) => {
+    event.preventDefault();
+    if (!advocateId) return;
     setWorking(true);
-    setStatusMessage('Using the selected case document as a drafting source.');
     try {
-      const sessionId = await ensureSession();
-      const registered = await registerDraftingSource({ sessionId, sourceType: 'existing_document', existingDocumentId: documentId });
-      await runAutomaticPipeline(sessionId, { sourceIds: registered?.sourceId ? [registered.sourceId] : [] });
+      const clientId = await createClientProfile({
+        advocateId,
+        data: {
+          advocate_id: advocateId,
+          ...clientForm,
+          draftReady: true,
+        },
+        aadhaarFile,
+      });
+      setClientForm(emptyClientForm);
+      setAadhaarFile(null);
+      setShowNewClientForm(false);
+      await loadWorkspace();
+      setDraftForm((current) => ({ ...current, clientId }));
+      setStatusMessage(t('clientAddedForDrafting'));
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
@@ -292,20 +332,45 @@ const DraftingAssistant = () => {
     }
   };
 
-  const handleSourceTextChange = (sourceId, reviewedText) => {
-    setSources((current) => current.map((source) => (source.id === sourceId ? { ...source, reviewed_text: reviewedText } : source)));
+  const openSession = (sessionId) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('sessionId', sessionId);
+      next.delete('view');
+      return next;
+    });
   };
 
-  const persistSourceText = async (sourceId, reviewedText) => {
-    await updateDoc(doc(db, 'drafting_sources', sourceId), { reviewed_text: reviewedText, updated_at: new Date() });
+  const clearSessionParams = () => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('sessionId');
+      next.delete('view');
+      return next;
+    });
   };
 
-  const handleRemoveSource = async (sourceId) => {
+  const handleDiscardSession = async (sessionId) => {
+    if (!sessionId) return;
     setWorking(true);
     try {
-      await deleteDoc(doc(db, 'drafting_sources', sourceId));
-      await loadSessionArtifacts(sessionParam, advocateId);
-      setStatusMessage('Drafting source removed.');
+      const [sourceSnapshot, outputSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'drafting_sources'), where('session_id', '==', sessionId), where('advocate_id', '==', advocateId))),
+        getDocs(query(collection(db, 'drafting_outputs'), where('session_id', '==', sessionId), where('advocate_id', '==', advocateId))),
+      ]);
+      await Promise.all([
+        ...sourceSnapshot.docs.map((item) => deleteDoc(item.ref)),
+        ...outputSnapshot.docs.map((item) => deleteDoc(item.ref)),
+        deleteDoc(doc(db, 'drafting_sessions', sessionId)),
+      ]);
+      if (sessionId === sessionParam) {
+        clearSessionParams();
+        setDraftForm(emptyDraftForm);
+        setOutput(null);
+        setValidationFields([]);
+      }
+      await loadWorkspace();
+      setStatusMessage('Drafting workflow discarded.');
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
@@ -313,20 +378,54 @@ const DraftingAssistant = () => {
     }
   };
 
-  const handleRegenerate = async () => {
-    if (!sessionParam) return;
+  const handleValidationChange = (fieldKey, value) => {
+    setValidationFields((current) => current.map((field) => (field.key === fieldKey ? { ...field, value } : field)));
+  };
+
+  const handleFactValidation = async () => {
+    if (!currentSession) return;
     setWorking(true);
-    setStatusMessage('Regenerating the draft.');
+    setStatusMessage('Validating key facts and refreshing the draft.');
     try {
-      await Promise.all(sources.map((source) => updateDoc(doc(db, 'drafting_sources', source.id), {
-        reviewed_text: source.reviewed_text || source.raw_extracted_text || '',
+      const validatedFacts = validationFields.reduce((accumulator, field) => {
+        accumulator[field.key] = field.value || '';
+        return accumulator;
+      }, {});
+
+      const clientPatch = {};
+      const advocatePatch = {};
+      const casePatch = {};
+
+      validationFields.forEach((field) => {
+        if (!field.sourceField) return;
+        if (field.target === 'client') clientPatch[field.sourceField] = field.value || '';
+        if (field.target === 'advocate') advocatePatch[field.sourceField] = field.value || '';
+        if (field.target === 'case') casePatch[field.sourceField] = field.value || '';
+      });
+
+      await updateDoc(doc(db, 'drafting_sessions', currentSession.id), {
+        validated_facts: validatedFacts,
+        ...buildSessionPatch(),
         updated_at: new Date(),
-      })));
-      await generateDraftingOutput({ sessionId: sessionParam });
+      });
+
+      const updates = [];
+      if (currentSession.client_id && Object.keys(clientPatch).length) {
+        updates.push(updateDoc(doc(db, 'clients', currentSession.client_id), clientPatch));
+      }
+      if (Object.keys(advocatePatch).length) {
+        updates.push(updateDoc(doc(db, 'users', advocateId), advocatePatch));
+      }
+      if (currentSession.case_id && Object.keys(casePatch).length) {
+        updates.push(updateDoc(doc(db, 'cases', currentSession.case_id), casePatch));
+      }
+      await Promise.all(updates);
+
+      const generation = await generateDraftingOutput({ sessionId: currentSession.id });
       await loadWorkspace();
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
-        next.set('view', 'review');
+        next.set('view', generation.requiresValidation ? 'validate' : 'review');
         return next;
       });
     } catch (error) {
@@ -356,13 +455,12 @@ const DraftingAssistant = () => {
   };
 
   const handleExport = async () => {
-    if (!output?.id) return;
+    if (!output?.id || !currentSession) return;
     setWorking(true);
     try {
-      const exportResult = await exportDraftingDocx({ sessionId: sessionParam, outputId: output.id });
+      const exportResult = await exportDraftingDocx({ sessionId: currentSession.id, outputId: output.id });
       const exportUrl = await getStorageUrl(exportResult.exportPath);
       window.open(exportUrl, '_blank', 'noopener,noreferrer');
-      await loadSessionArtifacts(sessionParam, advocateId);
       setStatusMessage(t('draftingExportReady'));
     } catch (error) {
       setStatusMessage(error.message);
@@ -372,11 +470,10 @@ const DraftingAssistant = () => {
   };
 
   const handlePublish = async () => {
-    if (!output?.id) return;
+    if (!output?.id || !currentSession) return;
     setWorking(true);
     try {
-      await publishDraftingOutput({ sessionId: sessionParam, outputId: output.id });
-      await loadSessionArtifacts(sessionParam, advocateId);
+      await publishDraftingOutput({ sessionId: currentSession.id, outputId: output.id });
       setStatusMessage(t('draftingPublishComplete'));
     } catch (error) {
       setStatusMessage(error.message);
@@ -385,67 +482,64 @@ const DraftingAssistant = () => {
     }
   };
 
-  const handleDiscardSession = async (sessionId) => {
-    if (!sessionId) return;
-    setWorking(true);
-    try {
-      const [sourceSnapshot, outputSnapshot] = await Promise.all([
-        getDocs(query(collection(db, 'drafting_sources'), where('session_id', '==', sessionId), where('advocate_id', '==', advocateId))),
-        getDocs(query(collection(db, 'drafting_outputs'), where('session_id', '==', sessionId), where('advocate_id', '==', advocateId))),
-      ]);
-      await Promise.all([
-        ...sourceSnapshot.docs.map((item) => deleteDoc(item.ref)),
-        ...outputSnapshot.docs.map((item) => deleteDoc(item.ref)),
-        deleteDoc(doc(db, 'drafting_sessions', sessionId)),
-      ]);
-      if (sessionId === sessionParam) {
-        clearSessionParams();
-        setSetup(emptySetup);
-        setSources([]);
-        setOutput(null);
-      }
-      await loadWorkspace();
-      setStatusMessage('Drafting workflow discarded.');
-    } catch (error) {
-      setStatusMessage(error.message);
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  const openSession = (sessionId) => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.set('sessionId', sessionId);
-      next.delete('view');
-      return next;
-    });
-  };
-
   if (loading) {
     return <PageShell title={t('aiDraftingAssistant')} subtitle={t('aiDraftingSubtitle')} showBack><LoadingState label={t('loadingDraftingWorkspace')} /></PageShell>;
   }
 
-  if (reviewMode && output) {
+  if (view === 'validate' && currentSession && output) {
     return (
       <PageShell
-        title={draftTypeLabel(setup.draftType, setup.customDraftType)}
-        subtitle={activeCase ? `${activeCase.case_number} | ${activeCase.client_name}` : t('aiDraftingSubtitle')}
+        title={t('validateDraftFacts')}
+        subtitle={currentSession.case_number || activeClient?.name || t('aiDraftingSubtitle')}
         showBack
-        actions={<div className="header-icon-group"><button type="button" className="icon-button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('view'); return next; })}><ArrowRightIcon className="app-icon" /></button></div>}
+      >
+        <section className="panel workflow-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">{workflowLabels[currentSession.status] || t('review')}</p>
+              <h2>{t('validateKeyFacts')}</h2>
+            </div>
+            <InfoIcon className="app-icon section-icon" />
+          </div>
+          <p className="helper-text">{t('factValidationHint')}</p>
+          <div className="form-grid top-space">
+            {validationFields.map((field) => (
+              <div key={field.key} className="form-group">
+                <label>{field.label}</label>
+                <input type="text" value={field.value || ''} onChange={(event) => handleValidationChange(field.key, event.target.value)} />
+              </div>
+            ))}
+          </div>
+          <div className="button-row top-space">
+            <button type="button" className="button" onClick={handleFactValidation} disabled={working}>{working ? t('generatingDraft') : t('applyFactsAndContinue')}</button>
+            <button type="button" className="button button--secondary" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', 'review'); return next; })}>{t('skipToDraftReview')}</button>
+          </div>
+          {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
+        </section>
+      </PageShell>
+    );
+  }
+
+  if (view === 'review' && output) {
+    return (
+      <PageShell
+        title={t('firstDraft')}
+        subtitle={currentSession?.case_number || activeClient?.name || t('aiDraftingSubtitle')}
+        showBack
+        actions={activeCase ? <button type="button" className="icon-button" onClick={() => navigate(`/cases/${activeCase.id}`)}><CasesIcon className="app-icon" /></button> : null}
       >
         <section className="panel draft-review-shell">
-          <div className="section-heading">
-            <div><p className="eyebrow">{currentWorkflowLabel}</p><h2>{t('firstDraft')}</h2></div>
-            {activeCase ? <button type="button" className="icon-button" onClick={() => navigate(`/cases/${activeCase.id}`)}><CasesIcon className="app-icon" /></button> : null}
-          </div>
-          <textarea className="draft-review-shell__editor" rows="22" value={output.edited_text || output.generated_text || ''} onChange={(event) => setOutput((current) => ({ ...current, edited_text: event.target.value }))} />
+          <textarea
+            className="draft-review-shell__editor"
+            rows="24"
+            value={output.edited_text || output.generated_text || ''}
+            onChange={(event) => setOutput((current) => ({ ...current, edited_text: event.target.value }))}
+          />
           <div className="button-row top-space">
             <button type="button" className="button" onClick={handleSaveDraftEdits} disabled={working}>{t('saveDraft')}</button>
             <button type="button" className="button button--secondary" onClick={handleCopy}><CopyIcon className="app-icon" /><span>{t('copyText')}</span></button>
             <button type="button" className="button button--secondary" onClick={handleExport} disabled={working}>{t('exportDocx')}</button>
-            <button type="button" className="button button--secondary" onClick={handlePublish} disabled={working || !setup.caseId}>{t('publishToCaseDocuments')}</button>
-            <button type="button" className="button button--secondary" onClick={handleRegenerate} disabled={working}>{t('generateDraft')}</button>
+            <button type="button" className="button button--secondary" onClick={handlePublish} disabled={working || !draftForm.caseId}>{t('publishToCaseDocuments')}</button>
           </div>
           {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
         </section>
@@ -456,39 +550,41 @@ const DraftingAssistant = () => {
   return (
     <PageShell
       title={t('aiDraftingAssistant')}
-      subtitle={t('aiDraftingSubtitle')}
+      subtitle={t('aiDraftingLeanSubtitle')}
       showBack
-      actions={
-        <div className="header-icon-group">
-          {activeCase ? <button type="button" className="icon-button" onClick={() => navigate(`/cases/${activeCase.id}`)}><CasesIcon className="app-icon" /></button> : null}
-          {currentSession ? <button type="button" className="icon-button icon-button--danger" onClick={() => handleDiscardSession(currentSession.id)} disabled={working}><DeleteIcon className="app-icon" /></button> : null}
-        </div>
-      }
+      actions={currentSession ? <button type="button" className="icon-button icon-button--danger" onClick={() => handleDiscardSession(currentSession.id)} disabled={working}><DeleteIcon className="app-icon" /></button> : null}
     >
       <section className="panel panel--accent workflow-card">
         <div className="section-heading">
-          <div><p className="eyebrow">{currentSession ? 'Resume workflow' : 'Start workflow'}</p><h2>{currentSession ? currentWorkflowLabel : 'Single-flow drafting'}</h2></div>
+          <div>
+            <p className="eyebrow">{currentSession ? t('resumeWorkflow') : t('startWorkflow')}</p>
+            <h2>{currentSession ? workflowLabels[currentSession.status] || t('activeSession') : t('singleFlowDrafting')}</h2>
+          </div>
           <InfoIcon className="app-icon section-icon" />
         </div>
         <div className="workflow-summary">
           <div className="workflow-summary__main">
-            <strong>{currentSession ? draftTypeLabel(currentSession.draft_type, currentSession.custom_draft_type) : 'Default assumptions are ready'}</strong>
-            <p>{activeCase ? `${activeCase.case_number} | ${activeCase.client_name}` : 'Upload once and iAdvocate will extract text and prepare the first draft automatically.'}</p>
+            <strong>{activeClient?.name || t('selectClientBeforeDrafting')}</strong>
+            <p>{activeCase ? `${activeCase.case_number} | ${activeCase.summary || activeCase.next_step || ''}` : t('draftingContextSubtitle')}</p>
           </div>
-          <div className="workflow-summary__meta"><span className="badge">{currentSession ? currentWorkflowLabel : 'Waiting for source'}</span></div>
+          <div className="workflow-summary__meta">
+            <span className="badge">{currentSession ? workflowLabels[currentSession.status] || currentSession.status : t('readyToStart')}</span>
+          </div>
         </div>
-        {working ? <LoadingState compact label={statusMessage || 'Working on your draft.'} /> : statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
+        {working ? <LoadingState compact label={statusMessage || t('processing')} /> : statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
       </section>
 
       {sessions.length ? (
         <section className="panel workflow-card">
-          <div className="section-heading"><div><p className="eyebrow">Saved workflows</p><h2>Resume or discard</h2></div></div>
+          <div className="section-heading">
+            <div><p className="eyebrow">{t('savedWorkflows')}</p><h2>{t('resumeOrDiscard')}</h2></div>
+          </div>
           <div className="record-list">
             {sessions.slice(0, 5).map((session) => (
               <article key={session.id} className="record-item">
                 <button type="button" className="workflow-session" onClick={() => openSession(session.id)}>
-                  <strong>{draftTypeLabel(session.draft_type, session.custom_draft_type)}</strong>
-                  <p>{session.case_number || 'Standalone draft'} | {workflowLabels[session.status] || session.status}</p>
+                  <strong>{session.client_name || t('standaloneDraft')}</strong>
+                  <p>{session.case_number || t('standaloneDraft')} | {workflowLabels[session.status] || session.status}</p>
                 </button>
                 <div className="inline-actions">
                   <button type="button" className="icon-button" onClick={() => openSession(session.id)}><ArrowRightIcon className="app-icon" /></button>
@@ -502,66 +598,124 @@ const DraftingAssistant = () => {
 
       <section className="panel workflow-card">
         <div className="section-heading">
-          <div><p className="eyebrow">Assumptions</p><h2>Use defaults or adjust</h2></div>
-          <button type="button" className="icon-button" onClick={() => setShowAssumptions((current) => !current)}><PlusIcon className="app-icon" /></button>
+          <div><p className="eyebrow">{t('stepOne')}</p><h2>{t('chooseClientAndCase')}</h2></div>
+          <button type="button" className="icon-button icon-button--accent" onClick={() => setShowNewClientForm((current) => !current)}>
+            <PlusIcon className="app-icon" />
+          </button>
         </div>
-        <div className="workflow-defaults">
-          <span>{draftTypeLabel(setup.draftType, setup.customDraftType)}</span>
-          <span>{setup.outputLanguage === 'hi' ? t('hindi') : t('english')}</span>
-          <span>{activeCase ? activeCase.case_number : 'Standalone matter'}</span>
+        <div className="form-grid">
+          <div className="form-group">
+            <label>{t('clientLabel')}</label>
+            <select
+              value={draftForm.clientId}
+              onChange={(event) => setDraftForm((current) => ({ ...current, clientId: event.target.value, caseId: '' }))}
+            >
+              <option value="">{t('selectClient')}</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name} {isClientDraftReady(client) ? '' : `(${t('draftProfileIncomplete')})`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>{t('linkedMatter')}</label>
+            <select
+              value={draftForm.caseId}
+              onChange={(event) => {
+                const selectedCase = cases.find((caseRecord) => caseRecord.id === event.target.value) || null;
+                setDraftForm((current) => ({
+                  ...current,
+                  caseId: event.target.value,
+                  clientId: findClientIdForCase(selectedCase) || current.clientId,
+                }));
+              }}
+            >
+              <option value="">{t('standaloneDraft')}</option>
+              {availableCases.map((caseRecord) => (
+                <option key={caseRecord.id} value={caseRecord.id}>{caseRecord.case_number} - {caseRecord.client_name}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        {showAssumptions ? (
-          <>
-            <div className="form-grid top-space">
-              <div className="form-group"><label>{t('linkedMatter')}</label><select value={setup.caseId} onChange={(event) => setSetup((current) => ({ ...current, caseId: event.target.value }))}><option value="">{t('standaloneDraft')}</option>{cases.map((caseRecord) => <option key={caseRecord.id} value={caseRecord.id}>{caseRecord.case_number} - {caseRecord.client_name}</option>)}</select></div>
-              <div className="form-group"><label>{t('draftType')}</label><select value={setup.draftType} onChange={(event) => setSetup((current) => ({ ...current, draftType: event.target.value }))}>{draftingTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-              {setup.draftType === 'custom' ? <div className="form-group"><label>{t('customDraftType')}</label><input type="text" value={setup.customDraftType} onChange={(event) => setSetup((current) => ({ ...current, customDraftType: event.target.value }))} placeholder={t('customDraftTypePlaceholder')} /></div> : null}
-              <div className="form-group"><label>{t('outputLanguage')}</label><select value={setup.outputLanguage} onChange={(event) => setSetup((current) => ({ ...current, outputLanguage: event.target.value }))}><option value="en">{t('english')}</option><option value="hi">{t('hindi')}</option></select></div>
-              <div className="form-group full-span"><label>{t('draftInstructions')}</label><textarea rows="4" value={setup.instructions} onChange={(event) => setSetup((current) => ({ ...current, instructions: event.target.value }))} placeholder={t('draftInstructionsPlaceholder')} /></div>
+        {activeClient && !isClientDraftReady(activeClient) ? (
+          <p className="inline-feedback inline-feedback--error">
+            {t('clientProfileIncompleteForDrafting')} <button type="button" className="text-link text-link--button" onClick={() => navigate(`/clients/${activeClient.id}`)}>{t('openClientProfile')}</button>
+          </p>
+        ) : null}
+        {showNewClientForm ? (
+          <form onSubmit={handleCreateClient} className="top-space">
+            <div className="form-grid">
+              <div className="form-group"><label>{t('name')}</label><input type="text" value={clientForm.name} onChange={(event) => setClientForm((current) => ({ ...current, name: event.target.value }))} required /></div>
+              <div className="form-group"><label>{t('phone')}</label><input type="text" value={clientForm.phone} onChange={(event) => setClientForm((current) => ({ ...current, phone: event.target.value }))} required /></div>
+              <div className="form-group"><label>{t('email')}</label><input type="email" value={clientForm.email} onChange={(event) => setClientForm((current) => ({ ...current, email: event.target.value }))} /></div>
+              <div className="form-group"><label>{t('preferredLanguage')}</label><select value={clientForm.preferredLanguage} onChange={(event) => setClientForm((current) => ({ ...current, preferredLanguage: event.target.value }))}><option value="en">{t('english')}</option><option value="hi">{t('hindi')}</option></select></div>
+              <div className="form-group"><label>{t('relationLabel')}</label><select value={clientForm.relationLabel} onChange={(event) => setClientForm((current) => ({ ...current, relationLabel: event.target.value }))}>{relationLabelOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></div>
+              <div className="form-group"><label>{t('relationName')}</label><input type="text" value={clientForm.relationName} onChange={(event) => setClientForm((current) => ({ ...current, relationName: event.target.value }))} required /></div>
+              <div className="form-group"><label>{t('age')}</label><input type="number" value={clientForm.age} onChange={(event) => setClientForm((current) => ({ ...current, age: event.target.value }))} required /></div>
+              <div className="form-group"><label>{t('dateOfBirth')}</label><input type="date" value={clientForm.dateOfBirth} onChange={(event) => setClientForm((current) => ({ ...current, dateOfBirth: event.target.value }))} required /></div>
+              <div className="form-group"><label>{t('gender')}</label><select value={clientForm.gender} onChange={(event) => setClientForm((current) => ({ ...current, gender: event.target.value }))}>{genderOptions.map((option) => <option key={option} value={option}>{t(option.toLowerCase())}</option>)}</select></div>
+              <div className="form-group full-span"><label>{t('address')}</label><textarea value={clientForm.address} onChange={(event) => setClientForm((current) => ({ ...current, address: event.target.value }))} required /></div>
+              <div className="form-group"><label>{t('aadhaarName')}</label><input type="text" value={clientForm.aadhaarName} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarName: event.target.value }))} required /></div>
+              <div className="form-group"><label>{t('aadhaarNumber')}</label><input type="text" value={clientForm.aadhaarNumber} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarNumber: event.target.value }))} required /></div>
+              <div className="form-group full-span"><label>{t('aadhaarReference')}</label><input type="file" accept="image/*,application/pdf" onChange={(event) => setAadhaarFile(event.target.files?.[0] || null)} /></div>
             </div>
-            <div className="button-row"><button type="button" className="button button--secondary" onClick={applyAssumptions} disabled={working}>{currentSession ? t('saveSetup') : 'Apply defaults'}</button></div>
-          </>
+            <button type="submit" className="button" disabled={working}>{t('addClientAndContinue')}</button>
+          </form>
         ) : null}
       </section>
 
       <section className="panel workflow-card">
-        <div className="section-heading"><div><p className="eyebrow">Step 1</p><h2>Upload once</h2></div><DocumentsIcon className="app-icon section-icon" /></div>
+        <div className="section-heading">
+          <div><p className="eyebrow">{t('stepTwo')}</p><h2>{t('uploadSourceDocumentsOptional')}</h2></div>
+          <DocumentsIcon className="app-icon section-icon" />
+        </div>
         <div className={`dropzone${working ? ' dropzone--disabled' : ''}`} {...getRootProps()}>
           <input {...getInputProps()} />
           <p>{t('draftingDropzoneTitle')}</p>
-          <small>Upload a file and iAdvocate will extract text and prepare a first draft automatically.</small>
+          <small>{t('optionalSourceUploadHint')}</small>
         </div>
-        <div className="form-group top-space"><label>{t('pasteFactsOrNotes')}</label><textarea rows="5" value={typedText} onChange={(event) => setTypedText(event.target.value)} placeholder={t('typedNotesPlaceholder')} /></div>
-        <div className="button-row"><button type="button" className="button button--secondary" onClick={handleAddTypedText} disabled={working}>{t('addTypedNotes')}</button></div>
-        {existingDocuments.length ? <div className="record-list top-space">{existingDocuments.map((documentRecord) => <article key={documentRecord.id} className="record-item"><div><strong>{documentRecord.name}</strong><p>{documentRecord.type || t('generalFile')}</p></div><button type="button" className="icon-button" onClick={() => handleAttachExistingDocument(documentRecord.id)} disabled={working}><PlusIcon className="app-icon" /></button></article>)}</div> : null}
-      </section>
-
-      {sources.length ? (
-        <section className="panel workflow-card">
-          <div className="section-heading">
-            <div><p className="eyebrow">Step 2</p><h2>Review source text only if needed</h2></div>
-            <button type="button" className="icon-button" onClick={() => setShowSourceReview((current) => !current)}><PlusIcon className="app-icon" /></button>
+        {selectedFiles.length ? (
+          <div className="workflow-defaults top-space">
+            {selectedFiles.map((file) => <span key={`${file.name}-${file.size}`}>{file.name}</span>)}
           </div>
-          <div className="workflow-defaults">{sources.map((source) => <span key={source.id}>{source.name || source.label || t('untitledSource')}</span>)}</div>
-          {showSourceReview ? <div className="record-list top-space">{sources.map((source) => <article key={source.id} className="record-card record-card--drafting"><div className="record-item"><div><strong>{source.name || source.label || t('untitledSource')}</strong><p>{source.extraction_method || source.source_type} | {source.status}</p></div><button type="button" className="icon-button" onClick={() => handleRemoveSource(source.id)}><DeleteIcon className="app-icon" /></button></div><textarea rows="7" value={source.reviewed_text || source.raw_extracted_text || ''} onChange={(event) => handleSourceTextChange(source.id, event.target.value)} onBlur={(event) => persistSourceText(source.id, event.target.value)} placeholder={t('reviewedTextPlaceholder')} />{source.error_message ? <p className="inline-feedback inline-feedback--error">{source.error_message}</p> : null}</article>)}
-            <div className="button-row"><button type="button" className="button" onClick={handleRegenerate} disabled={!readySources.length || working}>{t('generateDraft')}</button></div>
-          </div> : null}
-        </section>
-      ) : null}
+        ) : null}
+      </section>
 
       <section className="panel workflow-card">
-        <div className="section-heading"><div><p className="eyebrow">Step 3</p><h2>Open the draft full screen</h2></div></div>
-        {!output ? <div className="empty-state-block"><p className="empty-state">{t('draftingNoOutput')}</p><button type="button" className="button" onClick={handleRegenerate} disabled={!sessionParam || !readySources.length || working}>{working ? t('generatingDraft') : t('generateDraft')}</button></div> : (
+        <div className="section-heading">
+          <div><p className="eyebrow">{t('stepThree')}</p><h2>{t('advocateInstructions')}</h2></div>
+        </div>
+        <div className="form-group">
+          <label>{t('draftInstructions')}</label>
+          <textarea
+            rows="6"
+            value={draftForm.instructions}
+            onChange={(event) => setDraftForm((current) => ({ ...current, instructions: event.target.value }))}
+            placeholder={t('draftInstructionsPlaceholder')}
+          />
+        </div>
+        <div className="button-row top-space">
+          <button type="button" className="button" onClick={startDrafting} disabled={working}>{working ? t('generatingDraft') : t('generateDraft')}</button>
+        </div>
+      </section>
+
+      {output ? (
+        <section className="panel workflow-card">
+          <div className="section-heading">
+            <div><p className="eyebrow">{t('firstDraft')}</p><h2>{t('draftPreview')}</h2></div>
+          </div>
           <div className="draft-preview">
-            <strong>{draftTypeLabel(setup.draftType, setup.customDraftType)}</strong>
+            <strong>{activeClient?.name || t('generatedDraft')}</strong>
             <p>{(output.edited_text || output.generated_text || '').slice(0, 320)}...</p>
             <div className="button-row">
-              <button type="button" className="button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', 'review'); return next; })}>Open full-screen review</button>
-              <button type="button" className="button button--secondary" onClick={handleRegenerate} disabled={working}>Regenerate</button>
+              <button type="button" className="button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', output.fact_validation_required ? 'validate' : 'review'); return next; })}>
+                {output.fact_validation_required ? t('validateKeyFacts') : t('openFullScreenReview')}
+              </button>
             </div>
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
     </PageShell>
   );
 };

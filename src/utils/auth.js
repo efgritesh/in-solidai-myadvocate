@@ -6,6 +6,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { getStoredLanguage } from './language';
+import { isAdvocateDraftReady } from './draftingProfiles';
 
 export const roleRoutes = {
   admin: '/admin-dashboard',
@@ -13,6 +14,24 @@ export const roleRoutes = {
 };
 
 export const getRouteForRole = (role) => roleRoutes[role] || '/dashboard';
+
+const normalizeAdvocateProfile = (profile = {}, user = null) => {
+  const normalized = {
+    ...profile,
+    name: profile.name || user?.displayName || '',
+    phone: profile.phone || '',
+    officeAddress: profile.officeAddress || profile.address || '',
+    address: profile.address || profile.officeAddress || '',
+    enrollmentNumber: profile.enrollmentNumber || '',
+    email: profile.email || user?.email || '',
+  };
+
+  if ((profile.role || 'advocate') === 'advocate') {
+    normalized.profileComplete = isAdvocateDraftReady(normalized);
+  }
+
+  return normalized;
+};
 
 export const ensureUserProfile = async (user, role = 'advocate', extraData = {}) => {
   const userRef = doc(db, 'users', user.uid);
@@ -23,7 +42,7 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
   const premiumActive = extraData.premiumActive || false;
 
   if (!userSnap.exists()) {
-    const baseProfile = {
+    const baseProfile = normalizeAdvocateProfile({
       uid: user.uid,
       email: user.email || '',
       role,
@@ -34,7 +53,11 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
       subscriptionPlan,
       premiumStatus,
       premiumActive,
-    };
+      phone: extraData.phone || '',
+      officeAddress: extraData.officeAddress || extraData.address || '',
+      address: extraData.address || extraData.officeAddress || '',
+      enrollmentNumber: extraData.enrollmentNumber || '',
+    }, user);
 
     await setDoc(userRef, { ...baseProfile, ...extraData });
     return { ...baseProfile, ...extraData };
@@ -43,23 +66,37 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
   const currentData = userSnap.data();
   const mergedRole = currentData.role || role;
 
-  if ((!currentData.email && user.email) || (!currentData.name && user.displayName) || !currentData.preferredLanguage) {
-    await updateDoc(userRef, {
-      email: currentData.email || user.email || '',
-      name: currentData.name || user.displayName || '',
-      role: mergedRole,
-      preferredLanguage: currentData.preferredLanguage || preferredLanguage,
-    });
-  }
-
-  return {
+  const normalizedProfile = normalizeAdvocateProfile({
     ...currentData,
     role: mergedRole,
     preferredLanguage: currentData.preferredLanguage || preferredLanguage,
     subscriptionPlan: currentData.subscriptionPlan || subscriptionPlan,
     premiumStatus: currentData.premiumStatus || premiumStatus,
     premiumActive: typeof currentData.premiumActive === 'boolean' ? currentData.premiumActive : premiumActive,
-  };
+  }, user);
+
+  if (
+    (!currentData.email && user.email) ||
+    (!currentData.name && user.displayName) ||
+    !currentData.preferredLanguage ||
+    currentData.profileComplete !== normalizedProfile.profileComplete ||
+    currentData.officeAddress !== normalizedProfile.officeAddress ||
+    currentData.enrollmentNumber !== normalizedProfile.enrollmentNumber
+  ) {
+    await updateDoc(userRef, {
+      email: normalizedProfile.email,
+      name: normalizedProfile.name,
+      role: mergedRole,
+      preferredLanguage: normalizedProfile.preferredLanguage,
+      phone: normalizedProfile.phone,
+      officeAddress: normalizedProfile.officeAddress,
+      address: normalizedProfile.address,
+      enrollmentNumber: normalizedProfile.enrollmentNumber,
+      profileComplete: normalizedProfile.profileComplete,
+    });
+  }
+
+  return normalizedProfile;
 };
 
 export const loginWithEmail = async (email, password) => {

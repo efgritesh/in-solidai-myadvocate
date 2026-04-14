@@ -55,9 +55,51 @@ const buildLifecycle = (overrides = {}) => [
 ];
 
 const advocateClients = (advocateId) => [
-  { advocate_id: advocateId, name: 'Aarav Mehta', phone: '9876543210', email: 'aarav.mehta@example.com', preferredLanguage: 'en' },
-  { advocate_id: advocateId, name: 'Neha Sharma', phone: '9822012345', email: 'neha.sharma@example.com', preferredLanguage: 'hi' },
-  { advocate_id: advocateId, name: 'Rohan Iyer', phone: '9811198111', email: 'rohan.iyer@example.com', preferredLanguage: 'en' },
+  {
+    advocate_id: advocateId,
+    name: 'Aarav Mehta',
+    phone: '9876543210',
+    email: 'aarav.mehta@example.com',
+    preferredLanguage: 'en',
+    relationLabel: 'S/o',
+    relationName: 'Rajesh Mehta',
+    age: '34',
+    dateOfBirth: '1992-08-11',
+    gender: 'Male',
+    address: '17 Green Park, New Delhi',
+    aadhaarName: 'Aarav Rajesh Mehta',
+    aadhaarNumber: '9876 5432 1012',
+  },
+  {
+    advocate_id: advocateId,
+    name: 'Neha Sharma',
+    phone: '9822012345',
+    email: 'neha.sharma@example.com',
+    preferredLanguage: 'hi',
+    relationLabel: 'D/o',
+    relationName: 'Vikram Sharma',
+    age: '31',
+    dateOfBirth: '1995-01-24',
+    gender: 'Female',
+    address: '22 Indiranagar, Bengaluru',
+    aadhaarName: 'Neha Vikram Sharma',
+    aadhaarNumber: '8765 4321 1002',
+  },
+  {
+    advocate_id: advocateId,
+    name: 'Rohan Iyer',
+    phone: '9811198111',
+    email: 'rohan.iyer@example.com',
+    preferredLanguage: 'en',
+    relationLabel: 'S/o',
+    relationName: 'Sridhar Iyer',
+    age: '39',
+    dateOfBirth: '1987-04-03',
+    gender: 'Male',
+    address: '5 Marine Drive, Mumbai',
+    aadhaarName: 'Rohan Sridhar Iyer',
+    aadhaarNumber: '7654 3210 9988',
+  },
 ];
 
 const advocateCases = (advocateId) => [
@@ -71,6 +113,8 @@ const advocateCases = (advocateId) => [
     client_language: 'en',
     status: 'Open',
     court: 'Delhi District Court',
+    place: 'New Delhi',
+    police_station: 'Connaught Place',
     summary: 'Civil recovery matter involving unpaid commercial dues and interim relief.',
     next_step: 'File reply bundle and supporting invoice set.',
     lifecycle: buildLifecycle({
@@ -93,6 +137,8 @@ const advocateCases = (advocateId) => [
     client_language: 'hi',
     status: 'Pending',
     court: 'Family Court Bengaluru',
+    place: 'Bengaluru',
+    police_station: 'Indiranagar',
     summary: 'Family matter currently at counselling and settlement review stage.',
     next_step: 'Collect counselling note and update filing pack.',
     lifecycle: buildLifecycle({
@@ -115,6 +161,8 @@ const advocateCases = (advocateId) => [
     client_language: 'en',
     status: 'Open',
     court: 'Commercial Court Mumbai',
+    place: 'Mumbai',
+    police_station: 'Marine Drive',
     summary: 'Commercial dispute with current hearing preparation underway.',
     next_step: 'Prepare final argument note and chronology.',
     lifecycle: buildLifecycle({
@@ -243,7 +291,7 @@ const seedCollectionIfEmpty = async (collectionName, fieldName, fieldValue, reco
 export const seedAdvocateData = async (advocateId) => {
   if (!advocateId) return;
 
-const seedKey = `seeded_${advocateId}_advocate_v7`;
+const seedKey = `seeded_${advocateId}_advocate_v8`;
   if (localStorage.getItem(seedKey) === 'true') return;
 
   const cases = advocateCases(advocateId);

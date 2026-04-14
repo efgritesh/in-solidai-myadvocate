@@ -21,6 +21,8 @@ const googleAuth = new GoogleAuth({
 const DEFAULT_VERTEX_LOCATION = 'global';
 const DEFAULT_VERTEX_MODEL = 'gemini-2.5-flash';
 const SUFFICIENT_TEXT_LENGTH = 120;
+const ADVOCATE_DRAFT_FIELDS = ['name', 'phone', 'officeAddress', 'enrollmentNumber', 'email'];
+const CLIENT_DRAFT_FIELDS = ['name', 'relationLabel', 'relationName', 'age', 'dateOfBirth', 'gender', 'address', 'aadhaarName', 'aadhaarNumber', 'preferredLanguage'];
 
 function getProjectId() {
   return process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || admin.app().options.projectId;
@@ -32,6 +34,22 @@ function getVertexLocation() {
 
 function getVertexModel() {
   return process.env.VERTEX_AI_MODEL || DEFAULT_VERTEX_MODEL;
+}
+
+function hasFieldValue(value) {
+  return String(value || '').trim().length > 0;
+}
+
+function isAdvocateDraftReady(profile = {}) {
+  return ADVOCATE_DRAFT_FIELDS.every((field) => hasFieldValue(profile[field]));
+}
+
+function isClientDraftReady(client = {}) {
+  return CLIENT_DRAFT_FIELDS.every((field) => hasFieldValue(client[field]));
+}
+
+function missingFields(fields, payload = {}) {
+  return fields.filter((field) => !hasFieldValue(payload[field]));
 }
 
 async function requireAdvocate(request) {
@@ -46,6 +64,10 @@ async function requireAdvocate(request) {
 
   if (!userSnap.data()?.premiumActive) {
     throw new HttpsError('failed-precondition', 'AI drafting is available only on the premium plan.');
+  }
+
+  if (!isAdvocateDraftReady(userSnap.data())) {
+    throw new HttpsError('failed-precondition', 'Complete your advocate profile before starting AI drafting.');
   }
 
   return {
@@ -191,6 +213,49 @@ async function getOwnedCase(caseId, advocateId) {
   return caseRecord;
 }
 
+async function getOwnedClient(clientId, advocateId) {
+  if (!clientId) {
+    return null;
+  }
+
+  const clientSnap = await db.collection('clients').doc(clientId).get();
+  if (!clientSnap.exists) {
+    throw new HttpsError('not-found', 'Client not found.');
+  }
+
+  const clientRecord = { id: clientSnap.id, ...clientSnap.data() };
+  if (clientRecord.advocate_id !== advocateId) {
+    throw new HttpsError('permission-denied', 'This client belongs to another advocate.');
+  }
+
+  return clientRecord;
+}
+
+async function resolveClientForDrafting({ clientId, caseRecord, advocateId }) {
+  if (clientId) {
+    return getOwnedClient(clientId, advocateId);
+  }
+
+  if (!caseRecord) {
+    return null;
+  }
+
+  if (caseRecord.client_id) {
+    return getOwnedClient(caseRecord.client_id, advocateId);
+  }
+
+  const clientsSnap = await db.collection('clients').where('advocate_id', '==', advocateId).get();
+  const matched = clientsSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .find((client) =>
+      client.name === caseRecord.client_name ||
+      (client.email && client.email === caseRecord.client_email) ||
+      (client.phone && client.phone === caseRecord.client_phone)
+    );
+
+  return matched || null;
+}
+
 async function getOwnedDocument(documentId, advocateId) {
   const docSnap = await db.collection('documents').doc(documentId).get();
   if (!docSnap.exists) {
@@ -216,6 +281,101 @@ function cleanExtractedText(text) {
 
 function hasSufficientText(text) {
   return cleanExtractedText(text).length >= SUFFICIENT_TEXT_LENGTH;
+}
+
+function buildAdvocateSnapshot(profile = {}) {
+  return {
+    name: profile.name || '',
+    phone: profile.phone || '',
+    email: profile.email || '',
+    officeAddress: profile.officeAddress || profile.address || '',
+    enrollmentNumber: profile.enrollmentNumber || '',
+  };
+}
+
+function buildClientSnapshot(client = {}) {
+  return {
+    clientId: client.id || '',
+    name: client.name || '',
+    phone: client.phone || '',
+    email: client.email || '',
+    preferredLanguage: client.preferredLanguage || 'en',
+    relationLabel: client.relationLabel || '',
+    relationName: client.relationName || '',
+    age: client.age || '',
+    dateOfBirth: client.dateOfBirth || '',
+    gender: client.gender || '',
+    address: client.address || '',
+    aadhaarName: client.aadhaarName || '',
+    aadhaarNumber: client.aadhaarNumber || '',
+  };
+}
+
+function buildCaseSnapshot(caseRecord = {}) {
+  return {
+    caseId: caseRecord.id || '',
+    caseNumber: caseRecord.case_number || '',
+    clientName: caseRecord.client_name || '',
+    court: caseRecord.court || '',
+    place: caseRecord.place || '',
+    policeStation: caseRecord.police_station || '',
+    status: caseRecord.status || '',
+    summary: caseRecord.summary || '',
+    nextStep: caseRecord.next_step || '',
+  };
+}
+
+function extractDraftPlaceholders(text) {
+  const matches = [...String(text || '').matchAll(/\[([^\]]+)\]/g)];
+  return matches
+    .map((match) => match[1].trim())
+    .filter((value, index, list) => value && list.indexOf(value) === index)
+    .slice(0, 10);
+}
+
+function buildFactValidationFields({ session, draftText }) {
+  const advocate = session.advocate_profile_snapshot || {};
+  const client = session.client_profile_snapshot || {};
+  const caseRecord = session.case_snapshot || {};
+  const validatedFacts = session.validated_facts || {};
+
+  const baseFields = [
+    { key: 'client_name', label: 'Client name', value: validatedFacts.client_name || client.name || '', required: true, target: 'client', sourceField: 'name' },
+    { key: 'client_relation_label', label: 'Relation label', value: validatedFacts.client_relation_label || client.relationLabel || '', required: true, target: 'client', sourceField: 'relationLabel' },
+    { key: 'client_relation_name', label: 'Relation name', value: validatedFacts.client_relation_name || client.relationName || '', required: true, target: 'client', sourceField: 'relationName' },
+    { key: 'client_age', label: 'Age', value: validatedFacts.client_age || client.age || '', required: true, target: 'client', sourceField: 'age' },
+    { key: 'client_date_of_birth', label: 'Date of birth', value: validatedFacts.client_date_of_birth || client.dateOfBirth || '', required: true, target: 'client', sourceField: 'dateOfBirth' },
+    { key: 'client_gender', label: 'Gender', value: validatedFacts.client_gender || client.gender || '', required: true, target: 'client', sourceField: 'gender' },
+    { key: 'client_address', label: 'Client address', value: validatedFacts.client_address || client.address || '', required: true, target: 'client', sourceField: 'address' },
+    { key: 'place', label: 'Place', value: validatedFacts.place || caseRecord.place || '', required: false, target: 'case', sourceField: 'place' },
+    { key: 'court', label: 'Court', value: validatedFacts.court || caseRecord.court || '', required: false, target: 'case', sourceField: 'court' },
+    { key: 'police_station', label: 'Police station', value: validatedFacts.police_station || caseRecord.policeStation || '', required: false, target: 'case', sourceField: 'police_station' },
+    { key: 'advocate_name', label: 'Advocate name', value: validatedFacts.advocate_name || advocate.name || '', required: true, target: 'advocate', sourceField: 'name' },
+    { key: 'advocate_enrollment_number', label: 'Enrollment number', value: validatedFacts.advocate_enrollment_number || advocate.enrollmentNumber || '', required: true, target: 'advocate', sourceField: 'enrollmentNumber' },
+    { key: 'advocate_phone', label: 'Advocate phone', value: validatedFacts.advocate_phone || advocate.phone || '', required: true, target: 'advocate', sourceField: 'phone' },
+    { key: 'advocate_email', label: 'Advocate email', value: validatedFacts.advocate_email || advocate.email || '', required: true, target: 'advocate', sourceField: 'email' },
+    { key: 'advocate_office_address', label: 'Advocate office address', value: validatedFacts.advocate_office_address || advocate.officeAddress || '', required: true, target: 'advocate', sourceField: 'officeAddress' },
+  ].map((field) => ({
+    ...field,
+    status: field.required && !hasFieldValue(field.value) ? 'missing' : 'ready',
+  }));
+
+  const placeholderFields = extractDraftPlaceholders(draftText).map((placeholder) => ({
+    key: `placeholder_${placeholder.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+    label: placeholder,
+    value: validatedFacts[`placeholder_${placeholder.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`] || '',
+    required: true,
+    status: 'missing',
+    target: 'session',
+    sourceField: '',
+    placeholder,
+  }));
+
+  const fields = [...baseFields, ...placeholderFields];
+  return {
+    fields,
+    requiresValidation: fields.some((field) => field.status === 'missing'),
+  };
 }
 
 function formatTimestamp(value) {
@@ -408,39 +568,75 @@ async function extractSourceText(source) {
 }
 
 function buildPrompt({ session, caseRecord, sources }) {
-  const draftType = session.custom_draft_type?.trim() || session.draft_type;
+  const draftType = session.custom_draft_type?.trim() || session.draft_type || 'legal draft';
   const language = session.output_language === 'hi' ? 'Hindi' : 'English';
+  const advocateContext = session.advocate_profile_snapshot
+    ? [
+        `Advocate name: ${session.advocate_profile_snapshot.name || ''}`,
+        `Enrollment number: ${session.advocate_profile_snapshot.enrollmentNumber || ''}`,
+        `Phone: ${session.advocate_profile_snapshot.phone || ''}`,
+        `Email: ${session.advocate_profile_snapshot.email || ''}`,
+        `Office address: ${session.advocate_profile_snapshot.officeAddress || ''}`,
+      ].filter(Boolean).join('\n')
+    : 'No advocate profile was attached.';
+  const clientContext = session.client_profile_snapshot
+    ? [
+        `Client name: ${session.client_profile_snapshot.name || ''}`,
+        `Relation: ${session.client_profile_snapshot.relationLabel || ''} ${session.client_profile_snapshot.relationName || ''}`.trim(),
+        `Age: ${session.client_profile_snapshot.age || ''}`,
+        `Date of birth: ${session.client_profile_snapshot.dateOfBirth || ''}`,
+        `Gender: ${session.client_profile_snapshot.gender || ''}`,
+        `Address: ${session.client_profile_snapshot.address || ''}`,
+        `Aadhaar-aligned name: ${session.client_profile_snapshot.aadhaarName || ''}`,
+        `Aadhaar number: ${session.client_profile_snapshot.aadhaarNumber || ''}`,
+      ].filter(Boolean).join('\n')
+    : 'No client profile was linked.';
   const caseContext = caseRecord
     ? [
-        `Case number: ${caseRecord.case_number || ''}`,
-        `Client name: ${caseRecord.client_name || ''}`,
-        `Court: ${caseRecord.court || ''}`,
+        `Case number: ${caseRecord.case_number || caseRecord.caseNumber || ''}`,
+        `Client name: ${caseRecord.client_name || caseRecord.clientName || ''}`,
+        `Court: ${caseRecord.court || caseRecord.court || ''}`,
+        `Place: ${caseRecord.place || ''}`,
+        `Police station: ${caseRecord.police_station || caseRecord.policeStation || ''}`,
         `Current status: ${caseRecord.status || ''}`,
         `Matter summary: ${caseRecord.summary || ''}`,
-        `Next step: ${caseRecord.next_step || ''}`,
+        `Next step: ${caseRecord.next_step || caseRecord.nextStep || ''}`,
       ]
         .filter(Boolean)
         .join('\n')
     : 'No case metadata was linked for this drafting session.';
+  const validatedFacts = Object.entries(session.validated_facts || {})
+    .filter(([, value]) => hasFieldValue(value))
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n');
 
   const sourceText = sources
     .map((source, index) => {
       const heading = `Source ${index + 1}: ${source.name || source.label || source.source_type}`;
       return `${heading}\n${source.reviewed_text || source.raw_extracted_text || ''}`;
     })
-    .join('\n\n---\n\n');
+    .join('\n\n---\n\n') || 'No uploaded source material was attached. Draft from the structured matter details and advocate instructions only.';
 
   return [
     `You are an AI legal drafting assistant for an Indian advocate.`,
-    `Prepare a first-draft ${draftType} in ${language}.`,
+    `Prepare a first-draft ${draftType === 'auto' ? 'legal document inferred from the advocate instructions' : draftType} in ${language}.`,
     `The draft must be professional, structured, and ready for advocate review.`,
     `Do not invent facts that are missing from the source material.`,
     `If a fact is uncertain, mark it as [To be confirmed].`,
     `Use headings and numbered paragraphs where appropriate.`,
     `Include a short "Review notes" section at the end listing factual gaps or items that need advocate validation.`,
     '',
+    'Advocate profile:',
+    advocateContext,
+    '',
+    'Client profile:',
+    clientContext,
+    '',
     'Case context:',
     caseContext,
+    '',
+    'Confirmed facts:',
+    validatedFacts || 'No additional fact confirmations were provided.',
     '',
     'Advocate instructions:',
     session.instructions?.trim() || 'No extra instructions were provided.',
@@ -584,17 +780,29 @@ exports.createDraftingSession = onCall(async (request) => {
   const advocate = await requireAdvocate(request);
   const data = request.data || {};
   const caseRecord = await getOwnedCase(data.caseId || '', advocate.uid);
+  const clientRecord = await resolveClientForDrafting({ clientId: data.clientId || '', caseRecord, advocateId: advocate.uid });
+  if (!clientRecord) {
+    throw new HttpsError('failed-precondition', 'Select a client before starting AI drafting.');
+  }
+  if (!isClientDraftReady(clientRecord)) {
+    throw new HttpsError('failed-precondition', `Complete the client profile before drafting. Missing: ${missingFields(CLIENT_DRAFT_FIELDS, clientRecord).join(', ')}`);
+  }
   const now = admin.firestore.FieldValue.serverTimestamp();
 
   const sessionRef = await db.collection('drafting_sessions').add({
     advocate_id: advocate.uid,
+    client_id: clientRecord.id,
     case_id: caseRecord?.id || '',
     case_number: caseRecord?.case_number || '',
-    client_name: caseRecord?.client_name || '',
-    draft_type: data.draftType || 'legal_notice',
+    client_name: clientRecord.name || caseRecord?.client_name || '',
+    draft_type: data.draftType || 'auto',
     custom_draft_type: data.customDraftType || '',
-    output_language: data.outputLanguage || caseRecord?.client_language || advocate.profile.preferredLanguage || 'en',
+    output_language: data.outputLanguage || clientRecord.preferredLanguage || caseRecord?.client_language || advocate.profile.preferredLanguage || 'en',
     instructions: data.instructions || '',
+    advocate_profile_snapshot: buildAdvocateSnapshot(advocate.profile),
+    client_profile_snapshot: buildClientSnapshot(clientRecord),
+    case_snapshot: caseRecord ? buildCaseSnapshot(caseRecord) : {},
+    validated_facts: {},
     status: 'draft',
     source_count: 0,
     ocr_source_count: 0,
@@ -619,17 +827,31 @@ exports.createDraftingSessionHttp = onRequest({ invoker: 'public' }, async (requ
 
     const data = request.body || {};
     const caseRecord = await getOwnedCase(data.caseId || '', advocate.uid);
+    const clientRecord = await resolveClientForDrafting({ clientId: data.clientId || '', caseRecord, advocateId: advocate.uid });
+    if (!clientRecord) {
+      response.status(412).json({ error: 'Select a client before starting AI drafting.' });
+      return;
+    }
+    if (!isClientDraftReady(clientRecord)) {
+      response.status(412).json({ error: `Complete the client profile before drafting. Missing: ${missingFields(CLIENT_DRAFT_FIELDS, clientRecord).join(', ')}` });
+      return;
+    }
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     const sessionRef = await db.collection('drafting_sessions').add({
       advocate_id: advocate.uid,
+      client_id: clientRecord.id,
       case_id: caseRecord?.id || '',
       case_number: caseRecord?.case_number || '',
-      client_name: caseRecord?.client_name || '',
-      draft_type: data.draftType || 'legal_notice',
+      client_name: clientRecord.name || caseRecord?.client_name || '',
+      draft_type: data.draftType || 'auto',
       custom_draft_type: data.customDraftType || '',
-      output_language: data.outputLanguage || caseRecord?.client_language || advocate.profile.preferredLanguage || 'en',
+      output_language: data.outputLanguage || clientRecord.preferredLanguage || caseRecord?.client_language || advocate.profile.preferredLanguage || 'en',
       instructions: data.instructions || '',
+      advocate_profile_snapshot: buildAdvocateSnapshot(advocate.profile),
+      client_profile_snapshot: buildClientSnapshot(clientRecord),
+      case_snapshot: caseRecord ? buildCaseSnapshot(caseRecord) : {},
+      validated_facts: {},
       status: 'draft',
       source_count: 0,
       ocr_source_count: 0,
@@ -934,9 +1156,10 @@ exports.generateDraftingOutput = onCall(async (request) => {
   const sources = sourcesSnapshot.docs
     .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
     .filter((source) => cleanExtractedText(source.reviewed_text || source.raw_extracted_text || '').length > 0);
-
-  if (!sources.length) {
-    throw new HttpsError('failed-precondition', 'Add and review at least one usable source before generation.');
+  const caseRecord = session.case_id ? await getOwnedCase(session.case_id, advocate.uid) : null;
+  const promptReady = sources.length > 0 || hasFieldValue(session.instructions) || hasFieldValue(session.client_name);
+  if (!promptReady) {
+    throw new HttpsError('failed-precondition', 'Add instructions or a usable source before generation.');
   }
 
   await db.collection('drafting_sessions').doc(session.id).update({
@@ -944,16 +1167,18 @@ exports.generateDraftingOutput = onCall(async (request) => {
     updated_at: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  const caseRecord = session.case_id ? await getOwnedCase(session.case_id, advocate.uid) : null;
   const prompt = buildPrompt({ session, caseRecord, sources });
 
   try {
     const generation = await generateWithVertex(prompt);
+    const validation = buildFactValidationFields({ session, draftText: generation.text });
     const outputId = await upsertDraftingOutput(session.id, advocate.uid, {
       generated_text: generation.text,
       edited_text: generation.text,
       model: generation.model,
       provider: 'vertex_ai',
+      fact_validation_fields: validation.fields,
+      fact_validation_required: validation.requiresValidation,
       prompt_summary: {
         draft_type: session.custom_draft_type?.trim() || session.draft_type,
         output_language: session.output_language,
@@ -963,13 +1188,14 @@ exports.generateDraftingOutput = onCall(async (request) => {
     });
 
     await db.collection('drafting_sessions').doc(session.id).update({
-      status: 'completed',
+      status: validation.requiresValidation ? 'ready_for_review' : 'completed',
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     return {
       outputId,
       generatedText: generation.text,
+      requiresValidation: validation.requiresValidation,
     };
   } catch (error) {
     await db.collection('drafting_sessions').doc(session.id).update({
@@ -997,9 +1223,10 @@ exports.generateDraftingOutputHttp = onRequest({ invoker: 'public' }, async (req
     const sources = sourcesSnapshot.docs
       .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
       .filter((source) => cleanExtractedText(source.reviewed_text || source.raw_extracted_text || '').length > 0);
-
-    if (!sources.length) {
-      response.status(412).json({ error: 'Add and review at least one usable source before generation.' });
+    const caseRecord = session.case_id ? await getOwnedCase(session.case_id, advocate.uid) : null;
+    const promptReady = sources.length > 0 || hasFieldValue(session.instructions) || hasFieldValue(session.client_name);
+    if (!promptReady) {
+      response.status(412).json({ error: 'Add instructions or a usable source before generation.' });
       return;
     }
 
@@ -1008,14 +1235,16 @@ exports.generateDraftingOutputHttp = onRequest({ invoker: 'public' }, async (req
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    const caseRecord = session.case_id ? await getOwnedCase(session.case_id, advocate.uid) : null;
     const prompt = buildPrompt({ session, caseRecord, sources });
     const generation = await generateWithVertex(prompt);
+    const validation = buildFactValidationFields({ session, draftText: generation.text });
     const outputId = await upsertDraftingOutput(session.id, advocate.uid, {
       generated_text: generation.text,
       edited_text: generation.text,
       model: generation.model,
       provider: 'vertex_ai',
+      fact_validation_fields: validation.fields,
+      fact_validation_required: validation.requiresValidation,
       prompt_summary: {
         draft_type: session.custom_draft_type?.trim() || session.draft_type,
         output_language: session.output_language,
@@ -1025,11 +1254,11 @@ exports.generateDraftingOutputHttp = onRequest({ invoker: 'public' }, async (req
     });
 
     await db.collection('drafting_sessions').doc(session.id).update({
-      status: 'completed',
+      status: validation.requiresValidation ? 'ready_for_review' : 'completed',
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    response.status(200).json({ outputId, generatedText: generation.text });
+    response.status(200).json({ outputId, generatedText: generation.text, requiresValidation: validation.requiresValidation });
   } catch (error) {
     response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to generate drafting output.' });
   }

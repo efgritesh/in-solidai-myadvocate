@@ -67,6 +67,9 @@ const Cases = () => {
   const [clientPhone, setClientPhone] = useState('');
   const [summary, setSummary] = useState('');
   const [nextStep, setNextStep] = useState('');
+  const [court, setCourt] = useState('');
+  const [place, setPlace] = useState('');
+  const [policeStation, setPoliceStation] = useState('');
   const [status, setStatus] = useState('Open');
   const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
   const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
@@ -167,12 +170,16 @@ const Cases = () => {
 
     const caseDocRef = await addDoc(collection(db, 'cases'), {
       advocate_id: advocateId,
+      client_id: matchedClient?.id || '',
       case_number: caseNumber,
       client_name: clientName,
       client_email: clientEmail,
       client_phone: clientPhone,
       summary,
       next_step: nextStep,
+      court,
+      place,
+      police_station: policeStation,
       status,
       client_access_enabled: true,
       client_access_token: clientAccessToken,
@@ -184,12 +191,16 @@ const Cases = () => {
     await syncCaseAccessRecord({
       id: caseDocRef.id,
       advocate_id: advocateId,
+      client_id: matchedClient?.id || '',
       case_number: caseNumber,
       client_name: clientName,
       client_email: clientEmail,
       client_phone: clientPhone,
       summary,
       next_step: nextStep,
+      court,
+      place,
+      police_station: policeStation,
       status,
       client_access_enabled: true,
       client_access_token: clientAccessToken,
@@ -204,6 +215,9 @@ const Cases = () => {
     setClientPhone('');
     setSummary('');
     setNextStep('');
+    setCourt('');
+    setPlace('');
+    setPoliceStation('');
     setStatus('Open');
     setSelectedLifecyclePreset(lifecyclePresets[0]);
     setSelectedLifecycleEta('');
@@ -292,6 +306,33 @@ const Cases = () => {
                 value={nextStep}
                 onChange={(e) => setNextStep(e.target.value)}
                 placeholder="What is currently pending or next?"
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('court')}:</label>
+              <input
+                type="text"
+                value={court}
+                onChange={(e) => setCourt(e.target.value)}
+                placeholder="Court name"
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('place')}:</label>
+              <input
+                type="text"
+                value={place}
+                onChange={(e) => setPlace(e.target.value)}
+                placeholder="City / district"
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('policeStation')}:</label>
+              <input
+                type="text"
+                value={policeStation}
+                onChange={(e) => setPoliceStation(e.target.value)}
+                placeholder="Police station if relevant"
               />
             </div>
             <div className="form-group">
