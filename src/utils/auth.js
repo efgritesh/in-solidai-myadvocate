@@ -126,6 +126,7 @@ export const signupWithEmail = async ({ name, email, password, role }) => {
 };
 
 export const loginWithGoogle = async (roleHint = 'advocate', flowType = 'login') => {
+  console.log('[auth] loginWithGoogle:start', { roleHint, flowType });
   sessionStorage.setItem(GOOGLE_ROLE_KEY, roleHint);
   sessionStorage.setItem(GOOGLE_FLOW_KEY, flowType);
   if (flowType === 'signup') {
@@ -136,15 +137,31 @@ export const loginWithGoogle = async (roleHint = 'advocate', flowType = 'login')
 };
 
 export const consumeGoogleRedirect = async () => {
+  console.log('[auth] consumeGoogleRedirect:start');
   const userCredential = await getRedirectResult(auth);
-  if (!userCredential) return null;
+  if (!userCredential) {
+    console.log('[auth] consumeGoogleRedirect:none');
+    return null;
+  }
   const roleHint = sessionStorage.getItem(GOOGLE_ROLE_KEY) || 'advocate';
   const flowType = sessionStorage.getItem(GOOGLE_FLOW_KEY) || 'login';
+  console.log('[auth] consumeGoogleRedirect:result', {
+    uid: userCredential.user?.uid || null,
+    email: userCredential.user?.email || null,
+    roleHint,
+    flowType,
+  });
   sessionStorage.removeItem(GOOGLE_ROLE_KEY);
   sessionStorage.removeItem(GOOGLE_FLOW_KEY);
   const profile = await ensureUserProfile(userCredential.user, roleHint, {
     role: roleHint,
     profileComplete: roleHint === 'admin' ? true : false,
+  });
+  console.log('[auth] consumeGoogleRedirect:profile', {
+    uid: userCredential.user?.uid || null,
+    role: profile?.role || null,
+    profileComplete: profile?.profileComplete || false,
+    preferredLanguage: profile?.preferredLanguage || null,
   });
   return { user: userCredential.user, profile, flowType };
 };
