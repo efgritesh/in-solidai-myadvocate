@@ -3,6 +3,7 @@ import './App.css';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LanguageSelection from './components/LanguageSelection';
+import AppEntry from './components/AppEntry';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
 import ProfileSetup from './components/ProfileSetup';
@@ -33,7 +34,8 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<PublicOnlyRoute><LanguageSelection /></PublicOnlyRoute>} />
+        <Route path="/" element={<PublicOnlyRoute><AppEntry /></PublicOnlyRoute>} />
+        <Route path="/language" element={<PublicOnlyRoute><LanguageSelection /></PublicOnlyRoute>} />
         <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
         <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
         <Route path="/profile-setup" element={<ProtectedRoute allowIncomplete><ProfileSetup /></ProtectedRoute>} />

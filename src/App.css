@@ -143,6 +143,10 @@ textarea {
   letter-spacing: -0.02em;
 }
 
+.brand-mark--light {
+  color: #ffffff;
+}
+
 .hero-card,
 .panel,
 .auth-card {
@@ -908,6 +912,10 @@ textarea {
   min-width: 0;
 }
 
+.auth-layout--entry {
+  width: min(100%, 980px);
+}
+
 .auth-hero,
 .auth-card {
   border-radius: 24px;
@@ -923,6 +931,10 @@ textarea {
   background: #000000;
   color: #ffffff;
   border-color: #000000;
+}
+
+.auth-hero--entry {
+  min-height: 320px;
 }
 
 .auth-hero__topbar {
@@ -946,6 +958,11 @@ textarea {
   text-align: center;
 }
 
+.auth-hero__body--entry {
+  justify-content: center;
+  gap: 18px;
+}
+
 .auth-hero__logo {
   display: block;
   background: #ffffff;
@@ -954,6 +971,12 @@ textarea {
   width: clamp(120px, 24vw, 200px);
   height: clamp(120px, 24vw, 200px);
   margin: 24px auto 0;
+}
+
+.auth-hero__logo--entry {
+  width: clamp(110px, 18vw, 160px);
+  height: clamp(110px, 18vw, 160px);
+  margin-top: 0;
 }
 
 .auth-hero__copy {
@@ -966,6 +989,11 @@ textarea {
   padding: 24px 20px;
   box-shadow: var(--shadow);
   min-width: 0;
+}
+
+.auth-card--entry {
+  max-width: 560px;
+  margin: 0 auto;
 }
 
 .auth-action-stack {

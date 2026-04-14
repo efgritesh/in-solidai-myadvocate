@@ -1,45 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getStoredLanguage } from '../utils/language';
 
 const LanguageSelection = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const [installPrompt, setInstallPrompt] = useState(null);
 
   useEffect(() => {
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-      setInstallPrompt(event);
-    };
-
-    const handleInstalled = () => {
-      setInstallPrompt(null);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleInstalled);
-    };
-  }, []);
+    const existingLanguage = getStoredLanguage();
+    if (existingLanguage) {
+      navigate('/login', { replace: true });
+      return;
+    }
+  }, [navigate]);
 
   const handleLanguageSelect = (lang) => {
     i18n.changeLanguage(lang);
     localStorage.setItem('selectedLanguage', lang);
     navigate('/login');
-  };
-
-  const handleInstall = async () => {
-    if (!installPrompt) {
-      return;
-    }
-
-    installPrompt.prompt();
-    await installPrompt.userChoice;
-    setInstallPrompt(null);
   };
 
   return (
@@ -53,7 +32,6 @@ const LanguageSelection = () => {
           />
           <p className="brand-mark">{t('appName')}</p>
           <h1>{t('chooseLanguage')}</h1>
-          <p className="auth-subtitle">{t('languageSubtitle')}</p>
         </section>
         <div className="auth-card">
           <div className="section-heading">
@@ -70,17 +48,6 @@ const LanguageSelection = () => {
               {t('hindi')}
             </button>
           </div>
-          {installPrompt ? (
-            <section className="install-card top-space">
-              <div>
-                <strong>{t('installAppTitle')}</strong>
-                <p className="helper-text">{t('installAppSubtitle')}</p>
-              </div>
-              <button type="button" className="button" onClick={handleInstall}>
-                {t('installAppButton')}
-              </button>
-            </section>
-          ) : null}
         </div>
       </div>
     </div>
