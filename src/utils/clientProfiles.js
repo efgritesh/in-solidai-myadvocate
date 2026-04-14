@@ -4,6 +4,26 @@ import { auth, db, storage } from '../firebase';
 
 const FUNCTIONS_BASE = 'https://asia-south1-in-solidai-myadvocate.cloudfunctions.net';
 
+export const calculateAgeFromDateOfBirth = (dateOfBirth) => {
+  if (!dateOfBirth) {
+    return '';
+  }
+
+  const birthDate = new Date(dateOfBirth);
+  if (Number.isNaN(birthDate.getTime())) {
+    return '';
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDifference = today.getMonth() - birthDate.getMonth();
+  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? String(age) : '';
+};
+
 export const uploadClientAadhaarReference = async ({ advocateId, clientId, file }) => {
   if (!file) {
     return null;

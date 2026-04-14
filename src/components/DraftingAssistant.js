@@ -17,7 +17,7 @@ import {
   registerDraftingSource,
   uploadDraftingFile,
 } from '../utils/drafting';
-import { createClientProfile, extractAadhaarDetails } from '../utils/clientProfiles';
+import { calculateAgeFromDateOfBirth, createClientProfile, extractAadhaarDetails } from '../utils/clientProfiles';
 import {
   genderOptions,
   isClientDraftReady,
@@ -44,6 +44,8 @@ const emptyClientForm = {
   aadhaarName: '',
   aadhaarNumber: '',
 };
+
+const emptyAadhaarStatus = { loading: false, success: false, warnings: [], rawText: '', error: '' };
 
 const workflowLabels = {
   draft: 'Ready to start',
@@ -138,9 +140,10 @@ const DraftingAssistant = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [output, setOutput] = useState(null);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [newClientIntakeMode, setNewClientIntakeMode] = useState('aadhaar');
   const [validationFields, setValidationFields] = useState([]);
   const [progress, setProgress] = useState(createProgressState());
-  const [aadhaarStatus, setAadhaarStatus] = useState({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+  const [aadhaarStatus, setAadhaarStatus] = useState(emptyAadhaarStatus);
 
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === sessionParam) || null,
@@ -169,6 +172,9 @@ const DraftingAssistant = () => {
       .join('\n\n---\n\n')
       .slice(0, 4000)
   ), [draftSources]);
+  const shouldShowNewClientFields = newClientIntakeMode === 'manual' || aadhaarStatus.success || Boolean(aadhaarStatus.error) || Boolean(aadhaarStatus.rawText);
+  const draftingOverlayLabel = aadhaarStatus.loading ? t('aadhaarProcessingTitle') : (progress.stageLabel || t('draftingProcessingTitle'));
+  const showProcessingOverlay = aadhaarStatus.loading || working;
 
   const availableCases = useMemo(() => {
     if (!draftForm.clientId) return cases;
@@ -355,7 +361,7 @@ const DraftingAssistant = () => {
       aadhaarName: extracted.aadhaarName || current.aadhaarName || '',
       aadhaarNumber: extracted.aadhaarNumber || current.aadhaarNumber || '',
       dateOfBirth: extracted.dateOfBirth || current.dateOfBirth || '',
-      age: extracted.age || current.age || '',
+      age: extracted.age || current.age || calculateAgeFromDateOfBirth(extracted.dateOfBirth || current.dateOfBirth || ''),
       gender: extracted.gender || current.gender || '',
       address: extracted.address || current.address || '',
     }));
@@ -364,7 +370,7 @@ const DraftingAssistant = () => {
   const handleAadhaarUpload = useCallback(async (file) => {
     setAadhaarFile(file || null);
     if (!file || !advocateId) {
-      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+      setAadhaarStatus(emptyAadhaarStatus);
       return;
     }
 
@@ -478,13 +484,15 @@ const DraftingAssistant = () => {
         data: {
           advocate_id: advocateId,
           ...clientForm,
+          age: clientForm.age || calculateAgeFromDateOfBirth(clientForm.dateOfBirth),
           draftReady: true,
         },
         aadhaarFile,
       });
       setClientForm(emptyClientForm);
       setAadhaarFile(null);
-      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+      setAadhaarStatus(emptyAadhaarStatus);
+      setNewClientIntakeMode('aadhaar');
       setShowNewClientForm(false);
       await loadWorkspace();
       setDraftForm((current) => ({ ...current, clientId }));
@@ -828,6 +836,18 @@ const DraftingAssistant = () => {
           ) : null}
           {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
         </section>
+        {showProcessingOverlay ? (
+          <LoadingState overlay label={draftingOverlayLabel}>
+            <div className="loading-state__meta">
+              <p>{aadhaarStatus.loading ? t('aadhaarProcessingBody') : (progress.detail || statusMessage || t('draftingProcessingBody'))}</p>
+              <div className="workflow-defaults">
+                <span>{t('draftingProgressStepLabel', { current: progress.currentStep || 1, total: progress.totalSteps || 4 })}</span>
+                <span>{t('draftingProgressFilesLabel', { count: progress.uploadedFiles || draftSources.length || selectedFiles.length })}</span>
+                <span>{t('draftingProgressEstimatedTokensLabel', { count: progress.estimatedTokens || estimatePromptTokens() })}</span>
+              </div>
+            </div>
+          </LoadingState>
+        ) : null}
       </PageShell>
     );
   }
@@ -869,6 +889,13 @@ const DraftingAssistant = () => {
           </div>
           {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
         </section>
+        {showProcessingOverlay ? (
+          <LoadingState overlay label={draftingOverlayLabel}>
+            <div className="loading-state__meta">
+              <p>{progress.detail || statusMessage || t('draftingProcessingBody')}</p>
+            </div>
+          </LoadingState>
+        ) : null}
       </PageShell>
     );
   }
@@ -896,6 +923,13 @@ const DraftingAssistant = () => {
           </div>
           {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
         </section>
+        {showProcessingOverlay ? (
+          <LoadingState overlay label={draftingOverlayLabel}>
+            <div className="loading-state__meta">
+              <p>{progress.detail || statusMessage || t('draftingProcessingBody')}</p>
+            </div>
+          </LoadingState>
+        ) : null}
       </PageShell>
     );
   }
@@ -952,7 +986,15 @@ const DraftingAssistant = () => {
       <section className="panel workflow-card">
         <div className="section-heading">
           <div><p className="eyebrow">{t('stepOne')}</p><h2>{t('chooseClientAndCase')}</h2></div>
-          <button type="button" className="icon-button icon-button--accent" onClick={() => setShowNewClientForm((current) => !current)}>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            onClick={() => {
+              setShowNewClientForm((current) => !current);
+              setNewClientIntakeMode('aadhaar');
+              setAadhaarStatus(emptyAadhaarStatus);
+            }}
+          >
             <PlusIcon className="app-icon" />
           </button>
         </div>
@@ -1002,32 +1044,68 @@ const DraftingAssistant = () => {
         ) : null}
         {showNewClientForm ? (
           <form onSubmit={handleCreateClient} className="top-space">
-            <div className="form-grid">
-              <div className="form-group full-span"><label>{t('aadhaarUploadPreferred')}</label><input type="file" accept="image/*,application/pdf" onChange={(event) => handleAadhaarUpload(event.target.files?.[0] || null)} /></div>
-              {aadhaarStatus.loading ? <p className="inline-feedback full-span">{t('aadhaarReading')}</p> : null}
-              {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
-              {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error full-span">{aadhaarStatus.error}</p> : null}
-              {aadhaarStatus.warnings.length ? (
-                <div className="record-card full-span">
-                  <strong>{t('aadhaarNeedsReview')}</strong>
-                  {aadhaarStatus.warnings.map((warning) => <p key={warning} className="helper-text">{warning}</p>)}
+            <div className="workflow-section-stack">
+              <p className="helper-text">{t('aadhaarIntakeChoiceSubtitle')}</p>
+              <div className="workflow-choice-row">
+                <button
+                  type="button"
+                  className={`workflow-choice${newClientIntakeMode === 'aadhaar' ? ' workflow-choice--selected' : ''}`}
+                  onClick={() => setNewClientIntakeMode('aadhaar')}
+                >
+                  <strong>{t('useAadhaarFlow')}</strong>
+                  <p>{t('aadhaarFlowHint')}</p>
+                </button>
+                <button
+                  type="button"
+                  className={`workflow-choice${newClientIntakeMode === 'manual' ? ' workflow-choice--selected' : ''}`}
+                  onClick={() => setNewClientIntakeMode('manual')}
+                >
+                  <strong>{t('useManualFlow')}</strong>
+                  <p>{t('manualFlowHint')}</p>
+                </button>
+              </div>
+
+              {newClientIntakeMode === 'aadhaar' && !shouldShowNewClientFields ? (
+                <div className="workflow-helper-card">
+                  <strong>{t('aadhaarUploadPreferred')}</strong>
+                  <input type="file" accept="image/*,application/pdf" onChange={(event) => handleAadhaarUpload(event.target.files?.[0] || null)} />
+                  <p>{t('aadhaarFlowHint')}</p>
+                  {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error">{aadhaarStatus.error}</p> : null}
                 </div>
               ) : null}
-              <div className="form-group"><label>{t('name')}</label><input type="text" value={clientForm.name} onChange={(event) => setClientForm((current) => ({ ...current, name: event.target.value }))} required /></div>
-              <div className="form-group"><label>{t('phone')}</label><input type="text" value={clientForm.phone} onChange={(event) => setClientForm((current) => ({ ...current, phone: event.target.value }))} required /></div>
-              <div className="form-group"><label>{t('email')}</label><input type="email" value={clientForm.email} onChange={(event) => setClientForm((current) => ({ ...current, email: event.target.value }))} /></div>
-              <div className="form-group"><label>{t('preferredLanguage')}</label><select value={clientForm.preferredLanguage} onChange={(event) => setClientForm((current) => ({ ...current, preferredLanguage: event.target.value }))}><option value="en">{t('english')}</option><option value="hi">{t('hindi')}</option></select></div>
-              <div className="form-group"><label>{t('relationLabel')}</label><select value={clientForm.relationLabel} onChange={(event) => setClientForm((current) => ({ ...current, relationLabel: event.target.value }))}>{relationLabelOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></div>
-              <div className="form-group"><label>{t('relationName')}</label><input type="text" value={clientForm.relationName} onChange={(event) => setClientForm((current) => ({ ...current, relationName: event.target.value }))} required /></div>
-              <div className="form-group"><label>{t('age')}</label><input type="number" value={clientForm.age} onChange={(event) => setClientForm((current) => ({ ...current, age: event.target.value }))} required /></div>
-              <div className="form-group"><label>{t('dateOfBirth')}</label><input type="date" value={clientForm.dateOfBirth} onChange={(event) => setClientForm((current) => ({ ...current, dateOfBirth: event.target.value }))} required /></div>
-              <div className="form-group"><label>{t('gender')}</label><select value={clientForm.gender} onChange={(event) => setClientForm((current) => ({ ...current, gender: event.target.value }))}>{genderOptions.map((option) => <option key={option} value={option}>{t(option.toLowerCase())}</option>)}</select></div>
-              <div className="form-group full-span"><label>{t('address')}</label><textarea value={clientForm.address} onChange={(event) => setClientForm((current) => ({ ...current, address: event.target.value }))} required /></div>
-              <div className="form-group"><label>{t('aadhaarName')}</label><input type="text" value={clientForm.aadhaarName} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarName: event.target.value }))} required /></div>
-              <div className="form-group"><label>{t('aadhaarNumber')}</label><input type="text" value={clientForm.aadhaarNumber} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarNumber: event.target.value }))} required /></div>
-              {aadhaarStatus.rawText ? <div className="form-group full-span"><label>{t('aadhaarOcrPreview')}</label><textarea value={aadhaarStatus.rawText} readOnly rows="5" /></div> : null}
+
+              {shouldShowNewClientFields ? (
+                <div className="form-grid">
+                  {newClientIntakeMode === 'aadhaar' ? (
+                    <div className="form-group full-span"><label>{t('aadhaarUploadPreferred')}</label><input type="file" accept="image/*,application/pdf" onChange={(event) => handleAadhaarUpload(event.target.files?.[0] || null)} /></div>
+                  ) : null}
+                  {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
+                  {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error full-span">{aadhaarStatus.error}</p> : null}
+                  {aadhaarStatus.warnings.length ? (
+                    <div className="record-card full-span">
+                      <strong>{t('aadhaarNeedsReview')}</strong>
+                      {aadhaarStatus.warnings.map((warning) => <p key={warning} className="helper-text">{warning}</p>)}
+                    </div>
+                  ) : null}
+                  <div className="form-group"><label>{t('name')}</label><input type="text" value={clientForm.name} onChange={(event) => setClientForm((current) => ({ ...current, name: event.target.value }))} required /></div>
+                  <div className="form-group"><label>{t('phone')}</label><input type="text" value={clientForm.phone} onChange={(event) => setClientForm((current) => ({ ...current, phone: event.target.value }))} required /></div>
+                  <div className="form-group"><label>{t('email')}</label><input type="email" value={clientForm.email} onChange={(event) => setClientForm((current) => ({ ...current, email: event.target.value }))} /></div>
+                  <div className="form-group"><label>{t('preferredLanguage')}</label><select value={clientForm.preferredLanguage} onChange={(event) => setClientForm((current) => ({ ...current, preferredLanguage: event.target.value }))}><option value="en">{t('english')}</option><option value="hi">{t('hindi')}</option></select></div>
+                  <div className="form-group"><label>{t('relationLabel')}</label><select value={clientForm.relationLabel} onChange={(event) => setClientForm((current) => ({ ...current, relationLabel: event.target.value }))}>{relationLabelOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></div>
+                  <div className="form-group"><label>{t('relationName')}</label><input type="text" value={clientForm.relationName} onChange={(event) => setClientForm((current) => ({ ...current, relationName: event.target.value }))} required /></div>
+                  <div className="form-group"><label>{t('age')}</label><input type="number" value={clientForm.age} onChange={(event) => setClientForm((current) => ({ ...current, age: event.target.value }))} required /></div>
+                  <div className="form-group"><label>{t('dateOfBirth')}</label><input type="date" value={clientForm.dateOfBirth} onChange={(event) => setClientForm((current) => ({ ...current, dateOfBirth: event.target.value, age: current.age || calculateAgeFromDateOfBirth(event.target.value) }))} required /></div>
+                  <div className="form-group"><label>{t('gender')}</label><select value={clientForm.gender} onChange={(event) => setClientForm((current) => ({ ...current, gender: event.target.value }))}>{genderOptions.map((option) => <option key={option} value={option}>{t(option.toLowerCase())}</option>)}</select></div>
+                  <div className="form-group full-span"><label>{t('address')}</label><textarea value={clientForm.address} onChange={(event) => setClientForm((current) => ({ ...current, address: event.target.value }))} required /></div>
+                  <div className="form-group"><label>{t('aadhaarName')}</label><input type="text" value={clientForm.aadhaarName} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarName: event.target.value }))} required /></div>
+                  <div className="form-group"><label>{t('aadhaarNumber')}</label><input type="text" value={clientForm.aadhaarNumber} onChange={(event) => setClientForm((current) => ({ ...current, aadhaarNumber: event.target.value }))} required /></div>
+                  {aadhaarStatus.rawText ? <div className="form-group full-span"><label>{t('aadhaarOcrPreview')}</label><textarea value={aadhaarStatus.rawText} readOnly rows="5" /></div> : null}
+                </div>
+              ) : null}
             </div>
-            <button type="submit" className="button" disabled={working}>{t('addClientAndContinue')}</button>
+            {shouldShowNewClientFields ? (
+              <button type="submit" className="button" disabled={working}>{t('addClientAndContinue')}</button>
+            ) : null}
           </form>
         ) : null}
       </section>
@@ -1094,6 +1172,18 @@ const DraftingAssistant = () => {
             </div>
           </div>
         </section>
+      ) : null}
+      {showProcessingOverlay ? (
+        <LoadingState overlay label={draftingOverlayLabel}>
+          <div className="loading-state__meta">
+            <p>{aadhaarStatus.loading ? t('aadhaarProcessingBody') : (progress.detail || statusMessage || t('draftingProcessingBody'))}</p>
+            <div className="workflow-defaults">
+              <span>{t('draftingProgressStepLabel', { current: progress.currentStep || 1, total: progress.totalSteps || 4 })}</span>
+              <span>{t('draftingProgressFilesLabel', { count: progress.uploadedFiles || draftSources.length || selectedFiles.length })}</span>
+              <span>{t('draftingProgressEstimatedTokensLabel', { count: progress.estimatedTokens || estimatePromptTokens() })}</span>
+            </div>
+          </div>
+        </LoadingState>
       ) : null}
     </PageShell>
   );

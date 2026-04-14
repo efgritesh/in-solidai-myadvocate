@@ -6,7 +6,7 @@ import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
 import { ArrowRightIcon, CasesIcon, CloseIcon, DocumentsIcon, LockIcon, PaymentsIcon } from './AppIcons';
-import { extractAadhaarDetails, updateClientProfile } from '../utils/clientProfiles';
+import { calculateAgeFromDateOfBirth, extractAadhaarDetails, updateClientProfile } from '../utils/clientProfiles';
 import {
   buildClientDraftingSummary,
   genderOptions,
@@ -44,7 +44,13 @@ const ClientDetails = () => {
   });
 
   const updateField = (key, value) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key === 'dateOfBirth' && !current.age) {
+        next.age = calculateAgeFromDateOfBirth(value);
+      }
+      return next;
+    });
   };
 
   const loadClientDetails = useCallback(async () => {
@@ -161,7 +167,7 @@ const ClientDetails = () => {
       aadhaarName: extracted.aadhaarName || current.aadhaarName || '',
       aadhaarNumber: extracted.aadhaarNumber || current.aadhaarNumber || '',
       dateOfBirth: extracted.dateOfBirth || current.dateOfBirth || '',
-      age: extracted.age || current.age || '',
+      age: extracted.age || current.age || calculateAgeFromDateOfBirth(extracted.dateOfBirth || current.dateOfBirth || ''),
       gender: extracted.gender || current.gender || '',
       address: extracted.address || current.address || '',
     }));
@@ -303,6 +309,14 @@ const ClientDetails = () => {
           </div>
         )}
       </section>
+
+      {aadhaarStatus.loading ? (
+        <LoadingState overlay label={t('aadhaarProcessingTitle')}>
+          <div className="loading-state__meta">
+            <p>{t('aadhaarProcessingBody')}</p>
+          </div>
+        </LoadingState>
+      ) : null}
 
       <section className="stats-grid">
         <article className="stat-card">

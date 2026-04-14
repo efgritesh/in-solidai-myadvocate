@@ -6,7 +6,7 @@ import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
 import { ArrowRightIcon, CloseIcon, PlusIcon } from './AppIcons';
-import { createClientProfile, extractAadhaarDetails } from '../utils/clientProfiles';
+import { calculateAgeFromDateOfBirth, createClientProfile, extractAadhaarDetails } from '../utils/clientProfiles';
 import {
   buildClientDraftingSummary,
   genderOptions,
@@ -29,6 +29,8 @@ const emptyClientForm = {
   aadhaarNumber: '',
 };
 
+const emptyAadhaarStatus = { loading: false, success: false, warnings: [], rawText: '', error: '' };
+
 const Clients = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -38,12 +40,26 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAddClientForm, setShowAddClientForm] = useState(false);
-  const [aadhaarStatus, setAadhaarStatus] = useState({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+  const [intakeMode, setIntakeMode] = useState('aadhaar');
+  const [aadhaarStatus, setAadhaarStatus] = useState(emptyAadhaarStatus);
   const advocateId = auth.currentUser?.uid || '';
 
   const updateField = (key, value) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key === 'dateOfBirth' && !current.age) {
+        next.age = calculateAgeFromDateOfBirth(value);
+      }
+      return next;
+    });
   };
+
+  const resetComposer = useCallback(() => {
+    setForm(emptyClientForm);
+    setAadhaarFile(null);
+    setAadhaarStatus(emptyAadhaarStatus);
+    setIntakeMode('aadhaar');
+  }, []);
 
   const fetchClients = useCallback(async () => {
     if (!advocateId) {
@@ -67,6 +83,8 @@ const Clients = () => {
     return { readyCount, totalCount: clients.length };
   }, [clients]);
 
+  const shouldShowManualForm = intakeMode === 'manual' || aadhaarStatus.success || Boolean(aadhaarStatus.error) || Boolean(aadhaarStatus.rawText);
+
   const handleAddClient = async (event) => {
     event.preventDefault();
     if (!advocateId) return;
@@ -78,14 +96,13 @@ const Clients = () => {
         data: {
           advocate_id: advocateId,
           ...form,
+          age: form.age || calculateAgeFromDateOfBirth(form.dateOfBirth),
           draftReady: true,
         },
         aadhaarFile,
       });
 
-      setForm(emptyClientForm);
-      setAadhaarFile(null);
-      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+      resetComposer();
       setShowAddClientForm(false);
       await fetchClients();
     } finally {
@@ -94,22 +111,26 @@ const Clients = () => {
   };
 
   const applyAadhaarFields = (extracted = {}) => {
-    setForm((current) => ({
-      ...current,
-      name: current.name || extracted.name || extracted.aadhaarName || '',
-      aadhaarName: extracted.aadhaarName || current.aadhaarName || '',
-      aadhaarNumber: extracted.aadhaarNumber || current.aadhaarNumber || '',
-      dateOfBirth: extracted.dateOfBirth || current.dateOfBirth || '',
-      age: extracted.age || current.age || '',
-      gender: extracted.gender || current.gender || '',
-      address: extracted.address || current.address || '',
-    }));
+    setForm((current) => {
+      const resolvedDob = extracted.dateOfBirth || current.dateOfBirth || '';
+      const resolvedAge = extracted.age || current.age || calculateAgeFromDateOfBirth(resolvedDob);
+      return {
+        ...current,
+        name: current.name || extracted.name || extracted.aadhaarName || '',
+        aadhaarName: extracted.aadhaarName || current.aadhaarName || '',
+        aadhaarNumber: extracted.aadhaarNumber || current.aadhaarNumber || '',
+        dateOfBirth: resolvedDob,
+        age: resolvedAge,
+        gender: extracted.gender || current.gender || '',
+        address: extracted.address || current.address || '',
+      };
+    });
   };
 
   const handleAadhaarUpload = async (file) => {
     setAadhaarFile(file || null);
     if (!file || !advocateId) {
-      setAadhaarStatus({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+      setAadhaarStatus(emptyAadhaarStatus);
       return;
     }
 
@@ -135,6 +156,16 @@ const Clients = () => {
     }
   };
 
+  const toggleComposer = () => {
+    setShowAddClientForm((current) => {
+      const next = !current;
+      if (!next) {
+        resetComposer();
+      }
+      return next;
+    });
+  };
+
   return (
     <PageShell title={t('clients')} subtitle={t('clientsSubtitle')} showBack>
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
@@ -150,7 +181,7 @@ const Clients = () => {
                 className="icon-button icon-button--accent"
                 aria-label={showAddClientForm ? t('closeAddClientForm') : t('openAddClientForm')}
                 title={showAddClientForm ? t('closeAddClientForm') : t('openAddClientForm')}
-                onClick={() => setShowAddClientForm((current) => !current)}
+                onClick={toggleComposer}
               >
                 {showAddClientForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
               </button>
@@ -160,85 +191,121 @@ const Clients = () => {
               <span>{t('clientProfilesForDrafting')}</span>
             </div>
             {showAddClientForm ? (
-              <form onSubmit={handleAddClient}>
-                <div className="form-grid">
-                  <div className="form-group full-span">
-                    <label>{t('aadhaarUploadPreferred')}:</label>
-                    <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
-                  </div>
-                  {aadhaarStatus.loading ? <p className="inline-feedback full-span">{t('aadhaarReading')}</p> : null}
-                  {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
-                  {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error full-span">{aadhaarStatus.error}</p> : null}
-                  {aadhaarStatus.warnings.length ? (
-                    <div className="record-card full-span">
-                      <strong>{t('aadhaarNeedsReview')}</strong>
-                      {aadhaarStatus.warnings.map((warning) => <p key={warning} className="helper-text">{warning}</p>)}
-                    </div>
-                  ) : null}
-                  <div className="form-group">
-                    <label>{t('name')}:</label>
-                    <input type="text" value={form.name} onChange={(e) => updateField('name', e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('phone')}:</label>
-                    <input type="text" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('email')}:</label>
-                    <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('preferredLanguage')}:</label>
-                    <select value={form.preferredLanguage} onChange={(e) => updateField('preferredLanguage', e.target.value)}>
-                      <option value="en">{t('english')}</option>
-                      <option value="hi">{t('hindi')}</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>{t('relationLabel')}:</label>
-                    <select value={form.relationLabel} onChange={(e) => updateField('relationLabel', e.target.value)}>
-                      {relationLabelOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>{t('relationName')}:</label>
-                    <input type="text" value={form.relationName} onChange={(e) => updateField('relationName', e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('age')}:</label>
-                    <input type="number" min="0" value={form.age} onChange={(e) => updateField('age', e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('dateOfBirth')}:</label>
-                    <input type="date" value={form.dateOfBirth} onChange={(e) => updateField('dateOfBirth', e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('gender')}:</label>
-                    <select value={form.gender} onChange={(e) => updateField('gender', e.target.value)}>
-                      {genderOptions.map((option) => <option key={option} value={option}>{t(option.toLowerCase())}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group full-span">
-                    <label>{t('address')}:</label>
-                    <textarea value={form.address} onChange={(e) => updateField('address', e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('aadhaarName')}:</label>
-                    <input type="text" value={form.aadhaarName} onChange={(e) => updateField('aadhaarName', e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label>{t('aadhaarNumber')}:</label>
-                    <input type="text" value={form.aadhaarNumber} onChange={(e) => updateField('aadhaarNumber', e.target.value)} required />
-                  </div>
-                  {aadhaarStatus.rawText ? (
-                    <div className="form-group full-span">
-                      <label>{t('aadhaarOcrPreview')}:</label>
-                      <textarea value={aadhaarStatus.rawText} readOnly rows="5" />
-                    </div>
-                  ) : null}
+              <div className="workflow-section-stack">
+                <div>
+                  <p className="helper-text">{t('aadhaarIntakeChoiceSubtitle')}</p>
                 </div>
-                <button type="submit" className="button" disabled={saving}>{saving ? t('saving') : t('addClient')}</button>
-              </form>
+                <div className="workflow-choice-row">
+                  <button
+                    type="button"
+                    className={`workflow-choice${intakeMode === 'aadhaar' ? ' workflow-choice--selected' : ''}`}
+                    onClick={() => setIntakeMode('aadhaar')}
+                  >
+                    <strong>{t('useAadhaarFlow')}</strong>
+                    <p>{t('aadhaarFlowHint')}</p>
+                  </button>
+                  <button
+                    type="button"
+                    className={`workflow-choice${intakeMode === 'manual' ? ' workflow-choice--selected' : ''}`}
+                    onClick={() => setIntakeMode('manual')}
+                  >
+                    <strong>{t('useManualFlow')}</strong>
+                    <p>{t('manualFlowHint')}</p>
+                  </button>
+                </div>
+
+                {intakeMode === 'aadhaar' && !shouldShowManualForm ? (
+                  <div className="workflow-helper-card">
+                    <strong>{t('aadhaarUploadPreferred')}</strong>
+                    <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
+                    <p>{t('aadhaarFlowHint')}</p>
+                    {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error">{aadhaarStatus.error}</p> : null}
+                  </div>
+                ) : null}
+
+                {shouldShowManualForm ? (
+                  <form onSubmit={handleAddClient}>
+                    <div className="form-grid">
+                      {intakeMode === 'aadhaar' ? (
+                        <div className="form-group full-span">
+                          <label>{t('aadhaarUploadPreferred')}:</label>
+                          <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
+                        </div>
+                      ) : null}
+                      {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
+                      {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error full-span">{aadhaarStatus.error}</p> : null}
+                      {aadhaarStatus.warnings.length ? (
+                        <div className="record-card full-span">
+                          <strong>{t('aadhaarNeedsReview')}</strong>
+                          {aadhaarStatus.warnings.map((warning) => <p key={warning} className="helper-text">{warning}</p>)}
+                        </div>
+                      ) : null}
+                      <div className="form-group">
+                        <label>{t('name')}:</label>
+                        <input type="text" value={form.name} onChange={(e) => updateField('name', e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('phone')}:</label>
+                        <input type="text" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('email')}:</label>
+                        <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('preferredLanguage')}:</label>
+                        <select value={form.preferredLanguage} onChange={(e) => updateField('preferredLanguage', e.target.value)}>
+                          <option value="en">{t('english')}</option>
+                          <option value="hi">{t('hindi')}</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>{t('relationLabel')}:</label>
+                        <select value={form.relationLabel} onChange={(e) => updateField('relationLabel', e.target.value)}>
+                          {relationLabelOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>{t('relationName')}:</label>
+                        <input type="text" value={form.relationName} onChange={(e) => updateField('relationName', e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('age')}:</label>
+                        <input type="number" min="0" value={form.age} onChange={(e) => updateField('age', e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('dateOfBirth')}:</label>
+                        <input type="date" value={form.dateOfBirth} onChange={(e) => updateField('dateOfBirth', e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('gender')}:</label>
+                        <select value={form.gender} onChange={(e) => updateField('gender', e.target.value)}>
+                          {genderOptions.map((option) => <option key={option} value={option}>{t(option.toLowerCase())}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group full-span">
+                        <label>{t('address')}:</label>
+                        <textarea value={form.address} onChange={(e) => updateField('address', e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('aadhaarName')}:</label>
+                        <input type="text" value={form.aadhaarName} onChange={(e) => updateField('aadhaarName', e.target.value)} required />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('aadhaarNumber')}:</label>
+                        <input type="text" value={form.aadhaarNumber} onChange={(e) => updateField('aadhaarNumber', e.target.value)} required />
+                      </div>
+                      {aadhaarStatus.rawText ? (
+                        <div className="form-group full-span">
+                          <label>{t('aadhaarOcrPreview')}:</label>
+                          <textarea value={aadhaarStatus.rawText} readOnly rows="5" />
+                        </div>
+                      ) : null}
+                    </div>
+                    <button type="submit" className="button" disabled={saving}>{saving ? t('saving') : t('addClient')}</button>
+                  </form>
+                ) : null}
+              </div>
             ) : (
               <p className="empty-state">{t('addClientHint')}</p>
             )}
@@ -277,6 +344,14 @@ const Clients = () => {
                 </div>
               )}
             </section>
+          ) : null}
+
+          {aadhaarStatus.loading ? (
+            <LoadingState overlay label={t('aadhaarProcessingTitle')}>
+              <div className="loading-state__meta">
+                <p>{t('aadhaarProcessingBody')}</p>
+              </div>
+            </LoadingState>
           ) : null}
         </>
       )}
