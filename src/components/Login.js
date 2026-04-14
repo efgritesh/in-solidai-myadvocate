@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { consumeGoogleRedirect, getRouteForRole, loginWithEmail, loginWithGoogle } from '../utils/auth';
+import { getRouteForRole, loginWithEmail, loginWithGoogle } from '../utils/auth';
 import { saveCurrentUserLanguage, setStoredLanguage } from '../utils/language';
 import LanguageSelector from './LanguageSelector';
 import LoadingState from './LoadingState';
@@ -11,7 +11,6 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [googleLoading, setGoogleLoading] = useState(true);
   const [googlePending, setGooglePending] = useState(false);
   const navigate = useNavigate();
 
@@ -24,30 +23,6 @@ const Login = () => {
     }
     navigate(profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup');
   }, [i18n, navigate]);
-
-  useEffect(() => {
-    let active = true;
-
-    consumeGoogleRedirect()
-      .then(async (result) => {
-        if (!active || !result?.profile) return;
-        await completeLogin(result.profile);
-      })
-      .catch((err) => {
-        if (active) {
-          setError(err.message);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setGoogleLoading(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [completeLogin]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -73,8 +48,8 @@ const Login = () => {
     }
   };
 
-  if (googleLoading || googlePending) {
-    return <LoadingState fullScreen label={googlePending ? 'Continuing with Google...' : 'Loading workspace...'} />;
+  if (googlePending) {
+    return <LoadingState fullScreen label="Continuing with Google..." />;
   }
 
   return (

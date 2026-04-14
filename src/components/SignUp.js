@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { consumeGoogleRedirect, getRouteForRole, loginWithGoogle, signupWithEmail } from '../utils/auth';
+import { getRouteForRole, loginWithGoogle, signupWithEmail } from '../utils/auth';
 import { saveCurrentUserLanguage, setStoredLanguage } from '../utils/language';
 import LanguageSelector from './LanguageSelector';
 import LoadingState from './LoadingState';
@@ -17,40 +17,11 @@ const SignUp = () => {
     role: 'advocate',
   });
   const [error, setError] = useState('');
-  const [googleLoading, setGoogleLoading] = useState(true);
   const [googlePending, setGooglePending] = useState(false);
 
   const updateField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
-
-  useEffect(() => {
-    let active = true;
-
-    consumeGoogleRedirect()
-      .then(async (result) => {
-        if (!active || !result?.profile) return;
-        const nextLanguage = i18n.language || 'en';
-        await i18n.changeLanguage(nextLanguage);
-        setStoredLanguage(nextLanguage);
-        await saveCurrentUserLanguage(nextLanguage);
-        navigate(result.profile.profileComplete ? getRouteForRole(result.profile.role) : '/profile-setup');
-      })
-      .catch((err) => {
-        if (active) {
-          setError(err.message);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setGoogleLoading(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [i18n, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -85,8 +56,8 @@ const SignUp = () => {
     }
   };
 
-  if (googleLoading || googlePending) {
-    return <LoadingState fullScreen label={googlePending ? 'Continuing with Google...' : 'Loading workspace...'} />;
+  if (googlePending) {
+    return <LoadingState fullScreen label="Continuing with Google..." />;
   }
 
   return (

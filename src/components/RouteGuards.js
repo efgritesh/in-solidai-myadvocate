@@ -2,21 +2,41 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
-import { ensureUserProfile, getRouteForRole, GOOGLE_FORCE_PROFILE_SETUP_KEY } from '../utils/auth';
+import {
+  consumeGoogleRedirect,
+  ensureUserProfile,
+  getRouteForRole,
+  GOOGLE_FORCE_PROFILE_SETUP_KEY,
+} from '../utils/auth';
 import LoadingState from './LoadingState';
 
 const useAuthSession = () => {
   const [session, setSession] = useState({ user: auth.currentUser, loading: true });
+  const [redirectLoading, setRedirectLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setSession({ user, loading: false });
+      if (active) {
+        setSession({ user, loading: false });
+      }
     });
 
-    return unsubscribe;
+    consumeGoogleRedirect()
+      .catch(() => null)
+      .finally(() => {
+        if (active) {
+          setRedirectLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
-  return session;
+  return { ...session, loading: session.loading || redirectLoading };
 };
 
 const useResolvedProfile = (user, loading) => {
