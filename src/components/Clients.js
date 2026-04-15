@@ -13,6 +13,8 @@ import {
   isClientDraftReady,
   relationLabelOptions,
 } from '../utils/draftingProfiles';
+import useAiAccessSummary from '../utils/useAiAccessSummary';
+import { canUseAiNow, getAiCreditHeadline } from '../utils/billing';
 
 const emptyClientForm = {
   name: '',
@@ -43,6 +45,7 @@ const Clients = () => {
   const [intakeMode, setIntakeMode] = useState('aadhaar');
   const [aadhaarStatus, setAadhaarStatus] = useState(emptyAadhaarStatus);
   const advocateId = auth.currentUser?.uid || '';
+  const { summary: aiSummary } = useAiAccessSummary();
 
   const updateField = (key, value) => {
     setForm((current) => {
@@ -146,6 +149,9 @@ const Clients = () => {
         error: '',
       });
     } catch (error) {
+      if (/trial|subscribe|top up|credits/i.test(error.message || '')) {
+        navigate('/premium?feature=aadhaar_ocr');
+      }
       setAadhaarStatus({
         loading: false,
         success: false,
@@ -195,6 +201,9 @@ const Clients = () => {
                 <div className="workflow-helper-card">
                   <strong>{t('aadhaarUploadPreferred')}</strong>
                   <p>{t('aadhaarIntakeChoiceSubtitle')}</p>
+                  <p className="helper-text">
+                    {aiSummary ? getAiCreditHeadline(aiSummary) : t('aadhaarFlowHint')}
+                  </p>
                   <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
                   <div className="workflow-choice-row">
                     <button
@@ -215,6 +224,11 @@ const Clients = () => {
                     </button>
                   </div>
                   {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error">{aadhaarStatus.error}</p> : null}
+                  {aiSummary && !canUseAiNow(aiSummary) ? (
+                    <button type="button" className="button button--secondary" onClick={() => navigate('/premium?feature=aadhaar_ocr')}>
+                      {t('manageAiAccess')}
+                    </button>
+                  ) : null}
                 </div>
 
                 {shouldShowManualForm ? (

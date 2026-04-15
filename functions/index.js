@@ -25,6 +25,57 @@ const SUFFICIENT_TEXT_LENGTH = 120;
 const ADVOCATE_DRAFT_FIELDS = ['name', 'phone', 'officeAddress', 'enrollmentNumber', 'email'];
 const CLIENT_DRAFT_FIELDS = ['name', 'relationLabel', 'relationName', 'age', 'dateOfBirth', 'gender', 'address', 'aadhaarName', 'aadhaarNumber', 'preferredLanguage'];
 const TEST_ADVOCATE_PASSWORD = 'solidai';
+const PLAN_TIERS = {
+  CORE: 'core',
+  TRIAL: 'trial',
+  AI_PLUS: 'ai_plus',
+};
+const PLAN_STATUS = {
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+  CANCELLED: 'cancelled',
+};
+const TRIAL_STATUS = {
+  UNUSED: 'unused',
+  ACTIVE: 'active',
+  EXPIRED: 'expired',
+  CONSUMED: 'consumed',
+};
+const CREDIT_RULES = {
+  inputTokensPerCredit: 1000,
+  outputTokensPerCredit: 1000,
+  inputCreditRate: 1,
+  outputCreditRate: 8,
+  ocrCreditPerUnit: 5,
+};
+const BILLING_DEFAULTS = {
+  planTier: PLAN_TIERS.CORE,
+  planStatus: PLAN_STATUS.INACTIVE,
+  trialStatus: TRIAL_STATUS.UNUSED,
+  trialCreditsRemaining: 0,
+  trialStartedAt: null,
+  trialExpiresAt: null,
+  includedCreditsMonthly: 0,
+  includedCreditsRemaining: 0,
+  walletCreditsRemaining: 0,
+  currentCycleStart: null,
+  currentCycleEnd: null,
+  autoRenew: false,
+  subscriptionPlan: 'core',
+  premiumStatus: 'inactive',
+  premiumActive: false,
+  premiumSource: '',
+  premiumBillingAmountInr: 0,
+};
+const AI_TRIAL_CREDITS = 300;
+const AI_TRIAL_VALIDITY_DAYS = 14;
+const AI_PLUS_MONTHLY_PRICE_INR = 299;
+const AI_PLUS_INCLUDED_CREDITS = 1500;
+const TOPUP_PACKS = {
+  starter_500: { id: 'starter_500', amountInr: 99, credits: 500 },
+  growth_1500: { id: 'growth_1500', amountInr: 249, credits: 1500 },
+  pro_3500: { id: 'pro_3500', amountInr: 499, credits: 3500 },
+};
 
 function getProjectId() {
   return process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || admin.app().options.projectId;
@@ -40,6 +91,233 @@ function getVertexModel() {
 
 function hasFieldValue(value) {
   return String(value || '').trim().length > 0;
+}
+
+function timestampToDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === 'function') return value.toDate();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeBillingProfile(profile = {}) {
+  return {
+    ...BILLING_DEFAULTS,
+    ...profile,
+  };
+}
+
+function calculateCreditCharge({ inputTokens = 0, outputTokens = 0, ocrUnits = 0 }) {
+  const inputCredits = Math.ceil(Math.max(0, Number(inputTokens) || 0) / CREDIT_RULES.inputTokensPerCredit) * CREDIT_RULES.inputCreditRate;
+  const outputCredits = Math.ceil(Math.max(0, Number(outputTokens) || 0) / CREDIT_RULES.outputTokensPerCredit) * CREDIT_RULES.outputCreditRate;
+  const ocrCredits = Math.ceil(Math.max(0, Number(ocrUnits) || 0)) * CREDIT_RULES.ocrCreditPerUnit;
+  return {
+    inputCredits,
+    outputCredits,
+    ocrCredits,
+    totalCredits: inputCredits + outputCredits + ocrCredits,
+  };
+}
+
+function getStoredCreditBalances(profile = {}) {
+  const normalized = normalizeBillingProfile(profile);
+  return {
+    trialCreditsRemaining: Math.max(0, Number(normalized.trialCreditsRemaining) || 0),
+    includedCreditsRemaining: Math.max(0, Number(normalized.includedCreditsRemaining) || 0),
+    walletCreditsRemaining: Math.max(0, Number(normalized.walletCreditsRemaining) || 0),
+  };
+}
+
+function hasEntitlementWindow(profile = {}) {
+  const normalized = normalizeBillingProfile(profile);
+  const now = new Date();
+  const trialExpiresAt = timestampToDate(normalized.trialExpiresAt);
+  const currentCycleEnd = timestampToDate(normalized.currentCycleEnd);
+  const trialActive = normalized.trialStatus === TRIAL_STATUS.ACTIVE && trialExpiresAt && trialExpiresAt > now;
+  const subscriptionActive =
+    normalized.planTier === PLAN_TIERS.AI_PLUS &&
+    [PLAN_STATUS.ACTIVE, PLAN_STATUS.CANCELLED].includes(normalized.planStatus) &&
+    currentCycleEnd &&
+    currentCycleEnd > now;
+
+  return {
+    trialActive,
+    subscriptionActive,
+    hasEntitlement: trialActive || subscriptionActive,
+  };
+}
+
+function hasUsableAiBalance(profile = {}) {
+  const balances = getStoredCreditBalances(profile);
+  return balances.trialCreditsRemaining + balances.includedCreditsRemaining + balances.walletCreditsRemaining > 0;
+}
+
+function buildBillingSummary(profile = {}) {
+  const normalized = normalizeBillingProfile(profile);
+  const balances = getStoredCreditBalances(normalized);
+  const entitlement = hasEntitlementWindow(normalized);
+  return {
+    planTier: normalized.planTier,
+    planStatus: normalized.planStatus,
+    trialStatus: normalized.trialStatus,
+    trialCreditsRemaining: balances.trialCreditsRemaining,
+    includedCreditsMonthly: Math.max(0, Number(normalized.includedCreditsMonthly) || 0),
+    includedCreditsRemaining: balances.includedCreditsRemaining,
+    walletCreditsRemaining: balances.walletCreditsRemaining,
+    currentCycleStart: normalized.currentCycleStart || null,
+    currentCycleEnd: normalized.currentCycleEnd || null,
+    trialExpiresAt: normalized.trialExpiresAt || null,
+    autoRenew: Boolean(normalized.autoRenew),
+    hasEntitlement: entitlement.hasEntitlement,
+    canUseAiNow: entitlement.hasEntitlement && hasUsableAiBalance(normalized),
+    subscriptionPlan: normalized.subscriptionPlan || 'core',
+    premiumActive: Boolean(normalized.premiumActive),
+  };
+}
+
+async function recordBillingEvent(advocateId, event = {}) {
+  await db.collection('billing_events').add({
+    advocate_id: advocateId,
+    ...event,
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function recordUsageEvent(advocateId, event = {}) {
+  await db.collection('usage_events').add({
+    advocate_id: advocateId,
+    ...event,
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function refreshBillingState(userRef, profile = {}) {
+  const normalized = normalizeBillingProfile(profile);
+  const now = new Date();
+  const patch = {};
+
+  const trialExpiresAt = timestampToDate(normalized.trialExpiresAt);
+  if (normalized.trialStatus === TRIAL_STATUS.ACTIVE && trialExpiresAt && trialExpiresAt <= now) {
+    patch.trialStatus = normalized.trialCreditsRemaining > 0 ? TRIAL_STATUS.EXPIRED : TRIAL_STATUS.CONSUMED;
+    patch.trialCreditsRemaining = 0;
+  }
+
+  const currentCycleEnd = timestampToDate(normalized.currentCycleEnd);
+  if (
+    normalized.planTier === PLAN_TIERS.AI_PLUS &&
+    currentCycleEnd &&
+    currentCycleEnd <= now
+  ) {
+    if (normalized.autoRenew) {
+      const nextStart = now;
+      const nextEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      patch.planStatus = PLAN_STATUS.ACTIVE;
+      patch.currentCycleStart = admin.firestore.Timestamp.fromDate(nextStart);
+      patch.currentCycleEnd = admin.firestore.Timestamp.fromDate(nextEnd);
+      patch.includedCreditsMonthly = normalized.includedCreditsMonthly || AI_PLUS_INCLUDED_CREDITS;
+      patch.includedCreditsRemaining = normalized.includedCreditsMonthly || AI_PLUS_INCLUDED_CREDITS;
+      patch.premiumActive = true;
+      patch.premiumStatus = 'active';
+      await recordBillingEvent(userRef.id, {
+        type: 'subscription_renewed',
+        amountInr: AI_PLUS_MONTHLY_PRICE_INR,
+        credits: patch.includedCreditsRemaining,
+      });
+    } else {
+      patch.planTier = PLAN_TIERS.CORE;
+      patch.planStatus = PLAN_STATUS.INACTIVE;
+      patch.subscriptionPlan = 'core';
+      patch.premiumActive = false;
+      patch.premiumStatus = 'inactive';
+      patch.includedCreditsRemaining = 0;
+      patch.includedCreditsMonthly = 0;
+      patch.currentCycleStart = null;
+      patch.currentCycleEnd = null;
+    }
+  }
+
+  if (!Object.keys(patch).length) {
+    return normalized;
+  }
+
+  const firestorePatch = { ...patch };
+  if (patch.currentCycleStart === null) firestorePatch.currentCycleStart = null;
+  if (patch.currentCycleEnd === null) firestorePatch.currentCycleEnd = null;
+  await userRef.set(firestorePatch, { merge: true });
+
+  return normalizeBillingProfile({
+    ...normalized,
+    ...patch,
+  });
+}
+
+async function consumeCreditsForUsage({ userRef, profile, usage, event }) {
+  const normalized = normalizeBillingProfile(profile);
+  const charge = calculateCreditCharge(usage);
+
+  if (charge.totalCredits <= 0) {
+    return {
+      charge,
+      sourceBreakdown: { trial: 0, included: 0, wallet: 0 },
+      remaining: getStoredCreditBalances(normalized),
+    };
+  }
+
+  const entitlement = hasEntitlementWindow(normalized);
+  if (!entitlement.hasEntitlement) {
+    throw new HttpsError('failed-precondition', 'Start an AI plan or trial before using OCR or drafting.');
+  }
+
+  const balances = getStoredCreditBalances(normalized);
+  if (balances.trialCreditsRemaining + balances.includedCreditsRemaining + balances.walletCreditsRemaining < charge.totalCredits) {
+    throw new HttpsError('failed-precondition', 'You do not have enough AI credits left. Please top up or renew your plan.');
+  }
+
+  const sourceBreakdown = { trial: 0, included: 0, wallet: 0 };
+  let remaining = charge.totalCredits;
+
+  const nextBalances = { ...balances };
+  const applyBucket = (key) => {
+    if (remaining <= 0) return;
+    const consumed = Math.min(nextBalances[key], remaining);
+    nextBalances[key] -= consumed;
+    remaining -= consumed;
+    if (key === 'trialCreditsRemaining') sourceBreakdown.trial += consumed;
+    if (key === 'includedCreditsRemaining') sourceBreakdown.included += consumed;
+    if (key === 'walletCreditsRemaining') sourceBreakdown.wallet += consumed;
+  };
+
+  applyBucket('trialCreditsRemaining');
+  applyBucket('includedCreditsRemaining');
+  applyBucket('walletCreditsRemaining');
+
+  const patch = {
+    trialCreditsRemaining: nextBalances.trialCreditsRemaining,
+    includedCreditsRemaining: nextBalances.includedCreditsRemaining,
+    walletCreditsRemaining: nextBalances.walletCreditsRemaining,
+    trialStatus:
+      normalized.trialStatus === TRIAL_STATUS.ACTIVE && nextBalances.trialCreditsRemaining === 0
+        ? TRIAL_STATUS.CONSUMED
+        : normalized.trialStatus,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await userRef.set(patch, { merge: true });
+  await recordUsageEvent(userRef.id, {
+    ...event,
+    input_tokens: usage.inputTokens || 0,
+    output_tokens: usage.outputTokens || 0,
+    ocr_units: usage.ocrUnits || 0,
+    credits_consumed: charge.totalCredits,
+    credit_breakdown: sourceBreakdown,
+  });
+
+  return {
+    charge,
+    sourceBreakdown,
+    remaining: nextBalances,
+  };
 }
 
 function isAdvocateDraftReady(profile = {}) {
@@ -59,22 +337,25 @@ async function requireAdvocate(request) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
 
-  const userSnap = await db.collection('users').doc(request.auth.uid).get();
+  const userRef = db.collection('users').doc(request.auth.uid);
+  const userSnap = await userRef.get();
   if (!userSnap.exists || userSnap.data()?.role !== 'advocate') {
     throw new HttpsError('permission-denied', 'Only advocates can use drafting tools.');
   }
 
-  if (!userSnap.data()?.premiumActive) {
-    throw new HttpsError('failed-precondition', 'AI drafting is available only on the premium plan.');
+  const refreshedProfile = await refreshBillingState(userRef, userSnap.data());
+  if (!buildBillingSummary(refreshedProfile).canUseAiNow) {
+    throw new HttpsError('failed-precondition', 'AI drafting is available only with active AI credits. Start a trial, subscribe, or top up.');
   }
 
-  if (!isAdvocateDraftReady(userSnap.data())) {
+  if (!isAdvocateDraftReady(refreshedProfile)) {
     throw new HttpsError('failed-precondition', 'Complete your advocate profile before starting AI drafting.');
   }
 
   return {
     uid: request.auth.uid,
-    profile: userSnap.data(),
+    profile: refreshedProfile,
+    userRef,
   };
 }
 
@@ -83,15 +364,27 @@ async function requireSignedInUser(request) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
 
-  const userSnap = await db.collection('users').doc(request.auth.uid).get();
+  const userRef = db.collection('users').doc(request.auth.uid);
+  const userSnap = await userRef.get();
   if (!userSnap.exists) {
     throw new HttpsError('not-found', 'User profile not found.');
   }
 
+  const refreshedProfile = await refreshBillingState(userRef, userSnap.data());
+
   return {
     uid: request.auth.uid,
-    profile: userSnap.data(),
+    profile: refreshedProfile,
+    userRef,
   };
+}
+
+async function requireAdvocateRoleOnly(request) {
+  const user = await requireSignedInUser(request);
+  if (user.profile.role !== 'advocate') {
+    throw new HttpsError('permission-denied', 'Only advocates can access this action.');
+  }
+  return user;
 }
 
 async function requireAdminHttp(request, response) {
@@ -108,32 +401,49 @@ async function requireAdminHttp(request, response) {
   return user;
 }
 
-async function activatePremiumForUser({ uid, profile, data }) {
+async function subscribeAiPlusForUser({ uid, profile, data }) {
   if (profile.role !== 'advocate') {
     throw new HttpsError('permission-denied', 'Only advocates can activate the premium plan.');
   }
 
-  const billingAmountInr = Number(data?.billingAmountInr || 200);
+  const billingAmountInr = Number(data?.billingAmountInr || AI_PLUS_MONTHLY_PRICE_INR);
   const activatedAt = admin.firestore.Timestamp.now();
-  const renewalDate = admin.firestore.Timestamp.fromDate(
+  const cycleEnd = admin.firestore.Timestamp.fromDate(
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   );
+  const cycleStart = activatedAt;
 
   await db.collection('users').doc(uid).update({
-    subscriptionPlan: 'premium_monthly',
-    premiumStatus: 'active',
-    premiumActive: true,
+    planTier: PLAN_TIERS.AI_PLUS,
+    planStatus: PLAN_STATUS.ACTIVE,
+    subscriptionPlan: 'ai_plus_monthly',
+    trialStatus: profile.trialStatus || TRIAL_STATUS.UNUSED,
+    includedCreditsMonthly: AI_PLUS_INCLUDED_CREDITS,
+    includedCreditsRemaining: AI_PLUS_INCLUDED_CREDITS,
+    autoRenew: true,
+    currentCycleStart: cycleStart,
+    currentCycleEnd: cycleEnd,
     premiumSource: data?.source || 'dummy_checkout',
     premiumBillingAmountInr: billingAmountInr,
     premiumActivatedAt: activatedAt,
-    premiumRenewalDate: renewalDate,
+    premiumRenewalDate: cycleEnd,
+    premiumStatus: 'active',
+    premiumActive: true,
     updatedAt: new Date().toISOString(),
   });
 
+  await recordBillingEvent(uid, {
+    type: 'subscription_started',
+    amountInr: billingAmountInr,
+    credits: AI_PLUS_INCLUDED_CREDITS,
+  });
+
   return {
+    planTier: PLAN_TIERS.AI_PLUS,
     premiumActive: true,
-    subscriptionPlan: 'premium_monthly',
+    subscriptionPlan: 'ai_plus_monthly',
     billingAmountInr,
+    includedCreditsMonthly: AI_PLUS_INCLUDED_CREDITS,
   };
 }
 
@@ -175,15 +485,19 @@ async function getHttpUser(request, response) {
   }
 
   const decodedToken = await admin.auth().verifyIdToken(match[1]);
-  const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+  const userRef = db.collection('users').doc(decodedToken.uid);
+  const userSnap = await userRef.get();
   if (!userSnap.exists) {
     response.status(404).json({ error: 'User profile not found.' });
     return null;
   }
 
+  const refreshedProfile = await refreshBillingState(userRef, userSnap.data());
+
   return {
     uid: decodedToken.uid,
-    profile: userSnap.data(),
+    profile: refreshedProfile,
+    userRef,
   };
 }
 
@@ -721,6 +1035,51 @@ async function seedIsolationDataForAdvocate(blueprint) {
   };
 }
 
+async function getUsageSummaryForAdvocate(advocateId, profile = {}) {
+  const normalized = normalizeBillingProfile(profile);
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const usageSnapshot = await db
+    .collection('usage_events')
+    .where('advocate_id', '==', advocateId)
+    .get();
+
+  const allUsageItems = usageSnapshot.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .sort((a, b) => (timestampToDate(b.created_at)?.getTime() || 0) - (timestampToDate(a.created_at)?.getTime() || 0))
+    .slice(0, 25);
+  const monthlyUsage = allUsageItems.filter((item) => {
+    const createdAt = timestampToDate(item.created_at);
+    return createdAt && createdAt >= monthStart;
+  });
+
+  return {
+    ...buildBillingSummary(normalized),
+    pricing: {
+      aiTrialCredits: AI_TRIAL_CREDITS,
+      aiTrialDays: AI_TRIAL_VALIDITY_DAYS,
+      aiPlusMonthlyPriceInr: AI_PLUS_MONTHLY_PRICE_INR,
+      aiPlusIncludedCredits: AI_PLUS_INCLUDED_CREDITS,
+      topupPacks: Object.values(TOPUP_PACKS),
+      creditRules: CREDIT_RULES,
+    },
+    monthUsage: summarizeUsageLedger(monthlyUsage),
+    recentUsage: allUsageItems.map((item) => ({
+      id: item.id,
+      feature: item.feature || '',
+      caseId: item.case_id || '',
+      clientId: item.client_id || '',
+      inputTokens: item.input_tokens || 0,
+      outputTokens: item.output_tokens || 0,
+      ocrUnits: item.ocr_units || 0,
+      creditsConsumed: item.credits_consumed || 0,
+      createdAt: formatTimestamp(item.created_at),
+    })),
+  };
+}
+
 async function getOwnedSession(sessionId, advocateId) {
   const sessionSnap = await db.collection('drafting_sessions').doc(sessionId).get();
   if (!sessionSnap.exists) {
@@ -1138,14 +1497,17 @@ async function extractSourceText(source) {
       reviewedText: text,
       extractionMethod: 'native_text',
       usedOcr: false,
+      ocrUnits: 0,
     };
   }
 
   if (mimeType === 'application/pdf' || source.name?.toLowerCase().endsWith('.pdf')) {
     let nativeText = '';
+    let pageCount = 1;
     try {
       const parsed = await pdfParse(buffer);
       nativeText = cleanExtractedText(parsed.text || '');
+      pageCount = parsed.numpages || pageCount;
     } catch (error) {
       nativeText = '';
     }
@@ -1156,6 +1518,7 @@ async function extractSourceText(source) {
         reviewedText: nativeText,
         extractionMethod: 'native_text',
         usedOcr: false,
+        ocrUnits: 0,
       };
     }
 
@@ -1169,6 +1532,7 @@ async function extractSourceText(source) {
       reviewedText: ocrText,
       extractionMethod: 'vision_ocr',
       usedOcr: true,
+      ocrUnits: pageCount,
     };
   }
 
@@ -1183,6 +1547,7 @@ async function extractSourceText(source) {
       reviewedText: ocrText,
       extractionMethod: 'vision_ocr',
       usedOcr: true,
+      ocrUnits: 1,
     };
   }
 
@@ -1264,9 +1629,12 @@ async function extractAadhaarDetailsFromSource(source) {
   const extraction = await extractSourceText(source);
   const parsed = parseAadhaarDetailsFromText(extraction.reviewedText || extraction.rawText || '');
   let aiMapped = null;
+  let aiUsage = { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
 
   try {
-    aiMapped = await mapAadhaarDetailsWithVertex(extraction.reviewedText || extraction.rawText || '');
+    const mapped = await mapAadhaarDetailsWithVertex(extraction.reviewedText || extraction.rawText || '');
+    aiMapped = mapped;
+    aiUsage = mapped.usage || aiUsage;
   } catch (error) {
     aiMapped = null;
   }
@@ -1288,6 +1656,8 @@ async function extractAadhaarDetailsFromSource(source) {
     success: Boolean(extracted.aadhaarName || extracted.aadhaarNumber || extracted.address),
     extractionMethod: extraction.extractionMethod,
     usedOcr: extraction.usedOcr,
+    ocrUnits: extraction.ocrUnits || 0,
+    aiUsage,
   };
 }
 
@@ -1370,6 +1740,39 @@ function buildPrompt({ session, caseRecord, sources }) {
   ].join('\n');
 }
 
+function estimatePromptTokensFromText(text = '') {
+  return Math.ceil(String(text || '').length / 4);
+}
+
+function estimateDraftGenerationUsage({ session, caseRecord, sources }) {
+  const prompt = buildPrompt({ session, caseRecord, sources });
+  const inputTokens = estimatePromptTokensFromText(prompt);
+  const outputTokens = 2500;
+  const charge = calculateCreditCharge({ inputTokens, outputTokens, ocrUnits: 0 });
+  return {
+    promptLength: prompt.length,
+    inputTokens,
+    outputTokens,
+    estimatedCredits: charge.totalCredits,
+    charge,
+  };
+}
+
+function summarizeUsageLedger(items = []) {
+  return items.reduce((summary, item) => {
+    summary.inputTokens += Number(item.input_tokens) || 0;
+    summary.outputTokens += Number(item.output_tokens) || 0;
+    summary.ocrUnits += Number(item.ocr_units) || 0;
+    summary.creditsConsumed += Number(item.credits_consumed) || 0;
+    return summary;
+  }, {
+    inputTokens: 0,
+    outputTokens: 0,
+    ocrUnits: 0,
+    creditsConsumed: 0,
+  });
+}
+
 async function generateWithVertex(prompt) {
   const projectId = getProjectId();
   const location = getVertexLocation();
@@ -1424,6 +1827,11 @@ async function generateWithVertex(prompt) {
     text,
     model,
     location,
+    usage: {
+      promptTokenCount: payload.usageMetadata?.promptTokenCount || 0,
+      candidatesTokenCount: payload.usageMetadata?.candidatesTokenCount || 0,
+      totalTokenCount: payload.usageMetadata?.totalTokenCount || 0,
+    },
   };
 }
 
@@ -1469,6 +1877,7 @@ async function mapAadhaarDetailsWithVertex(ocrText) {
     gender: String(parsed.gender || '').trim(),
     address: String(parsed.address || '').trim(),
     warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map((item) => String(item).trim()).filter(Boolean) : [],
+    usage: result.usage,
   };
 }
 
@@ -1589,8 +1998,12 @@ exports.createDraftingSessionHttp = onRequest({ invoker: 'public' }, async (requ
     const user = await getHttpUser(request, response);
     if (!user) return;
     const advocate = { uid: user.uid, profile: user.profile };
-    if (advocate.profile.role !== 'advocate' || !advocate.profile.premiumActive) {
-      response.status(403).json({ error: 'AI drafting is available only on the premium plan.' });
+    if (advocate.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can use AI drafting.' });
+      return;
+    }
+    if (!buildBillingSummary(advocate.profile).canUseAiNow) {
+      response.status(412).json({ error: 'AI drafting is available only with active AI credits. Start a trial, subscribe, or top up.' });
       return;
     }
 
@@ -1695,8 +2108,12 @@ exports.registerDraftingSourceHttp = onRequest({ invoker: 'public' }, async (req
     const user = await getHttpUser(request, response);
     if (!user) return;
     const advocate = { uid: user.uid, profile: user.profile };
-    if (advocate.profile.role !== 'advocate' || !advocate.profile.premiumActive) {
-      response.status(403).json({ error: 'AI drafting is available only on the premium plan.' });
+    if (advocate.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can use AI drafting.' });
+      return;
+    }
+    if (!buildBillingSummary(advocate.profile).canUseAiNow) {
+      response.status(412).json({ error: 'AI drafting is available only with active AI credits. Start a trial, subscribe, or top up.' });
       return;
     }
 
@@ -1844,8 +2261,12 @@ exports.extractDraftingSourcesHttp = onRequest({ invoker: 'public' }, async (req
     const user = await getHttpUser(request, response);
     if (!user) return;
     const advocate = { uid: user.uid, profile: user.profile };
-    if (advocate.profile.role !== 'advocate' || !advocate.profile.premiumActive) {
-      response.status(403).json({ error: 'AI drafting is available only on the premium plan.' });
+    if (advocate.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can use AI drafting.' });
+      return;
+    }
+    if (!buildBillingSummary(advocate.profile).canUseAiNow) {
+      response.status(412).json({ error: 'AI drafting is available only with active AI credits. Start a trial, subscribe, or top up.' });
       return;
     }
 
@@ -1869,6 +2290,7 @@ exports.extractDraftingSourcesHttp = onRequest({ invoker: 'public' }, async (req
 
     let readyCount = 0;
     let ocrCount = 0;
+    let ocrUnits = 0;
     const results = [];
 
     for (const source of targets) {
@@ -1884,7 +2306,10 @@ exports.extractDraftingSourcesHttp = onRequest({ invoker: 'public' }, async (req
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
         });
         readyCount += 1;
-        if (extraction.usedOcr) ocrCount += 1;
+        if (extraction.usedOcr) {
+          ocrCount += 1;
+          ocrUnits += extraction.ocrUnits || 0;
+        }
         results.push({ sourceId: source.id, status: 'ready_for_review', extractionMethod: extraction.extractionMethod });
       } catch (error) {
         await source.ref.update({
@@ -1906,7 +2331,27 @@ exports.extractDraftingSourcesHttp = onRequest({ invoker: 'public' }, async (req
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    response.status(200).json({ results, readyCount, ocrCount });
+    const billing = await consumeCreditsForUsage({
+      userRef: user.userRef,
+      profile: advocate.profile,
+      usage: { ocrUnits },
+      event: {
+        feature: 'drafting_ocr',
+        case_id: session.case_number || '',
+        client_id: session.client_id || '',
+        session_id: session.id,
+      },
+    });
+
+    response.status(200).json({
+      results,
+      readyCount,
+      ocrCount,
+      ocrUnits,
+      creditsUsed: billing.charge.totalCredits,
+      creditBreakdown: billing.sourceBreakdown,
+      remainingCredits: billing.remaining,
+    });
   } catch (error) {
     response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to extract drafting sources.' });
   }
@@ -1918,6 +2363,10 @@ exports.extractAadhaarDetailsHttp = onRequest({ invoker: 'public' }, async (requ
     if (!user) return;
     if (user.profile.role !== 'advocate') {
       response.status(403).json({ error: 'Only advocates can read Aadhaar details.' });
+      return;
+    }
+    if (!buildBillingSummary(user.profile).canUseAiNow) {
+      response.status(412).json({ error: 'Aadhaar OCR is available only with active AI credits. Start a trial, subscribe, or top up.' });
       return;
     }
 
@@ -1934,7 +2383,25 @@ exports.extractAadhaarDetailsHttp = onRequest({ invoker: 'public' }, async (requ
     };
 
     const result = await extractAadhaarDetailsFromSource(source);
-    response.status(200).json(result);
+    const billing = await consumeCreditsForUsage({
+      userRef: user.userRef,
+      profile: user.profile,
+      usage: {
+        ocrUnits: result.ocrUnits || 0,
+        inputTokens: result.aiUsage?.promptTokenCount || 0,
+        outputTokens: result.aiUsage?.candidatesTokenCount || 0,
+      },
+      event: {
+        feature: 'aadhaar_ocr',
+        client_id: '',
+      },
+    });
+    response.status(200).json({
+      ...result,
+      creditsUsed: billing.charge.totalCredits,
+      creditBreakdown: billing.sourceBreakdown,
+      remainingCredits: billing.remaining,
+    });
   } catch (error) {
     response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to read Aadhaar details.' });
   }
@@ -2009,8 +2476,12 @@ exports.generateDraftingOutputHttp = onRequest({ invoker: 'public' }, async (req
     const user = await getHttpUser(request, response);
     if (!user) return;
     const advocate = { uid: user.uid, profile: user.profile };
-    if (advocate.profile.role !== 'advocate' || !advocate.profile.premiumActive) {
-      response.status(403).json({ error: 'AI drafting is available only on the premium plan.' });
+    if (advocate.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can use AI drafting.' });
+      return;
+    }
+    if (!buildBillingSummary(advocate.profile).canUseAiNow) {
+      response.status(412).json({ error: 'AI drafting is available only with active AI credits. Start a trial, subscribe, or top up.' });
       return;
     }
 
@@ -2033,6 +2504,11 @@ exports.generateDraftingOutputHttp = onRequest({ invoker: 'public' }, async (req
     });
 
     const prompt = buildPrompt({ session, caseRecord, sources });
+    const estimate = estimateDraftGenerationUsage({ session, caseRecord, sources });
+    if (!hasUsableAiBalance(advocate.profile) || buildBillingSummary(advocate.profile).hasEntitlement === false) {
+      response.status(412).json({ error: 'AI drafting is available only with active AI credits. Start a trial, subscribe, or top up.' });
+      return;
+    }
     const generation = await generateWithVertex(prompt);
     const validation = buildFactValidationFields({ session, draftText: generation.text });
     const outputId = await upsertDraftingOutput(session.id, advocate.uid, {
@@ -2055,14 +2531,37 @@ exports.generateDraftingOutputHttp = onRequest({ invoker: 'public' }, async (req
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    response.status(200).json({ outputId, generatedText: generation.text, requiresValidation: validation.requiresValidation });
+    const billing = await consumeCreditsForUsage({
+      userRef: user.userRef,
+      profile: advocate.profile,
+      usage: {
+        inputTokens: generation.usage?.promptTokenCount || estimate.inputTokens,
+        outputTokens: generation.usage?.candidatesTokenCount || estimate.outputTokens,
+      },
+      event: {
+        feature: 'draft_generation',
+        case_id: session.case_number || '',
+        client_id: session.client_id || '',
+        session_id: session.id,
+      },
+    });
+
+    response.status(200).json({
+      outputId,
+      generatedText: generation.text,
+      requiresValidation: validation.requiresValidation,
+      creditsUsed: billing.charge.totalCredits,
+      creditBreakdown: billing.sourceBreakdown,
+      remainingCredits: billing.remaining,
+      usage: generation.usage,
+    });
   } catch (error) {
     response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to generate drafting output.' });
   }
 });
 
 exports.exportDraftingDocx = onCall(async (request) => {
-  const advocate = await requireAdvocate(request);
+  const advocate = await requireAdvocateRoleOnly(request);
   const data = request.data || {};
   const session = await getOwnedSession(data.sessionId, advocate.uid);
   const outputSnap = await db.collection('drafting_outputs').doc(data.outputId).get();
@@ -2107,8 +2606,8 @@ exports.exportDraftingDocxHttp = onRequest({ invoker: 'public' }, async (request
     const user = await getHttpUser(request, response);
     if (!user) return;
     const advocate = { uid: user.uid, profile: user.profile };
-    if (advocate.profile.role !== 'advocate' || !advocate.profile.premiumActive) {
-      response.status(403).json({ error: 'AI drafting is available only on the premium plan.' });
+    if (advocate.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can export drafts.' });
       return;
     }
 
@@ -2152,7 +2651,7 @@ exports.exportDraftingDocxHttp = onRequest({ invoker: 'public' }, async (request
 });
 
 exports.publishDraftingOutput = onCall(async (request) => {
-  const advocate = await requireAdvocate(request);
+  const advocate = await requireAdvocateRoleOnly(request);
   const data = request.data || {};
   const session = await getOwnedSession(data.sessionId, advocate.uid);
   const caseRecord = await ensureSessionCaseForPublish(session, advocate);
@@ -2209,8 +2708,8 @@ exports.publishDraftingOutputHttp = onRequest({ invoker: 'public' }, async (requ
     const user = await getHttpUser(request, response);
     if (!user) return;
     const advocate = { uid: user.uid, profile: user.profile };
-    if (advocate.profile.role !== 'advocate' || !advocate.profile.premiumActive) {
-      response.status(403).json({ error: 'AI drafting is available only on the premium plan.' });
+    if (advocate.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can publish drafts.' });
       return;
     }
 
@@ -2270,7 +2769,7 @@ exports.publishDraftingOutputHttp = onRequest({ invoker: 'public' }, async (requ
 
 exports.activatePremiumSubscription = onCall(async (request) => {
   const user = await requireSignedInUser(request);
-  return activatePremiumForUser({
+  return subscribeAiPlusForUser({
     uid: user.uid,
     profile: user.profile,
     data: request.data,
@@ -2305,9 +2804,9 @@ exports.activatePremiumSubscriptionHttp = onRequest(async (request, response) =>
       return;
     }
 
-    const result = await activatePremiumForUser({
+    const result = await subscribeAiPlusForUser({
       uid: decodedToken.uid,
-      profile: userSnap.data(),
+      profile: await refreshBillingState(db.collection('users').doc(decodedToken.uid), userSnap.data()),
       data: request.body || {},
     });
 
@@ -2318,6 +2817,229 @@ exports.activatePremiumSubscriptionHttp = onRequest(async (request, response) =>
       ? (error.code === 'permission-denied' ? 403 : error.code === 'unauthenticated' ? 401 : 400)
       : 500;
     response.status(status).json({ error: message });
+  }
+});
+
+exports.activateAiTrialHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const user = await getHttpUser(request, response);
+    if (!user) return;
+    if (user.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can start the AI trial.' });
+      return;
+    }
+
+    const profile = normalizeBillingProfile(user.profile);
+    if (profile.trialStatus !== TRIAL_STATUS.UNUSED) {
+      response.status(412).json({ error: 'Your AI trial has already been used.' });
+      return;
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + AI_TRIAL_VALIDITY_DAYS * 24 * 60 * 60 * 1000);
+    await user.userRef.set({
+      planTier: PLAN_TIERS.TRIAL,
+      planStatus: PLAN_STATUS.ACTIVE,
+      trialStatus: TRIAL_STATUS.ACTIVE,
+      trialCreditsRemaining: AI_TRIAL_CREDITS,
+      trialStartedAt: admin.firestore.Timestamp.fromDate(now),
+      trialExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      premiumActive: true,
+      premiumStatus: 'active',
+      subscriptionPlan: 'ai_trial',
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    await recordBillingEvent(user.uid, {
+      type: 'trial_activated',
+      amountInr: 0,
+      credits: AI_TRIAL_CREDITS,
+    });
+
+    const summary = await getUsageSummaryForAdvocate(user.uid, {
+      ...profile,
+      planTier: PLAN_TIERS.TRIAL,
+      planStatus: PLAN_STATUS.ACTIVE,
+      trialStatus: TRIAL_STATUS.ACTIVE,
+      trialCreditsRemaining: AI_TRIAL_CREDITS,
+      trialStartedAt: admin.firestore.Timestamp.fromDate(now),
+      trialExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      premiumActive: true,
+      premiumStatus: 'active',
+      subscriptionPlan: 'ai_trial',
+    });
+
+    response.status(200).json(summary);
+  } catch (error) {
+    response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to activate the AI trial.' });
+  }
+});
+
+exports.subscribeAiPlusHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const user = await getHttpUser(request, response);
+    if (!user) return;
+    const result = await subscribeAiPlusForUser({
+      uid: user.uid,
+      profile: user.profile,
+      data: request.body || {},
+    });
+    const summary = await getUsageSummaryForAdvocate(user.uid, {
+      ...user.profile,
+      ...result,
+      planTier: PLAN_TIERS.AI_PLUS,
+      planStatus: PLAN_STATUS.ACTIVE,
+      includedCreditsMonthly: AI_PLUS_INCLUDED_CREDITS,
+      includedCreditsRemaining: AI_PLUS_INCLUDED_CREDITS,
+      autoRenew: true,
+      subscriptionPlan: 'ai_plus_monthly',
+      premiumActive: true,
+      premiumStatus: 'active',
+    });
+    response.status(200).json(summary);
+  } catch (error) {
+    response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to activate AI Plus.' });
+  }
+});
+
+exports.cancelAiPlusRenewalHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const user = await getHttpUser(request, response);
+    if (!user) return;
+    if (user.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can manage subscription settings.' });
+      return;
+    }
+
+    await user.userRef.set({
+      autoRenew: false,
+      planStatus: PLAN_STATUS.CANCELLED,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    await recordBillingEvent(user.uid, {
+      type: 'subscription_cancelled',
+      amountInr: 0,
+      credits: 0,
+    });
+
+    const summary = await getUsageSummaryForAdvocate(user.uid, {
+      ...user.profile,
+      autoRenew: false,
+      planStatus: PLAN_STATUS.CANCELLED,
+    });
+    response.status(200).json(summary);
+  } catch (error) {
+    response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to update renewal settings.' });
+  }
+});
+
+exports.createWalletTopupHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const user = await getHttpUser(request, response);
+    if (!user) return;
+    if (user.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can top up AI credits.' });
+      return;
+    }
+
+    const packId = request.body?.packId || '';
+    const pack = TOPUP_PACKS[packId];
+    if (!pack) {
+      response.status(400).json({ error: 'Invalid top-up pack selected.' });
+      return;
+    }
+
+    const orderRef = await db.collection('topup_orders').add({
+      advocate_id: user.uid,
+      pack_id: pack.id,
+      amount_inr: pack.amountInr,
+      credits: pack.credits,
+      status: 'success',
+      source: 'mock_checkout',
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await user.userRef.set({
+      walletCreditsRemaining: (Number(user.profile.walletCreditsRemaining) || 0) + pack.credits,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    await recordBillingEvent(user.uid, {
+      type: 'wallet_topup',
+      amountInr: pack.amountInr,
+      credits: pack.credits,
+      orderId: orderRef.id,
+    });
+
+    const summary = await getUsageSummaryForAdvocate(user.uid, {
+      ...user.profile,
+      walletCreditsRemaining: (Number(user.profile.walletCreditsRemaining) || 0) + pack.credits,
+    });
+    response.status(200).json(summary);
+  } catch (error) {
+    response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to top up wallet credits.' });
+  }
+});
+
+exports.getAiAccessSummaryHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const user = await getHttpUser(request, response);
+    if (!user) return;
+    if (user.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can view AI access summary.' });
+      return;
+    }
+
+    const summary = await getUsageSummaryForAdvocate(user.uid, user.profile);
+    response.status(200).json(summary);
+  } catch (error) {
+    response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to load AI access summary.' });
+  }
+});
+
+exports.estimateAiUsageHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const user = await getHttpUser(request, response);
+    if (!user) return;
+    if (user.profile.role !== 'advocate') {
+      response.status(403).json({ error: 'Only advocates can estimate AI usage.' });
+      return;
+    }
+
+    const data = request.body || {};
+    let estimate;
+
+    if (data.feature === 'draft_generation') {
+      const session = await getOwnedSession(data.sessionId, user.uid);
+      const sourcesSnapshot = await db.collection('drafting_sources').where('session_id', '==', session.id).get();
+      const sources = sourcesSnapshot.docs
+        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        .filter((source) => cleanExtractedText(source.reviewed_text || source.raw_extracted_text || '').length > 0);
+      const caseRecord = session.case_id ? await getOwnedCase(session.case_id, user.uid) : null;
+      estimate = estimateDraftGenerationUsage({ session, caseRecord, sources });
+    } else if (data.feature === 'aadhaar_ocr') {
+      const ocrUnits = 1;
+      const inputTokens = 1500;
+      const outputTokens = 300;
+      estimate = {
+        inputTokens,
+        outputTokens,
+        ocrUnits,
+        estimatedCredits: calculateCreditCharge({ inputTokens, outputTokens, ocrUnits }).totalCredits,
+      };
+    } else {
+      response.status(400).json({ error: 'Unsupported feature for usage estimate.' });
+      return;
+    }
+
+    response.status(200).json({
+      feature: data.feature,
+      ...estimate,
+      billing: buildBillingSummary(user.profile),
+    });
+  } catch (error) {
+    response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to estimate AI usage.' });
   }
 });
 

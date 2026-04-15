@@ -14,6 +14,8 @@ import {
 } from './AppIcons';
 import { auth } from '../firebase';
 import useCurrentUserProfile from '../utils/useCurrentUserProfile';
+import useAiAccessSummary from '../utils/useAiAccessSummary';
+import { canUseAiNow } from '../utils/billing';
 
 const defaultIcons = {
   '/dashboard': DashboardIcon,
@@ -30,7 +32,8 @@ const BottomNav = ({ items }) => {
   const [open, setOpen] = useState(false);
   const mobileMenuRef = useRef(null);
   const { profile } = useCurrentUserProfile();
-  const showPremiumBadge = profile?.role === 'advocate' && !profile?.premiumActive;
+  const { summary: aiSummary } = useAiAccessSummary();
+  const showPremiumBadge = profile?.role === 'advocate' && !canUseAiNow(aiSummary || profile || {});
 
   const navItems = useMemo(
     () =>
@@ -109,7 +112,7 @@ const BottomNav = ({ items }) => {
                     <span className="top-nav__label">
                       <span>{item.label}</span>
                       {showPremiumBadge && item.to === '/drafting' ? (
-                        <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
+                        <span className="premium-pill premium-pill--nav">{t('aiLockedShort')}</span>
                       ) : null}
                     </span>
                   </NavLink>
@@ -156,7 +159,7 @@ const BottomNav = ({ items }) => {
                 <span className="top-nav__label">
                   <span>{item.label}</span>
                   {showPremiumBadge && item.to === '/drafting' ? (
-                    <span className="premium-pill premium-pill--nav">{t('premiumShort')}</span>
+                    <span className="premium-pill premium-pill--nav">{t('aiLockedShort')}</span>
                   ) : null}
                 </span>
               </NavLink>

@@ -10,11 +10,14 @@ import { syncAdvocateClientAccess } from '../utils/clientAccessRecords';
 import { formatLifecycleDate, isHearingLifecycleStep } from '../utils/lifecycle';
 import { DraftingIcon } from './AppIcons';
 import useCurrentUserProfile from '../utils/useCurrentUserProfile';
+import useAiAccessSummary from '../utils/useAiAccessSummary';
+import { canUseAiNow, getAiCreditHeadline } from '../utils/billing';
 
 const Dashboard = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { profile } = useCurrentUserProfile();
+  const { summary: aiSummary } = useAiAccessSummary();
   const [hearings, setHearings] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [stats, setStats] = useState({
@@ -216,9 +219,9 @@ const Dashboard = () => {
           <div className="action-tile__header">
             <DraftingIcon className="app-icon" />
             <strong>{t('aiDraftingAssistant')}</strong>
-            {!profile?.premiumActive ? <span className="premium-pill premium-pill--inline">{t('premiumShort')}</span> : null}
+            {!canUseAiNow(aiSummary || profile || {}) ? <span className="premium-pill premium-pill--inline">{t('aiLockedShort')}</span> : null}
           </div>
-          <span>{t('dashboardDraftingCardSubtitle')}</span>
+          <span>{aiSummary ? getAiCreditHeadline(aiSummary) : t('dashboardDraftingCardSubtitle')}</span>
         </Link>
       </section>
       </>

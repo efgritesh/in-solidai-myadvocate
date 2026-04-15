@@ -20,6 +20,21 @@ export const GOOGLE_FORCE_PROFILE_SETUP_KEY = 'forceProfileSetupAfterGoogleSignu
 const PERSISTED_GOOGLE_ROLE_KEY = 'persistedGoogleRole';
 const PERSISTED_GOOGLE_FLOW_KEY = 'persistedGoogleFlow';
 const PERSISTED_GOOGLE_FORCE_PROFILE_SETUP_KEY = 'persistedForceProfileSetupAfterGoogleSignup';
+const defaultBillingState = {
+  planTier: 'core',
+  planStatus: 'inactive',
+  trialStatus: 'unused',
+  trialCreditsRemaining: 0,
+  includedCreditsMonthly: 0,
+  includedCreditsRemaining: 0,
+  walletCreditsRemaining: 0,
+  currentCycleStart: null,
+  currentCycleEnd: null,
+  autoRenew: false,
+  subscriptionPlan: 'core',
+  premiumStatus: 'inactive',
+  premiumActive: false,
+};
 
 export const getRouteForRole = (role) => roleRoutes[role] || '/dashboard';
 
@@ -68,9 +83,7 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
   const userRef = doc(db, 'users', user.uid);
   const userSnap = await getDoc(userRef);
   const preferredLanguage = extraData.preferredLanguage || getStoredLanguage();
-  const subscriptionPlan = extraData.subscriptionPlan || 'starter';
-  const premiumStatus = extraData.premiumStatus || 'inactive';
-  const premiumActive = extraData.premiumActive || false;
+  const billingState = { ...defaultBillingState, ...extraData };
 
   if (!userSnap.exists()) {
     const baseProfile = normalizeAdvocateProfile({
@@ -81,9 +94,7 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
       createdAt: new Date().toISOString(),
       profileComplete: role === 'admin',
       preferredLanguage,
-      subscriptionPlan,
-      premiumStatus,
-      premiumActive,
+      ...billingState,
       phone: extraData.phone || '',
       officeAddress: extraData.officeAddress || extraData.address || '',
       address: extraData.address || extraData.officeAddress || '',
@@ -101,9 +112,17 @@ export const ensureUserProfile = async (user, role = 'advocate', extraData = {})
     ...currentData,
     role: mergedRole,
     preferredLanguage: currentData.preferredLanguage || preferredLanguage,
-    subscriptionPlan: currentData.subscriptionPlan || subscriptionPlan,
-    premiumStatus: currentData.premiumStatus || premiumStatus,
-    premiumActive: typeof currentData.premiumActive === 'boolean' ? currentData.premiumActive : premiumActive,
+    planTier: currentData.planTier || billingState.planTier,
+    planStatus: currentData.planStatus || billingState.planStatus,
+    trialStatus: currentData.trialStatus || billingState.trialStatus,
+    trialCreditsRemaining: typeof currentData.trialCreditsRemaining === 'number' ? currentData.trialCreditsRemaining : billingState.trialCreditsRemaining,
+    includedCreditsMonthly: typeof currentData.includedCreditsMonthly === 'number' ? currentData.includedCreditsMonthly : billingState.includedCreditsMonthly,
+    includedCreditsRemaining: typeof currentData.includedCreditsRemaining === 'number' ? currentData.includedCreditsRemaining : billingState.includedCreditsRemaining,
+    walletCreditsRemaining: typeof currentData.walletCreditsRemaining === 'number' ? currentData.walletCreditsRemaining : billingState.walletCreditsRemaining,
+    autoRenew: typeof currentData.autoRenew === 'boolean' ? currentData.autoRenew : billingState.autoRenew,
+    subscriptionPlan: currentData.subscriptionPlan || billingState.subscriptionPlan,
+    premiumStatus: currentData.premiumStatus || billingState.premiumStatus,
+    premiumActive: typeof currentData.premiumActive === 'boolean' ? currentData.premiumActive : billingState.premiumActive,
   }, user);
 
   if (

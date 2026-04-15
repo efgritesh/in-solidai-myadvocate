@@ -51,7 +51,7 @@ function App() {
         <Route
           path="/drafting"
           element={
-            <ProtectedRoute allowedRoles={['advocate']} requirePremium premiumFallback="/premium?feature=drafting">
+            <ProtectedRoute allowedRoles={['advocate']}>
               <DraftingAssistant />
             </ProtectedRoute>
           }

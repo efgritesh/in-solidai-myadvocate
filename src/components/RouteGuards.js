@@ -10,6 +10,7 @@ import {
   resolveGoogleProfileFromStoredState,
   shouldForceGoogleProfileSetup,
 } from '../utils/auth';
+import { canUseAiNow } from '../utils/billing';
 import LoadingState from './LoadingState';
 
 const useAuthSession = () => {
@@ -184,7 +185,7 @@ export const ProtectedRoute = ({
     return <Navigate to={getRouteForRole(profile.role)} replace />;
   }
 
-  if (requirePremium && !profile.premiumActive) {
+  if (requirePremium && !canUseAiNow(profile)) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
     const separator = premiumFallback.includes('?') ? '&' : '?';
     return <Navigate to={`${premiumFallback}${separator}next=${next}`} replace />;

@@ -9,6 +9,7 @@ import LoadingState from './LoadingState';
 import { ArrowRightIcon, CasesIcon, CopyIcon, DeleteIcon, DocumentsIcon, InfoIcon, PlusIcon } from './AppIcons';
 import {
   createDraftingSession,
+  estimateDraftingUsage,
   exportDraftingDocx,
   extractDraftingSources,
   generateDraftingOutput,
@@ -23,6 +24,8 @@ import {
   isClientDraftReady,
   relationLabelOptions,
 } from '../utils/draftingProfiles';
+import useAiAccessSummary from '../utils/useAiAccessSummary';
+import { canUseAiNow, getAiCreditHeadline } from '../utils/billing';
 
 const emptyDraftForm = {
   clientId: '',
@@ -144,6 +147,9 @@ const DraftingAssistant = () => {
   const [validationFields, setValidationFields] = useState([]);
   const [progress, setProgress] = useState(createProgressState());
   const [aadhaarStatus, setAadhaarStatus] = useState(emptyAadhaarStatus);
+  const [usageEstimate, setUsageEstimate] = useState(null);
+  const [usageSummaryNote, setUsageSummaryNote] = useState('');
+  const { summary: aiSummary, refresh: refreshAiSummary } = useAiAccessSummary();
 
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === sessionParam) || null,
@@ -175,6 +181,7 @@ const DraftingAssistant = () => {
   const shouldShowNewClientFields = newClientIntakeMode === 'manual' || aadhaarStatus.success || Boolean(aadhaarStatus.error) || Boolean(aadhaarStatus.rawText);
   const draftingOverlayLabel = aadhaarStatus.loading ? t('aadhaarProcessingTitle') : (progress.stageLabel || t('draftingProcessingTitle'));
   const showProcessingOverlay = aadhaarStatus.loading || working;
+  const aiLocked = !canUseAiNow(aiSummary || {});
 
   const availableCases = useMemo(() => {
     if (!draftForm.clientId) return cases;
@@ -259,6 +266,31 @@ const DraftingAssistant = () => {
   useEffect(() => {
     loadWorkspace();
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    if (view !== 'prepare' || !currentSession?.id) {
+      setUsageEstimate(null);
+      return;
+    }
+
+    let active = true;
+
+    estimateDraftingUsage({ feature: 'draft_generation', sessionId: currentSession.id })
+      .then((result) => {
+        if (active) {
+          setUsageEstimate(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setUsageEstimate(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentSession?.id, view]);
 
   const buildSessionPatch = useCallback(() => {
     const client = clients.find((item) => item.id === draftForm.clientId) || null;
@@ -411,9 +443,14 @@ const DraftingAssistant = () => {
       setStatusMessage(t('draftingInstructionsRequired'));
       return;
     }
+    if (aiLocked) {
+      navigate('/premium?feature=drafting');
+      return;
+    }
 
     setWorking(true);
     setStatusMessage(t('draftingPreparing'));
+    setUsageSummaryNote('');
     updateProgressStage('session', 1, t('draftingProgressSessionDetail'));
     try {
       const sessionId = await ensureSession();
@@ -439,7 +476,14 @@ const DraftingAssistant = () => {
 
       if (sourceIds.length) {
         updateProgressStage('extract', 3, t('draftingProgressExtractDetail', { count: sourceIds.length }));
-        await extractDraftingSources({ sessionId, sourceIds });
+        const extraction = await extractDraftingSources({ sessionId, sourceIds });
+        if (extraction?.creditsUsed) {
+          setUsageSummaryNote(t('draftingCreditsAfterRun', {
+            credits: extraction.creditsUsed,
+            remaining: extraction.remainingCredits?.totalCredits || 0,
+          }));
+          await refreshAiSummary();
+        }
       }
       const { nextSources, nextOutput } = await fetchArtifacts(sessionId, advocateId);
       setDraftSources(nextSources);
@@ -456,6 +500,9 @@ const DraftingAssistant = () => {
       });
       setStatusMessage(t('draftingPromptReviewReady'));
     } catch (error) {
+      if (/trial|subscribe|top up|credits/i.test(error.message || '')) {
+        navigate('/premium?feature=drafting');
+      }
       setStatusMessage(error.message);
       setProgress((current) => createProgressState({
         ...current,
@@ -662,8 +709,13 @@ const DraftingAssistant = () => {
 
   const handleGenerateFromReview = async () => {
     if (!currentSession?.id) return;
+    if (aiLocked) {
+      navigate('/premium?feature=drafting');
+      return;
+    }
     setWorking(true);
     setStatusMessage(t('draftingPreparingPrompt'));
+    setUsageSummaryNote('');
     updateProgressStage('generate', 4, t('draftingProgressGenerateDetail'));
 
     try {
@@ -688,6 +740,13 @@ const DraftingAssistant = () => {
       setDraftSources(nextSources);
       setOutput(nextOutput);
       setValidationFields(nextOutput?.fact_validation_fields || []);
+      if (generation?.creditsUsed) {
+        setUsageSummaryNote(t('draftingCreditsAfterRun', {
+          credits: generation.creditsUsed,
+          remaining: generation.remainingCredits?.totalCredits || 0,
+        }));
+        await refreshAiSummary();
+      }
       await loadWorkspace(currentSession.id);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
@@ -696,6 +755,9 @@ const DraftingAssistant = () => {
       });
       setProgress(createProgressState());
     } catch (error) {
+      if (/trial|subscribe|top up|credits/i.test(error.message || '')) {
+        navigate('/premium?feature=drafting');
+      }
       setStatusMessage(error.message);
       setProgress((current) => createProgressState({
         ...current,
@@ -780,6 +842,23 @@ const DraftingAssistant = () => {
             <p className="helper-text">{activeCase?.case_number || t('standaloneDraft')}</p>
             <p className="helper-text">{draftForm.instructions || t('draftingInstructionsRequired')}</p>
           </div>
+          <div className="record-card">
+            <strong>{t('aiAccessTitle')}</strong>
+            <p className="helper-text">{aiSummary ? getAiCreditHeadline(aiSummary) : t('draftingEstimateUnavailable')}</p>
+            {usageEstimate ? (
+              <p className="helper-text">
+                {t('draftingEstimatedCredits', {
+                  credits: usageEstimate.estimatedCredits || 0,
+                  input: usageEstimate.inputTokens || 0,
+                  output: usageEstimate.outputTokens || 0,
+                  ocr: usageEstimate.ocrUnits || 0,
+                })}
+              </p>
+            ) : (
+              <p className="helper-text">{t('draftingEstimateUnavailable')}</p>
+            )}
+            {usageSummaryNote ? <p className="inline-feedback">{usageSummaryNote}</p> : null}
+          </div>
           <div className="record-list">
             {draftSources.length ? draftSources.map((source) => (
               <article key={source.id} className="record-card">
@@ -817,9 +896,24 @@ const DraftingAssistant = () => {
               {t('ocrFailureManualFallbackHint')}
             </p>
           ) : null}
+          {aiLocked ? (
+            <p className="inline-feedback inline-feedback--error">
+              {t('aiAccessLockedBody')}{' '}
+              <button
+                type="button"
+                className="text-link text-link--button"
+                onClick={() => navigate('/premium?feature=drafting')}
+              >
+                {t('manageAiAccess')}
+              </button>
+            </p>
+          ) : null}
           <div className="button-row top-space">
-            <button type="button" className="button" onClick={handleGenerateFromReview} disabled={working}>
+            <button type="button" className="button" onClick={handleGenerateFromReview} disabled={working || aiLocked}>
               {working ? t('generatingDraft') : t('sendToAiGenerateDraft')}
+            </button>
+            <button type="button" className="button button--secondary" onClick={() => navigate('/premium?feature=drafting')}>
+              {t('manageAiAccess')}
             </button>
           </div>
           {(working || progress.active) ? (
@@ -1142,6 +1236,13 @@ const DraftingAssistant = () => {
         </div>
         <div className="button-row top-space">
           <button type="button" className="button" onClick={startDrafting} disabled={working}>{working ? t('generatingDraft') : t('generateDraft')}</button>
+          <button type="button" className="button button--secondary" onClick={() => navigate('/premium?feature=drafting')}>
+            {t('manageAiAccess')}
+          </button>
+        </div>
+        <div className="workflow-defaults top-space">
+          <span>{aiSummary ? getAiCreditHeadline(aiSummary) : t('draftingEstimateUnavailable')}</span>
+          {usageSummaryNote ? <span>{usageSummaryNote}</span> : null}
         </div>
         {(working || progress.active) ? (
           <div className="record-card top-space">

@@ -48,6 +48,7 @@ export const extractDraftingSources = async (payload) => postDraftingAction('ext
 export const generateDraftingOutput = async (payload) => postDraftingAction('generateDraftingOutputHttp', payload);
 export const exportDraftingDocx = async (payload) => postDraftingAction('exportDraftingDocxHttp', payload);
 export const publishDraftingOutput = async (payload) => postDraftingAction('publishDraftingOutputHttp', payload);
+export const estimateDraftingUsage = async (payload) => postDraftingAction('estimateAiUsageHttp', payload);
 
 export const uploadDraftingFile = async ({ advocateId, sessionId, file }) => {
   const storagePath = `drafting/${advocateId}/sessions/${sessionId}/sources/${Date.now()}-${file.name}`;

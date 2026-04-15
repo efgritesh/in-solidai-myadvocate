@@ -121,6 +121,18 @@ service cloud.firestore {
       allow create: if ownsAdvocateRecord(request.resource.data.advocate_id);
     }
 
+    match /billing_events/{eventId} {
+      allow read: if ownsAdvocateRecord(resource.data.advocate_id);
+    }
+
+    match /usage_events/{eventId} {
+      allow read: if ownsAdvocateRecord(resource.data.advocate_id);
+    }
+
+    match /topup_orders/{orderId} {
+      allow read: if ownsAdvocateRecord(resource.data.advocate_id);
+    }
+
     match /client_access/{token} {
       allow read: if accessOpen(token) || ownsAccessToken(token);
       allow update, delete: if ownsAccessToken(token);
