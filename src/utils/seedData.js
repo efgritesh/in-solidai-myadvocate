@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { createCaseAccessToken } from './caseAccess';
 import {
@@ -272,6 +272,29 @@ const adminAlerts = (adminId) => [
   },
 ];
 
+const legacyDemoClientNames = ['Aarav Mehta', 'Neha Sharma', 'Rohan Iyer'];
+const legacyDemoCaseNumbers = ['DEL-CIV-204/2026', 'BLR-FAM-118/2026', 'MUM-COM-077/2026'];
+
+const deleteDocs = async (docs = []) => {
+  await Promise.all(docs.map((item) => deleteDoc(item.ref)));
+};
+
+const clearClientAccessToken = async (token) => {
+  if (!token) return;
+
+  const paymentDocs = await getDocs(collection(db, 'client_access', token, 'payments'));
+  const documentDocs = await getDocs(collection(db, 'client_access', token, 'documents'));
+  const commentDocs = await getDocs(collection(db, 'client_access', token, 'comments'));
+
+  await Promise.all([
+    deleteDocs(paymentDocs.docs),
+    deleteDocs(documentDocs.docs),
+    deleteDocs(commentDocs.docs),
+  ]);
+
+  await deleteDoc(doc(db, 'client_access', token));
+};
+
 const seedCollectionIfEmpty = async (collectionName, fieldName, fieldValue, records) => {
   const collectionRef = collection(db, collectionName);
   const snapshot = await getDocs(query(collectionRef, where(fieldName, '==', fieldValue)));
@@ -326,6 +349,49 @@ const seedKey = `seeded_${advocateId}_advocate_v8`;
   await syncAdvocateClientAccess(advocateId);
 
   localStorage.setItem(seedKey, 'true');
+};
+
+export const cleanupLegacyAdvocateDemoData = async (advocateId) => {
+  if (!advocateId) return false;
+
+  const cleanupKey = `cleanup_${advocateId}_legacy_demo_v1`;
+  if (localStorage.getItem(cleanupKey) === 'true') return false;
+
+  const [clientsSnapshot, casesSnapshot, paymentsSnapshot, documentsSnapshot, commentsSnapshot] = await Promise.all([
+    getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
+    getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
+    getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
+    getDocs(query(collection(db, 'documents'), where('advocate_id', '==', advocateId))),
+    getDocs(query(collection(db, 'comments'), where('advocate_id', '==', advocateId))),
+  ]);
+
+  const clientDocs = clientsSnapshot.docs.filter((item) => legacyDemoClientNames.includes(item.data().name));
+  const caseDocs = casesSnapshot.docs.filter((item) => legacyDemoCaseNumbers.includes(item.data().case_number));
+  const demoCaseNumbers = new Set(caseDocs.map((item) => item.data().case_number));
+  const demoTokens = [...new Set(caseDocs.map((item) => item.data().client_access_token).filter(Boolean))];
+
+  const paymentDocs = paymentsSnapshot.docs.filter((item) => demoCaseNumbers.has(item.data().case_id));
+  const documentDocs = documentsSnapshot.docs.filter((item) => demoCaseNumbers.has(item.data().case_id));
+  const commentDocs = commentsSnapshot.docs.filter((item) => demoCaseNumbers.has(item.data().case_id));
+
+  const hasDemoData = clientDocs.length || caseDocs.length || paymentDocs.length || documentDocs.length || commentDocs.length;
+
+  if (!hasDemoData) {
+    localStorage.setItem(cleanupKey, 'true');
+    return false;
+  }
+
+  await Promise.all([
+    deleteDocs(paymentDocs),
+    deleteDocs(documentDocs),
+    deleteDocs(commentDocs),
+    deleteDocs(caseDocs),
+    deleteDocs(clientDocs),
+    Promise.all(demoTokens.map((token) => clearClientAccessToken(token))),
+  ]);
+
+  localStorage.setItem(cleanupKey, 'true');
+  return true;
 };
 
 export const seedAdminData = async (adminId) => {

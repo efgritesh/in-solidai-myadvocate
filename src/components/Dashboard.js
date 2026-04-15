@@ -4,9 +4,8 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
-import { seedAdvocateData } from '../utils/seedData';
+import { cleanupLegacyAdvocateDemoData } from '../utils/seedData';
 import LoadingState from './LoadingState';
-import { syncAdvocateClientAccess } from '../utils/clientAccessRecords';
 import { formatLifecycleDate, isHearingLifecycleStep } from '../utils/lifecycle';
 import { DraftingIcon } from './AppIcons';
 import useCurrentUserProfile from '../utils/useCurrentUserProfile';
@@ -77,6 +76,8 @@ const Dashboard = () => {
       }
 
       try {
+        await cleanupLegacyAdvocateDemoData(advocateId);
+
         const [casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
           getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
           getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
@@ -84,22 +85,6 @@ const Dashboard = () => {
         ]);
         buildDashboardState(casesSnap, clientsSnap, paymentsSnap);
         setDashboardError('');
-        setLoading(false);
-
-        try {
-          await seedAdvocateData(advocateId);
-          await syncAdvocateClientAccess(advocateId);
-
-          const [freshCases, freshClients, freshPayments] = await Promise.all([
-            getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
-            getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
-            getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
-          ]);
-
-          buildDashboardState(freshCases, freshClients, freshPayments);
-        } catch (backgroundError) {
-          console.error('Dashboard background sync failed', backgroundError);
-        }
       } catch (error) {
         console.error('Dashboard load failed', error);
         setDashboardError(error.message || 'Unable to load the dashboard right now.');
