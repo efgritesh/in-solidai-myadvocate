@@ -19,18 +19,6 @@ import LoadingState from './LoadingState';
 import { syncCaseAccessComment, syncCaseAccessPayment, syncCaseAccessRecord } from '../utils/clientAccessRecords';
 import { createLifecycleStep, formatLifecycleDate, isHearingLifecycleStep, sortLifecycleForCase } from '../utils/lifecycle';
 
-const lifecyclePresets = [
-  'Initial consultation',
-  'Document review',
-  'Draft petition and evidence set',
-  'Legal notice',
-  'File before court',
-  'Interim relief hearing',
-  'Main hearing',
-  'Arguments',
-  'Order follow-up and closure',
-];
-
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -79,7 +67,7 @@ const CaseDetails = () => {
   const [caseRecord, setCaseRecord] = useState(null);
   const [payments, setPayments] = useState([]);
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
-  const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
+  const [selectedLifecycleTitle, setSelectedLifecycleTitle] = useState('');
   const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
   const [selectedLifecycleType, setSelectedLifecycleType] = useState('general');
   const [selectedLifecycleDate, setSelectedLifecycleDate] = useState('');
@@ -187,13 +175,13 @@ const CaseDetails = () => {
   };
 
   const addLifecycleStep = async () => {
-    if (!caseRecord) return;
+    if (!caseRecord || !selectedLifecycleTitle.trim()) return;
     const currentLifecycle = caseRecord.lifecycle || [];
     const firstPendingIndex = currentLifecycle.findIndex((step) => step.status === 'pending');
     const insertAt = firstPendingIndex === -1 ? currentLifecycle.length : firstPendingIndex;
     const nextStep = createLifecycleStep({
       id: `step-${Date.now()}`,
-      title: selectedLifecyclePreset,
+      title: selectedLifecycleTitle.trim(),
       eta: selectedLifecycleEta,
       scheduledDate: selectedLifecycleDate,
       stageType: selectedLifecycleType,
@@ -207,6 +195,7 @@ const CaseDetails = () => {
     ];
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
     await syncCaseAccessRecord({ ...caseRecord, lifecycle });
+    setSelectedLifecycleTitle('');
     setSelectedLifecycleEta('');
     setSelectedLifecycleDate('');
     setSelectedLifecycleNotes('');
@@ -436,11 +425,12 @@ const CaseDetails = () => {
         {activePanel === 'lifecycle-add' ? (
         <>
         <div className="planning-row">
-          <select value={selectedLifecyclePreset} onChange={(e) => setSelectedLifecyclePreset(e.target.value)}>
-            {lifecyclePresets.map((preset) => (
-              <option key={preset} value={preset}>{preset}</option>
-            ))}
-          </select>
+          <input
+            type="text"
+            value={selectedLifecycleTitle}
+            onChange={(e) => setSelectedLifecycleTitle(e.target.value)}
+            placeholder={t('stepTitle')}
+          />
           <select value={selectedLifecycleType} onChange={(e) => setSelectedLifecycleType(e.target.value)}>
             <option value="general">{t('generalStage')}</option>
             <option value="hearing">{t('hearingStage')}</option>

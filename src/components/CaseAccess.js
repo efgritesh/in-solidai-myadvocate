@@ -254,42 +254,44 @@ const CaseAccess = () => {
             </section>
           ) : null}
 
-          <section className="panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">{t('progressTracker')}</p>
-                <h2>{t('caseLifecycle')}</h2>
+          {timelineSteps.length ? (
+            <section className="panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">{t('progressTracker')}</p>
+                  <h2>{t('caseLifecycle')}</h2>
+                </div>
               </div>
-            </div>
-            <div className="timeline">
-              {timelineSteps.map((step, index) => (
-                <article key={step.id} className={`timeline-step timeline-step--${step.status}`}>
-                  <div className="timeline-step__rail">
-                    <span className="timeline-step__dot">{index + 1}</span>
-                    {!step.isLast ? <span className="timeline-step__line" /> : null}
-                  </div>
-                  <div className="timeline-step__body">
-                    <strong>{step.title}</strong>
-                    <span className="timeline-step__eta">
-                      {step.status === 'done'
-                        ? `Recorded ${getLifecycleDisplayDate(step) || 'timeline reached'}`
-                        : isHearingLifecycleStep(step) && step.scheduled_date
-                          ? `Scheduled ${formatLifecycleDate(step.scheduled_date)}`
-                          : `Tentative ${formatLifecycleMonth(step.eta) || 'date to be updated'}`}
-                    </span>
-                    <p>
-                      {step.status === 'done'
-                        ? t('completedRecordedByAdvocate')
-                        : step.status === 'in_progress'
-                          ? t('currentlyActiveInCase')
-                          : t('upcomingCaseJourney')}
-                    </p>
-                    {step.notes ? <p>{step.notes}</p> : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
+              <div className="timeline">
+                {timelineSteps.map((step, index) => (
+                  <article key={step.id} className={`timeline-step timeline-step--${step.status}`}>
+                    <div className="timeline-step__rail">
+                      <span className="timeline-step__dot">{index + 1}</span>
+                      {!step.isLast ? <span className="timeline-step__line" /> : null}
+                    </div>
+                    <div className="timeline-step__body">
+                      <strong>{step.title}</strong>
+                      <span className="timeline-step__eta">
+                        {step.status === 'done'
+                          ? `Recorded ${getLifecycleDisplayDate(step) || 'timeline reached'}`
+                          : isHearingLifecycleStep(step) && step.scheduled_date
+                            ? `Scheduled ${formatLifecycleDate(step.scheduled_date)}`
+                            : `Tentative ${formatLifecycleMonth(step.eta) || 'date to be updated'}`}
+                      </span>
+                      <p>
+                        {step.status === 'done'
+                          ? t('completedRecordedByAdvocate')
+                          : step.status === 'in_progress'
+                            ? t('currentlyActiveInCase')
+                            : t('upcomingCaseJourney')}
+                      </p>
+                      {step.notes ? <p>{step.notes}</p> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="panel">
             <div className="section-heading">

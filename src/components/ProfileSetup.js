@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from '../firebase';
 import { clearPendingGoogleState, getRouteForRole } from '../utils/auth';
 import { isAdvocateDraftReady } from '../utils/draftingProfiles';
+import LanguageSelector from './LanguageSelector';
 
 const ProfileSetup = () => {
   const { t } = useTranslation();
@@ -146,7 +147,7 @@ const ProfileSetup = () => {
 
   return (
     <div className="auth-screen">
-      <div className="auth-layout auth-layout--compact">
+      <div className="auth-layout auth-layout--compact auth-layout--profile">
         <div className="auth-card auth-card--profile">
           <div className="profile-editor">
             <div className="profile-editor__header">
@@ -154,6 +155,7 @@ const ProfileSetup = () => {
                 <p className="eyebrow">{isProfileReview ? t('myProfile') : t('firstTimeSetup')}</p>
                 <h1>{profileTitle}</h1>
               </div>
+              <LanguageSelector className="profile-language-selector" />
             </div>
             <div className="profile-avatar">
               <div className="profile-avatar__frame">
@@ -179,49 +181,51 @@ const ProfileSetup = () => {
               </button>
             </div>
             <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>{t('name')}:</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>{t('phone')}:</label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>{t('enrollmentNumber')}:</label>
-                <input
-                  type="text"
-                  value={enrollmentNumber}
-                  onChange={(e) => setEnrollmentNumber(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>{t('email')}:</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>{t('officeAddress')}:</label>
-                <textarea
-                  value={officeAddress}
-                  onChange={(e) => setOfficeAddress(e.target.value)}
-                  required
-                />
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>{t('name')}:</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>{t('phone')}:</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>{t('enrollmentNumber')}:</label>
+                  <input
+                    type="text"
+                    value={enrollmentNumber}
+                    onChange={(e) => setEnrollmentNumber(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>{t('email')}:</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group full-span">
+                  <label>{t('officeAddress')}:</label>
+                  <textarea
+                    value={officeAddress}
+                    onChange={(e) => setOfficeAddress(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
               <div className="form-group">
                 <label>{t('profilePic')}:</label>

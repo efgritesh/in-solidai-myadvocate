@@ -13,7 +13,6 @@ import {
   MenuIcon,
 } from './AppIcons';
 import { auth } from '../firebase';
-import LanguageSelector from './LanguageSelector';
 import useCurrentUserProfile from '../utils/useCurrentUserProfile';
 
 const defaultIcons = {
@@ -39,16 +38,13 @@ const BottomNav = ({ items }) => {
         { to: '/dashboard', label: t('dashboard') },
         { to: '/cases', label: t('cases') },
         { to: '/clients', label: t('clients') },
-        { to: '/profile', label: t('myProfile'), icon: LockIcon },
         { to: '/drafting', label: t('aiDraftingAssistant'), icon: DraftingIcon },
+        { to: '/profile', label: t('myProfile'), icon: LockIcon },
+        { to: '/invite', label: t('inviteAdvocates'), icon: InfoIcon },
         { to: '/about', label: t('about'), icon: InfoIcon },
       ],
     [items, t]
   );
-
-  const mobileOnlyItems = [
-    { to: '/invite', label: t('clientLinks') },
-  ];
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -100,7 +96,6 @@ const BottomNav = ({ items }) => {
           </button>
           <div className="top-nav__actions">
             <div className="top-nav__menu top-nav__menu--desktop">
-              <LanguageSelector className="top-nav__language" variant="icon" />
               {navItems.map((item) => {
                 const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
                 return (
@@ -148,7 +143,6 @@ const BottomNav = ({ items }) => {
       />
       <div className={`top-nav__menu top-nav__menu--mobile${open ? ' open' : ''}`} inert={open ? undefined : ''}>
         <div className="top-nav__drawer" ref={mobileMenuRef}>
-          <LanguageSelector className="top-nav__language top-nav__language--mobile" variant="icon" />
           {navItems.map((item) => {
             const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
             return (
@@ -168,16 +162,6 @@ const BottomNav = ({ items }) => {
               </NavLink>
             );
           })}
-          {mobileOnlyItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `top-nav__link${isActive ? ' active' : ''}`}
-              onClick={() => setOpen(false)}
-            >
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
           <button type="button" className="top-nav__logout top-nav__logout--mobile" onClick={handleLogout}>
             {t('logout')}
           </button>

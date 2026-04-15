@@ -920,6 +920,10 @@ textarea {
   width: min(100%, 760px);
 }
 
+.auth-layout--profile {
+  width: min(100%, 1100px);
+}
+
 .auth-hero,
 .auth-card {
   border-radius: 24px;
@@ -1021,6 +1025,10 @@ textarea {
   display: grid;
   justify-items: center;
   gap: 12px;
+}
+
+.profile-language-selector {
+  margin-left: auto;
 }
 
 .profile-avatar__frame {
@@ -1720,6 +1728,23 @@ textarea {
 
   .details-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .profile-editor {
+    grid-template-columns: 260px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .profile-editor__header,
+  .profile-editor form {
+    grid-column: 2;
+  }
+
+  .profile-avatar {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 110px;
   }
 
   .case-hero {

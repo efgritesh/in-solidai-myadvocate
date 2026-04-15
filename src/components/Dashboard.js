@@ -209,8 +209,8 @@ const Dashboard = () => {
           <span>{t('keepContactsAccessible')}</span>
         </Link>
         <Link className="action-tile" to="/invite">
-          <strong>{t('clientLinks')}</strong>
-          <span>{t('shareSecureClientLinks')}</span>
+          <strong>{t('inviteAdvocates')}</strong>
+          <span>{t('generateLink')}</span>
         </Link>
         <Link className="action-tile action-tile--drafting" to="/drafting">
           <div className="action-tile__header">

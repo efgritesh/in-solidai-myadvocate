@@ -1,98 +1,49 @@
-import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { auth, db } from '../firebase';
 import PageShell from './PageShell';
-import { buildCaseAccessLink } from '../utils/caseAccess';
-import { EyeIcon, MessageIcon, WhatsAppIcon } from './AppIcons';
-import LoadingState from './LoadingState';
+import { MessageIcon, WhatsAppIcon } from './AppIcons';
+
+const APP_URL = 'https://iadvocate.solidai.in';
 
 const Invite = () => {
   const { t } = useTranslation();
-  const [caseLinks, setCaseLinks] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadCases = async () => {
-      const advocateId = auth.currentUser?.uid;
-      if (!advocateId) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const snapshot = await getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId)));
-        setCaseLinks(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCases();
-  }, []);
-
-  const buildShareMessage = (caseItem) =>
-    `iAdvocate has shared your case updates for ${caseItem.case_number}. Open your case link here: ${buildCaseAccessLink(
-      caseItem.client_access_token
-    )}`;
+  const inviteMessage = `Join iAdvocate for a cleaner legal workspace. Install the app and create your account here: ${APP_URL}`;
 
   return (
-    <PageShell title={t('clientAccessLinks')} subtitle={t('clientAccessLinksSubtitle')} showBack>
-      {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
-      <>
+    <PageShell title={t('inviteAdvocates')} subtitle={t('generateLink')} showBack>
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">{t('shareableCaseAccess')}</p>
-            <h2>{caseLinks.length} {t('links')}</h2>
+            <p className="eyebrow">{t('inviteAdvocates')}</p>
+            <h2>iAdvocate</h2>
           </div>
         </div>
-        {caseLinks.length === 0 ? (
-          <p className="empty-state">{t('clientLinksEmpty')}</p>
-        ) : (
-          <div className="record-list">
-            {caseLinks.map((caseItem) => (
-              <article key={caseItem.id} className="record-item record-item--stack">
-                <div>
-                  <strong>{caseItem.case_number}</strong>
-                  <p>{caseItem.client_name}</p>
-                </div>
-                <div className="inline-actions">
-                  <a
-                    className="icon-button icon-button--whatsapp"
-                    href={`https://wa.me/?text=${encodeURIComponent(buildShareMessage(caseItem))}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={t('shareOnWhatsApp')}
-                    title={t('shareOnWhatsApp')}
-                  >
-                    <WhatsAppIcon className="app-icon" />
-                  </a>
-                  <a
-                    className="icon-button"
-                    href={`sms:?&body=${encodeURIComponent(buildShareMessage(caseItem))}`}
-                    aria-label={t('shareBySms')}
-                    title={t('shareBySms')}
-                  >
-                    <MessageIcon className="app-icon" />
-                  </a>
-                  <a
-                    className="icon-button"
-                    href={`${buildCaseAccessLink(caseItem.client_access_token)}?preview=1`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={t('previewClientCaseView')}
-                    title={t('previewClientCaseView')}
-                  >
-                    <EyeIcon className="app-icon" />
-                  </a>
-                </div>
-              </article>
-            ))}
+        <div className="workflow-helper-card">
+          <strong>{APP_URL}</strong>
+          <p>{t('generateLink')}</p>
+          <div className="inline-actions">
+            <a
+              className="icon-button icon-button--whatsapp"
+              href={`https://wa.me/?text=${encodeURIComponent(inviteMessage)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t('shareOnWhatsApp')}
+              title={t('shareOnWhatsApp')}
+            >
+              <WhatsAppIcon className="app-icon" />
+            </a>
+            <a
+              className="icon-button"
+              href={`sms:?&body=${encodeURIComponent(inviteMessage)}`}
+              aria-label={t('shareBySms')}
+              title={t('shareBySms')}
+            >
+              <MessageIcon className="app-icon" />
+            </a>
           </div>
-        )}
+        </div>
       </section>
-      </>
-      )}
     </PageShell>
   );
 };

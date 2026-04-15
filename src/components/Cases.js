@@ -1,109 +1,82 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
-import { buildCaseAccessLink, createCaseAccessToken } from '../utils/caseAccess';
-import { ArrowRightIcon, CloseIcon, EyeIcon, MessageIcon, PlusIcon, WhatsAppIcon } from './AppIcons';
+import { ArrowRightIcon, CloseIcon, PlusIcon } from './AppIcons';
 import LoadingState from './LoadingState';
 import { syncAdvocateClientAccess, syncCaseAccessRecord } from '../utils/clientAccessRecords';
+import { createCaseAccessToken } from '../utils/caseAccess';
 import { createLifecycleStep, formatLifecycleDate, getLifecycleDisplayDate, isHearingLifecycleStep } from '../utils/lifecycle';
 
-const defaultLifecycle = [
-  { title: 'Initial consultation', eta: '2026-04', stage_type: 'general', scheduled_date: '', notes: '' },
-  { title: 'Draft petition and evidence set', eta: '2026-05', stage_type: 'general', scheduled_date: '', notes: '' },
-  { title: 'File before court', eta: '2026-06', stage_type: 'general', scheduled_date: '', notes: '' },
-  { title: 'Interim relief hearing', eta: '2026-07', stage_type: 'hearing', scheduled_date: '', notes: '' },
-  { title: 'Order follow-up and closure', eta: '2026-08', stage_type: 'general', scheduled_date: '', notes: '' },
-];
+const todayIso = () => new Date().toISOString().split('T')[0];
 
-const lifecyclePresets = [
-  'Initial consultation',
-  'Document review',
-  'Draft petition and evidence set',
-  'Legal notice',
-  'File before court',
-  'Interim relief hearing',
-  'Main hearing',
-  'Arguments',
-  'Order follow-up and closure',
-];
-
-const createLifecycle = (customSteps) => {
-  const steps = customSteps.length ? customSteps : defaultLifecycle;
-  return steps.map((step, index) => ({
-    ...createLifecycleStep({
-      id: `step-${index + 1}`,
-      title: step.title,
-      eta: step.eta || '',
-      stageType: step.stage_type || 'general',
-      scheduledDate: step.scheduled_date || '',
-      notes: step.notes || '',
-      status: index === 0 ? 'in_progress' : 'pending',
-    }),
-  }));
+const emptyLifecycleDraft = {
+  title: '',
+  stageType: 'general',
+  eta: '',
+  scheduledDate: '',
+  notes: '',
 };
 
-const buildShareMessage = (caseItem) =>
-  `iAdvocate has shared your case updates for ${caseItem.case_number}. Open your case link here: ${buildCaseAccessLink(
-    caseItem.client_access_token
-  )}`;
-
-const buildWhatsAppShareLink = (caseItem) =>
-  `https://wa.me/?text=${encodeURIComponent(buildShareMessage(caseItem))}`;
-
-const buildSmsShareLink = (caseItem) =>
-  `sms:?&body=${encodeURIComponent(buildShareMessage(caseItem))}`;
+const createDefaultLifecycle = () => [
+  createLifecycleStep({
+    id: 'step-1',
+    title: 'Initial consultation',
+    stageType: 'general',
+    scheduledDate: todayIso(),
+    status: 'in_progress',
+  }),
+];
 
 const Cases = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [cases, setCases] = useState([]);
+  const [clients, setClients] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [caseNumber, setCaseNumber] = useState('');
-  const [clientName, setClientName] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
-  const [clientPhone, setClientPhone] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [summary, setSummary] = useState('');
   const [nextStep, setNextStep] = useState('');
   const [court, setCourt] = useState('');
   const [place, setPlace] = useState('');
   const [policeStation, setPoliceStation] = useState('');
   const [status, setStatus] = useState('Open');
-  const [selectedLifecyclePreset, setSelectedLifecyclePreset] = useState(lifecyclePresets[0]);
-  const [selectedLifecycleEta, setSelectedLifecycleEta] = useState('');
-  const [selectedLifecycleDate, setSelectedLifecycleDate] = useState('');
-  const [selectedLifecycleType, setSelectedLifecycleType] = useState('general');
-  const [selectedLifecycleNotes, setSelectedLifecycleNotes] = useState('');
-  const [lifecycleSteps, setLifecycleSteps] = useState(defaultLifecycle);
   const [loading, setLoading] = useState(true);
+  const [showLifecycleComposer, setShowLifecycleComposer] = useState(false);
+  const [lifecycleDraft, setLifecycleDraft] = useState(emptyLifecycleDraft);
+  const [lifecycleSteps, setLifecycleSteps] = useState([]);
 
-  const fetchCases = async () => {
-    const advocateId = auth.currentUser?.uid;
+  const advocateId = auth.currentUser?.uid;
+
+  const fetchWorkspace = useCallback(async () => {
     if (!advocateId) {
       setLoading(false);
       return;
     }
     try {
-      const querySnapshot = await getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId)));
-      setCases(querySnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      await syncAdvocateClientAccess(advocateId);
+      const [casesSnapshot, clientsSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
+        getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
+      ]);
+      setCases(casesSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+      setClients(clientsSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
     } finally {
       setLoading(false);
     }
-  };
+  }, [advocateId]);
 
   useEffect(() => {
-    const loadCases = async () => {
-      const advocateId = auth.currentUser?.uid;
-      if (advocateId) {
-        await syncAdvocateClientAccess(advocateId);
-      }
-      await fetchCases();
-    };
+    fetchWorkspace();
+  }, [fetchWorkspace]);
 
-    loadCases();
-  }, []);
+  const selectedClient = useMemo(
+    () => clients.find((client) => client.id === selectedClientId) || null,
+    [clients, selectedClientId]
+  );
 
   const caseSummaries = useMemo(
     () =>
@@ -123,406 +96,297 @@ const Cases = () => {
     [cases]
   );
 
-  const updateLifecycleDraft = (index, key, value) => {
-    setLifecycleSteps((current) =>
-      current.map((step, stepIndex) => (stepIndex === index ? { ...step, [key]: value } : step))
-    );
-  };
-
-  const addLifecycleStep = () => {
-    setLifecycleSteps((current) => [
-      ...current,
-      {
-        title: selectedLifecyclePreset,
-        eta: selectedLifecycleEta,
-        stage_type: selectedLifecycleType,
-        scheduled_date: selectedLifecycleDate,
-        notes: selectedLifecycleNotes,
-      },
-    ]);
-    setSelectedLifecycleEta('');
-    setSelectedLifecycleDate('');
-    setSelectedLifecycleNotes('');
-  };
-
-  const handleAddCase = async (e) => {
-    e.preventDefault();
-    const advocateId = auth.currentUser?.uid;
-    if (!advocateId) return;
-
-    const clientSnapshot = await getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId)));
-    const matchedClient = clientSnapshot.docs
-      .map((docItem) => docItem.data())
-      .find((client) =>
-        (clientEmail && client.email === clientEmail) ||
-        (clientPhone && client.phone === clientPhone) ||
-        client.name === clientName
-      );
-
-    const preparedLifecycle = lifecycleSteps
-      .map((step) => ({
-        title: step.title.trim(),
-        eta: step.eta.trim(),
-      }))
-      .filter((step) => step.title);
-
-    const clientAccessToken = createCaseAccessToken(caseNumber);
-
-    const caseDocRef = await addDoc(collection(db, 'cases'), {
-      advocate_id: advocateId,
-      client_id: matchedClient?.id || '',
-      case_number: caseNumber,
-      client_name: clientName,
-      client_email: clientEmail,
-      client_phone: clientPhone,
-      summary,
-      next_step: nextStep,
-      court,
-      place,
-      police_station: policeStation,
-      status,
-      client_access_enabled: true,
-      client_access_token: clientAccessToken,
-      advocate_language: i18n.language || 'en',
-      client_language: matchedClient?.preferredLanguage || i18n.language || 'en',
-      lifecycle: createLifecycle(preparedLifecycle),
-    });
-
-    await syncCaseAccessRecord({
-      id: caseDocRef.id,
-      advocate_id: advocateId,
-      client_id: matchedClient?.id || '',
-      case_number: caseNumber,
-      client_name: clientName,
-      client_email: clientEmail,
-      client_phone: clientPhone,
-      summary,
-      next_step: nextStep,
-      court,
-      place,
-      police_station: policeStation,
-      status,
-      client_access_enabled: true,
-      client_access_token: clientAccessToken,
-      advocate_language: i18n.language || 'en',
-      client_language: matchedClient?.preferredLanguage || i18n.language || 'en',
-      lifecycle: createLifecycle(preparedLifecycle),
-    });
-
+  const resetCaseForm = () => {
     setCaseNumber('');
-    setClientName('');
-    setClientEmail('');
-    setClientPhone('');
+    setSelectedClientId('');
     setSummary('');
     setNextStep('');
     setCourt('');
     setPlace('');
     setPoliceStation('');
     setStatus('Open');
-    setSelectedLifecyclePreset(lifecyclePresets[0]);
-    setSelectedLifecycleEta('');
-    setLifecycleSteps(defaultLifecycle);
+    setShowLifecycleComposer(false);
+    setLifecycleDraft(emptyLifecycleDraft);
+    setLifecycleSteps([]);
+  };
+
+  const addLifecycleStep = () => {
+    if (!lifecycleDraft.title.trim()) {
+      return;
+    }
+
+    setLifecycleSteps((current) => [
+      ...current,
+      createLifecycleStep({
+        id: `step-${current.length + 1}`,
+        title: lifecycleDraft.title.trim(),
+        eta: lifecycleDraft.eta,
+        stageType: lifecycleDraft.stageType,
+        scheduledDate: lifecycleDraft.scheduledDate,
+        notes: lifecycleDraft.notes.trim(),
+        status: current.length === 0 ? 'in_progress' : 'pending',
+      }),
+    ]);
+    setLifecycleDraft(emptyLifecycleDraft);
+    setShowLifecycleComposer(false);
+  };
+
+  const handleAddCase = async (event) => {
+    event.preventDefault();
+    if (!advocateId || !selectedClient) return;
+
+    const lifecycle = lifecycleSteps.length ? lifecycleSteps : createDefaultLifecycle();
+    const clientAccessToken = createCaseAccessToken(caseNumber);
+
+    const payload = {
+      advocate_id: advocateId,
+      client_id: selectedClient.id,
+      case_number: caseNumber,
+      client_name: selectedClient.name,
+      client_email: selectedClient.email || '',
+      client_phone: selectedClient.phone || '',
+      summary,
+      next_step: nextStep,
+      court,
+      place,
+      police_station: policeStation,
+      status,
+      client_access_enabled: true,
+      client_access_token: clientAccessToken,
+      advocate_language: i18n.language || 'en',
+      client_language: selectedClient.preferredLanguage || i18n.language || 'en',
+      lifecycle,
+    };
+
+    const caseDocRef = await addDoc(collection(db, 'cases'), payload);
+    await syncCaseAccessRecord({ id: caseDocRef.id, ...payload });
+
+    resetCaseForm();
     setShowForm(false);
-    await fetchCases();
+    await fetchWorkspace();
   };
 
   return (
-    <PageShell
-      title={t('cases')}
-      subtitle={t('casesSubtitle')}
-      showBack
-    >
+    <PageShell title={t('cases')} subtitle={t('casesSubtitle')} showBack>
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
-      <>
-      <section className={`panel${showForm ? '' : ' panel--collapsed'}`}>
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">{t('newMatter')}</p>
-            <h2>{t('addCase')}</h2>
-          </div>
-          <button
-            type="button"
-            className="icon-button icon-button--accent"
-            aria-label={showForm ? t('closeAddCaseForm') : t('openAddCaseForm')}
-            title={showForm ? t('closeAddCaseForm') : t('openAddCaseForm')}
-            onClick={() => setShowForm((current) => !current)}
-          >
-            {showForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
-          </button>
-        </div>
-        {showForm ? (
-          <form onSubmit={handleAddCase}>
-          <div className="form-grid">
-            <div className="form-group">
-              <label>{t('caseNumber')}:</label>
-              <input
-                type="text"
-                placeholder="e.g. DEL-CIV-204/2026"
-                value={caseNumber}
-                onChange={(e) => setCaseNumber(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('clientName')}:</label>
-              <input
-                type="text"
-                placeholder="Client full name"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('clientEmail')}:</label>
-              <input
-                type="email"
-                placeholder="For WhatsApp or email follow-up"
-                value={clientEmail}
-                onChange={(e) => setClientEmail(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('clientPhone')}:</label>
-              <input
-                type="text"
-                placeholder="WhatsApp-enabled number"
-                value={clientPhone}
-                onChange={(e) => setClientPhone(e.target.value)}
-              />
-            </div>
-            <div className="form-group full-span">
-              <label>{t('caseSummary')}:</label>
-              <textarea
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                placeholder="What should the client understand about this matter?"
-              />
-            </div>
-            <div className="form-group full-span">
-              <label>{t('nextStep')}:</label>
-              <input
-                type="text"
-                value={nextStep}
-                onChange={(e) => setNextStep(e.target.value)}
-                placeholder="What is currently pending or next?"
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('court')}:</label>
-              <input
-                type="text"
-                value={court}
-                onChange={(e) => setCourt(e.target.value)}
-                placeholder="Court name"
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('place')}:</label>
-              <input
-                type="text"
-                value={place}
-                onChange={(e) => setPlace(e.target.value)}
-                placeholder="City / district"
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('policeStation')}:</label>
-              <input
-                type="text"
-                value={policeStation}
-                onChange={(e) => setPoliceStation(e.target.value)}
-                placeholder="Police station if relevant"
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('statusLabel')}:</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="Open">Open</option>
-                <option value="Pending">Pending</option>
-                <option value="Closed">Closed</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label>{t('stepPreset')}:</label>
-              <select value={selectedLifecyclePreset} onChange={(e) => setSelectedLifecyclePreset(e.target.value)}>
-                {lifecyclePresets.map((preset) => (
-                  <option key={preset} value={preset}>{preset}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>{t('lifecycleItemType')}:</label>
-              <select value={selectedLifecycleType} onChange={(e) => setSelectedLifecycleType(e.target.value)}>
-                <option value="general">{t('generalStage')}</option>
-                <option value="hearing">{t('hearingStage')}</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label>{t('tentativeMonth')}:</label>
-              <input
-                type="month"
-                value={selectedLifecycleEta}
-                onChange={(e) => setSelectedLifecycleEta(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('scheduledDate')}</label>
-              <input
-                type="date"
-                value={selectedLifecycleDate}
-                onChange={(e) => setSelectedLifecycleDate(e.target.value)}
-              />
-            </div>
-            <div className="form-group full-span">
-              <label>{t('lifecyclePlanning')}:</label>
-              <div className="planning-stack">
-                {lifecycleSteps.map((step, index) => (
-                  <div key={`draft-${index + 1}`} className="planning-row">
-                    <input
-                      type="text"
-                      value={step.title}
-                      onChange={(e) => updateLifecycleDraft(index, 'title', e.target.value)}
-                      placeholder={t('stepTitle')}
-                      required
-                    />
-                    <input
-                      type="month"
-                      value={step.eta}
-                      onChange={(e) => updateLifecycleDraft(index, 'eta', e.target.value)}
-                    />
-                    <select
-                      value={step.stage_type || 'general'}
-                      onChange={(e) => updateLifecycleDraft(index, 'stage_type', e.target.value)}
-                    >
-                      <option value="general">{t('generalStage')}</option>
-                      <option value="hearing">{t('hearingStage')}</option>
-                    </select>
-                    <input
-                      type="date"
-                      value={step.scheduled_date || ''}
-                      onChange={(e) => updateLifecycleDraft(index, 'scheduled_date', e.target.value)}
-                    />
-                  </div>
-                ))}
+        <>
+          <section className={`panel${showForm ? '' : ' panel--collapsed'}`}>
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">{t('newMatter')}</p>
+                <h2>{t('addCase')}</h2>
               </div>
-            </div>
-            <div className="form-group full-span">
-              <label>{t('stageNotes')}</label>
-              <textarea
-                value={selectedLifecycleNotes}
-                onChange={(e) => setSelectedLifecycleNotes(e.target.value)}
-                placeholder={t('stageNotesPlaceholder')}
-              />
-            </div>
-            <div className="form-group full-span">
               <button
                 type="button"
-                className="button secondary"
-                onClick={addLifecycleStep}
+                className="icon-button icon-button--accent"
+                aria-label={showForm ? t('closeAddCaseForm') : t('openAddCaseForm')}
+                title={showForm ? t('closeAddCaseForm') : t('openAddCaseForm')}
+                onClick={() => {
+                  setShowForm((current) => !current);
+                  if (showForm) {
+                    resetCaseForm();
+                  }
+                }}
               >
-                {t('addLifecycleStep')}
+                {showForm ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
               </button>
             </div>
-          </div>
-          <button type="submit" className="button">{t('addCaseButton')}</button>
-          </form>
-        ) : (
-          <p className="empty-state">{t('addMatterHint')}</p>
-        )}
-      </section>
-
-      {!showForm ? (
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">{t('currentMatters')}</p>
-            <h2>{cases.length} {t('caseBoard')}</h2>
-          </div>
-        </div>
-        {cases.length === 0 ? (
-          <p className="empty-state">{t('noCasesYet')}</p>
-        ) : (
-          <div className="matter-board">
-                {caseSummaries.map((caseItem) => (
-              <article
-                key={caseItem.id}
-                className="matter-row matter-row--interactive"
-                onClick={() => navigate(`/cases/${caseItem.id}`)}
-              >
-                <div className="matter-row__main">
-                  <div>
-                    <strong>{caseItem.case_number}</strong>
-                    <p>{caseItem.client_name}</p>
-                    <p className="case-status-text">{caseItem.status}</p>
-                  </div>
-                </div>
-                <div className="matter-row__meta">
-                  <span>{caseItem.next_step || t('noNextStepYet')}</span>
-                  <span>
-                    {caseItem.activeMilestone?.title || t('noLifecyclePlanned')}
-                    {getLifecycleDisplayDate(caseItem.activeMilestone) ? ` | ${getLifecycleDisplayDate(caseItem.activeMilestone)}` : ''}
-                  </span>
-                  {caseItem.nextHearing ? (
-                    <span>{t('nextHearingLabel')} {caseItem.nextHearing.title} | {formatLifecycleDate(caseItem.nextHearing.scheduled_date)}</span>
-                  ) : null}
-                </div>
-                <div className="progress-strip matter-row__progress">
-                  <span>{caseItem.completedSteps}/{caseItem.totalSteps} {t('milestonesComplete')}</span>
-                  <span>{caseItem.client_access_enabled ? t('clientLinkLive') : t('clientLinkPaused')}</span>
-                </div>
-                <div className="matter-row__actions">
-                  <a
-                    className="icon-button icon-button--whatsapp"
-                    href={buildWhatsAppShareLink(caseItem)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={t('shareOnWhatsApp')}
-                    title={t('shareOnWhatsApp')}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <WhatsAppIcon className="app-icon" />
-                  </a>
-                  <a
-                    className="icon-button"
-                    href={buildSmsShareLink(caseItem)}
-                    aria-label={t('shareBySms')}
-                    title={t('shareBySms')}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <MessageIcon className="app-icon" />
-                  </a>
-                  <a
-                    className="icon-button"
-                    href={`${buildCaseAccessLink(caseItem.client_access_token)}?preview=1`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={t('previewClientCaseView')}
-                    title={t('previewClientCaseView')}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <EyeIcon className="app-icon" />
-                  </a>
-                  <button
-                    type="button"
-                    className="icon-button icon-button--accent"
-                    aria-label={t('openCaseDetails')}
-                    title={t('openCaseDetails')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      navigate(`/cases/${caseItem.id}`);
-                    }}
-                  >
-                    <ArrowRightIcon className="app-icon" />
+            {showForm ? (
+              clients.length === 0 ? (
+                <div className="workflow-helper-card">
+                  <strong>{t('clients')}</strong>
+                  <p>{t('clientsEmpty')}</p>
+                  <button type="button" className="button" onClick={() => navigate('/clients')}>
+                    {t('addClient')}
                   </button>
                 </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-      ) : null}
-      </>
+              ) : (
+                <form onSubmit={handleAddCase}>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>{t('clientLabel')}:</label>
+                      <select value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)} required>
+                        <option value="">{t('selectClient')}</option>
+                        {clients.map((client) => (
+                          <option key={client.id} value={client.id}>{client.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>{t('caseNumber')}:</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. DEL-CIV-204/2026"
+                        value={caseNumber}
+                        onChange={(event) => setCaseNumber(event.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group full-span">
+                      <label>{t('caseSummary')}:</label>
+                      <textarea value={summary} onChange={(event) => setSummary(event.target.value)} />
+                    </div>
+                    <div className="form-group full-span">
+                      <label>{t('nextStep')}:</label>
+                      <input type="text" value={nextStep} onChange={(event) => setNextStep(event.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>{t('court')}:</label>
+                      <input type="text" value={court} onChange={(event) => setCourt(event.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>{t('place')}:</label>
+                      <input type="text" value={place} onChange={(event) => setPlace(event.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>{t('policeStation')}:</label>
+                      <input type="text" value={policeStation} onChange={(event) => setPoliceStation(event.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>{t('statusLabel')}:</label>
+                      <select value={status} onChange={(event) => setStatus(event.target.value)}>
+                        <option value="Open">Open</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Closed">Closed</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="section-heading top-space">
+                    <div>
+                      <p className="eyebrow">{t('lifecycle')}</p>
+                      <h2>{t('lifecyclePlanning')}</h2>
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-button icon-button--accent"
+                      onClick={() => setShowLifecycleComposer((current) => !current)}
+                      aria-label={showLifecycleComposer ? t('closeAddStageForm') : t('addLifecycleStep')}
+                      title={showLifecycleComposer ? t('closeAddStageForm') : t('addLifecycleStep')}
+                    >
+                      {showLifecycleComposer ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+                    </button>
+                  </div>
+
+                  {showLifecycleComposer ? (
+                    <div className="planning-stack">
+                      <input
+                        type="text"
+                        value={lifecycleDraft.title}
+                        onChange={(event) => setLifecycleDraft((current) => ({ ...current, title: event.target.value }))}
+                        placeholder={t('stepTitle')}
+                      />
+                      <select
+                        value={lifecycleDraft.stageType}
+                        onChange={(event) => setLifecycleDraft((current) => ({ ...current, stageType: event.target.value }))}
+                      >
+                        <option value="general">{t('generalStage')}</option>
+                        <option value="hearing">{t('hearingStage')}</option>
+                      </select>
+                      <input
+                        type="month"
+                        value={lifecycleDraft.eta}
+                        onChange={(event) => setLifecycleDraft((current) => ({ ...current, eta: event.target.value }))}
+                      />
+                      <input
+                        type="date"
+                        value={lifecycleDraft.scheduledDate}
+                        onChange={(event) => setLifecycleDraft((current) => ({ ...current, scheduledDate: event.target.value }))}
+                      />
+                      <textarea
+                        value={lifecycleDraft.notes}
+                        onChange={(event) => setLifecycleDraft((current) => ({ ...current, notes: event.target.value }))}
+                        placeholder={t('stageNotesPlaceholder')}
+                      />
+                      <button type="button" className="button button--secondary" onClick={addLifecycleStep}>
+                        {t('addLifecycleStep')}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="empty-state">{t('lifecycleFormHint')}</p>
+                  )}
+
+                  {lifecycleSteps.length ? (
+                    <div className="record-list top-space">
+                      {lifecycleSteps.map((step) => (
+                        <article key={step.id} className="record-item record-item--stack">
+                          <div>
+                            <strong>{step.title}</strong>
+                            <p>{getLifecycleDisplayDate(step) || t('dateToBeUpdated')}</p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <button type="submit" className="button top-space">{t('addCaseButton')}</button>
+                </form>
+              )
+            ) : (
+              <p className="empty-state">{t('addMatterHint')}</p>
+            )}
+          </section>
+
+          {!showForm ? (
+            <section className="panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">{t('currentMatters')}</p>
+                  <h2>{cases.length} {t('caseBoard')}</h2>
+                </div>
+              </div>
+              {cases.length === 0 ? (
+                <p className="empty-state">{t('noCasesYet')}</p>
+              ) : (
+                <div className="matter-board">
+                  {caseSummaries.map((caseItem) => (
+                    <article
+                      key={caseItem.id}
+                      className="matter-row matter-row--interactive"
+                      onClick={() => navigate(`/cases/${caseItem.id}`)}
+                    >
+                      <div className="matter-row__main">
+                        <div>
+                          <strong>{caseItem.case_number}</strong>
+                          <p>{caseItem.client_name}</p>
+                          <p className="case-status-text">{caseItem.status}</p>
+                        </div>
+                      </div>
+                      <div className="matter-row__meta">
+                        <span>{caseItem.next_step || t('noNextStepYet')}</span>
+                        <span>
+                          {caseItem.activeMilestone?.title || t('noLifecyclePlanned')}
+                          {getLifecycleDisplayDate(caseItem.activeMilestone) ? ` | ${getLifecycleDisplayDate(caseItem.activeMilestone)}` : ''}
+                        </span>
+                        {caseItem.nextHearing ? (
+                          <span>{t('nextHearingLabel')} {caseItem.nextHearing.title} | {formatLifecycleDate(caseItem.nextHearing.scheduled_date)}</span>
+                        ) : null}
+                      </div>
+                      <div className="progress-strip matter-row__progress">
+                        <span>{caseItem.completedSteps}/{caseItem.totalSteps} {t('milestonesComplete')}</span>
+                        <span>{caseItem.client_access_enabled ? t('clientLinkLive') : t('clientLinkPaused')}</span>
+                      </div>
+                      <div className="matter-row__actions">
+                        <button
+                          type="button"
+                          className="icon-button icon-button--accent"
+                          aria-label={t('openCaseDetails')}
+                          title={t('openCaseDetails')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/cases/${caseItem.id}`);
+                          }}
+                        >
+                          <ArrowRightIcon className="app-icon" />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
+        </>
       )}
     </PageShell>
   );
