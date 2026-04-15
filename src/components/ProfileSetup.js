@@ -176,9 +176,6 @@ const ProfileSetup = () => {
                   </svg>
                 </button>
               </div>
-              <button type="button" className="inline-link" onClick={() => fileInputRef.current?.click()}>
-                {existingProfilePicUrl ? t('changePhoto') : t('uploadPhoto')}
-              </button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="form-grid">
