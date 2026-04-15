@@ -227,17 +227,14 @@ const ProfileSetup = () => {
                   />
                 </div>
               </div>
-              <div className="form-group">
-                <label>{t('profilePic')}:</label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="sr-only"
-                />
-                {profilePic ? <p className="helper-text top-space">{profilePic.name}</p> : null}
-              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="sr-only"
+              />
+              {profilePic ? <p className="helper-text top-space">{profilePic.name}</p> : null}
               <button type="submit" className="button" disabled={saving}>
                 {saving ? t('saving') : t('save')}
               </button>
