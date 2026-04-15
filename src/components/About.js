@@ -4,6 +4,23 @@ import PageShell from './PageShell';
 
 const About = () => {
   const { t } = useTranslation();
+  const featureRows = [
+    ['aboutFeatureDashboardsTitle', 'aboutFeatureDashboardsBody'],
+    ['aboutFeatureClientsTitle', 'aboutFeatureClientsBody'],
+    ['aboutFeatureCasesTitle', 'aboutFeatureCasesBody'],
+    ['aboutFeatureClientAccessTitle', 'aboutFeatureClientAccessBody'],
+    ['aboutFeatureDraftingTitle', 'aboutFeatureDraftingBody'],
+    ['aboutFeatureBillingTitle', 'aboutFeatureBillingBody'],
+    ['aboutFeatureDocumentsTitle', 'aboutFeatureDocumentsBody'],
+    ['aboutFeaturePaymentsTitle', 'aboutFeaturePaymentsBody'],
+    ['aboutFeatureSecurityTitle', 'aboutFeatureSecurityBody'],
+  ];
+  const gettingStartedRows = [
+    ['aboutStepOneTitle', 'aboutStepOneBody'],
+    ['aboutStepTwoTitle', 'aboutStepTwoBody'],
+    ['aboutStepThreeTitle', 'aboutStepThreeBody'],
+    ['aboutStepFourTitle', 'aboutStepFourBody'],
+  ];
 
   return (
     <PageShell title={t('about')} subtitle={t('aboutSubtitle')} showBack>
@@ -16,14 +33,14 @@ const About = () => {
         </div>
         <p className="empty-state">{t('aboutOnboardingBody')}</p>
         <div className="record-list">
-          <article className="record-item"><div><strong>{t('aboutFeatureDashboardsTitle')}</strong><p>{t('aboutFeatureDashboardsBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutFeatureClientsTitle')}</strong><p>{t('aboutFeatureClientsBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutFeatureCasesTitle')}</strong><p>{t('aboutFeatureCasesBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutFeatureClientAccessTitle')}</strong><p>{t('aboutFeatureClientAccessBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutFeatureDraftingTitle')}</strong><p>{t('aboutFeatureDraftingBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutFeatureDocumentsTitle')}</strong><p>{t('aboutFeatureDocumentsBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutFeaturePaymentsTitle')}</strong><p>{t('aboutFeaturePaymentsBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutFeatureSecurityTitle')}</strong><p>{t('aboutFeatureSecurityBody')}</p></div></article>
+          {featureRows.map(([titleKey, bodyKey]) => (
+            <article key={titleKey} className="record-item">
+              <div>
+                <strong>{t(titleKey)}</strong>
+                <p>{t(bodyKey)}</p>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -35,10 +52,14 @@ const About = () => {
           </div>
         </div>
         <div className="record-list">
-          <article className="record-item"><div><strong>{t('aboutStepOneTitle')}</strong><p>{t('aboutStepOneBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutStepTwoTitle')}</strong><p>{t('aboutStepTwoBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutStepThreeTitle')}</strong><p>{t('aboutStepThreeBody')}</p></div></article>
-          <article className="record-item"><div><strong>{t('aboutStepFourTitle')}</strong><p>{t('aboutStepFourBody')}</p></div></article>
+          {gettingStartedRows.map(([titleKey, bodyKey]) => (
+            <article key={titleKey} className="record-item">
+              <div>
+                <strong>{t(titleKey)}</strong>
+                <p>{t(bodyKey)}</p>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 

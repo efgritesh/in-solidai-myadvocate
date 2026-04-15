@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -13,6 +13,8 @@ import {
   isClientDraftReady,
   relationLabelOptions,
 } from '../utils/draftingProfiles';
+import useAiAccessSummary from '../utils/useAiAccessSummary';
+import { canUseAiNow, getAiCreditHeadline } from '../utils/billing';
 
 const ClientDetails = () => {
   const { t } = useTranslation();
@@ -28,6 +30,7 @@ const ClientDetails = () => {
   const [showEdit, setShowEdit] = useState(searchParams.get('edit') === '1');
   const [aadhaarFile, setAadhaarFile] = useState(null);
   const [aadhaarStatus, setAadhaarStatus] = useState({ loading: false, success: false, warnings: [], rawText: '', error: '' });
+  const [showAiAccessModal, setShowAiAccessModal] = useState(false);
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -42,6 +45,9 @@ const ClientDetails = () => {
     aadhaarName: '',
     aadhaarNumber: '',
   });
+  const { summary: aiSummary } = useAiAccessSummary();
+  const aadhaarInputRef = useRef(null);
+  const aiLocked = aiSummary && !canUseAiNow(aiSummary);
 
   const updateField = (key, value) => {
     setForm((current) => {
@@ -51,6 +57,14 @@ const ClientDetails = () => {
       }
       return next;
     });
+  };
+
+  const requestAadhaarUpload = () => {
+    if (aiLocked) {
+      setShowAiAccessModal(true);
+      return;
+    }
+    aadhaarInputRef.current?.click();
   };
 
   const loadClientDetails = useCallback(async () => {
@@ -263,8 +277,17 @@ const ClientDetails = () => {
         {showEdit ? (
           <form onSubmit={handleSave}>
             <div className="form-grid">
-              <div className="form-group full-span"><label>{t('aadhaarUploadPreferred')}:</label><input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} /></div>
-              {aadhaarStatus.loading ? <p className="inline-feedback full-span">{t('aadhaarReading')}</p> : null}
+              <div className="form-group full-span">
+                <label>{t('aadhaarUploadPreferred')}:</label>
+                <input
+                  ref={aadhaarInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="visually-hidden"
+                  onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)}
+                />
+                <button type="button" className="button button--secondary" onClick={requestAadhaarUpload}>{t('startAadhaarOcr')}</button>
+              </div>
               {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
               {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error full-span">{aadhaarStatus.error}</p> : null}
               {aadhaarStatus.warnings.length ? (
@@ -316,6 +339,27 @@ const ClientDetails = () => {
             <p>{t('aadhaarProcessingBody')}</p>
           </div>
         </LoadingState>
+      ) : null}
+      {showAiAccessModal ? (
+        <div className="app-modal">
+          <button type="button" className="app-modal__scrim" aria-label={t('closeNavigation')} onClick={() => setShowAiAccessModal(false)} />
+          <div className="app-modal__surface">
+            <p className="eyebrow">{t('aiAccessEyebrow')}</p>
+            <h2>{t('aadhaarAiGateTitle')}</h2>
+            <p>{t('aadhaarAiGateBody')}</p>
+            <div className="workflow-defaults">
+              <span>{aiSummary ? getAiCreditHeadline(aiSummary) : t('noAiCreditsLeft')}</span>
+            </div>
+            <div className="button-row top-space">
+              <button type="button" className="button" onClick={() => navigate('/premium?feature=aadhaar_ocr')}>
+                {t('manageAiAccess')}
+              </button>
+              <button type="button" className="button button--secondary" onClick={() => setShowAiAccessModal(false)}>
+                {t('back')}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       <section className="stats-grid">

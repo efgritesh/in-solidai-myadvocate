@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -44,8 +44,11 @@ const Clients = () => {
   const [showAddClientForm, setShowAddClientForm] = useState(false);
   const [intakeMode, setIntakeMode] = useState('aadhaar');
   const [aadhaarStatus, setAadhaarStatus] = useState(emptyAadhaarStatus);
+  const [showAiAccessModal, setShowAiAccessModal] = useState(false);
   const advocateId = auth.currentUser?.uid || '';
   const { summary: aiSummary } = useAiAccessSummary();
+  const aadhaarInputRef = useRef(null);
+  const aadhaarReviewInputRef = useRef(null);
 
   const updateField = (key, value) => {
     setForm((current) => {
@@ -87,6 +90,7 @@ const Clients = () => {
   }, [clients]);
 
   const shouldShowManualForm = intakeMode === 'manual' || aadhaarStatus.success || Boolean(aadhaarStatus.error) || Boolean(aadhaarStatus.rawText);
+  const aiLocked = aiSummary && !canUseAiNow(aiSummary);
 
   const handleAddClient = async (event) => {
     event.preventDefault();
@@ -162,6 +166,20 @@ const Clients = () => {
     }
   };
 
+  const requestAadhaarUpload = (target = 'primary') => {
+    if (aiLocked) {
+      setShowAiAccessModal(true);
+      return;
+    }
+
+    if (target === 'review') {
+      aadhaarReviewInputRef.current?.click();
+      return;
+    }
+
+    aadhaarInputRef.current?.click();
+  };
+
   const toggleComposer = () => {
     setShowAddClientForm((current) => {
       const next = !current;
@@ -204,7 +222,16 @@ const Clients = () => {
                   <p className="helper-text">
                     {aiSummary ? getAiCreditHeadline(aiSummary) : t('aadhaarFlowHint')}
                   </p>
-                  <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
+                  <input
+                    ref={aadhaarInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="visually-hidden"
+                    onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)}
+                  />
+                  <button type="button" className="button" onClick={() => requestAadhaarUpload('primary')}>
+                    {t('startAadhaarOcr')}
+                  </button>
                   <div className="workflow-choice-row">
                     <button
                       type="button"
@@ -224,11 +251,6 @@ const Clients = () => {
                     </button>
                   </div>
                   {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error">{aadhaarStatus.error}</p> : null}
-                  {aiSummary && !canUseAiNow(aiSummary) ? (
-                    <button type="button" className="button button--secondary" onClick={() => navigate('/premium?feature=aadhaar_ocr')}>
-                      {t('manageAiAccess')}
-                    </button>
-                  ) : null}
                 </div>
 
                 {shouldShowManualForm ? (
@@ -237,7 +259,16 @@ const Clients = () => {
                       {intakeMode === 'aadhaar' ? (
                         <div className="form-group full-span">
                           <label>{t('aadhaarUploadPreferred')}:</label>
-                          <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
+                          <input
+                            ref={aadhaarReviewInputRef}
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="visually-hidden"
+                            onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)}
+                          />
+                          <button type="button" className="button button--secondary" onClick={() => requestAadhaarUpload('review')}>
+                            {t('replaceAadhaarFile')}
+                          </button>
                         </div>
                       ) : null}
                       {aadhaarStatus.success ? <p className="inline-feedback full-span">{t('aadhaarReadSuccess')}</p> : null}
@@ -360,6 +391,27 @@ const Clients = () => {
                 <p>{t('aadhaarProcessingBody')}</p>
               </div>
             </LoadingState>
+          ) : null}
+          {showAiAccessModal ? (
+            <div className="app-modal">
+              <button type="button" className="app-modal__scrim" aria-label={t('closeNavigation')} onClick={() => setShowAiAccessModal(false)} />
+              <div className="app-modal__surface">
+                <p className="eyebrow">{t('aiAccessEyebrow')}</p>
+                <h2>{t('aadhaarAiGateTitle')}</h2>
+                <p>{t('aadhaarAiGateBody')}</p>
+                <div className="workflow-defaults">
+                  <span>{aiSummary ? getAiCreditHeadline(aiSummary) : t('noAiCreditsLeft')}</span>
+                </div>
+                <div className="button-row top-space">
+                  <button type="button" className="button" onClick={() => navigate('/premium?feature=aadhaar_ocr')}>
+                    {t('manageAiAccess')}
+                  </button>
+                  <button type="button" className="button button--secondary" onClick={() => setShowAiAccessModal(false)}>
+                    {t('back')}
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : null}
         </>
       )}

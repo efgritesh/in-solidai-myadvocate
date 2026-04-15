@@ -378,6 +378,9 @@ const resources = {
       aboutFeatureDraftingTitle: 'AI Legal Drafting Assistant',
       aboutFeatureDraftingBody:
         'Generate advocate-private first drafts from structured advocate and client profiles, case context, typed instructions, uploaded source files, OCR-reviewed text, and full-screen draft review.',
+      aboutFeatureBillingTitle: 'Core, trial, and AI Plus credits',
+      aboutFeatureBillingBody:
+        'Use the free Core plan for non-AI work, activate a one-time AI Trial for limited credits, or subscribe to AI Plus for monthly bundled credits and wallet top-ups for heavier OCR and drafting usage.',
       aboutFeatureDocumentsTitle: 'Documents, OCR, and publishing',
       aboutFeatureDocumentsBody:
         'Upload case files, read text from PDFs and images, publish approved AI drafts into case documents, and keep client-shared uploads visible in the right matter only.',
@@ -480,6 +483,10 @@ const resources = {
       draftingEstimatedCredits: 'Estimated usage: {{credits}} credits, about {{input}} input tokens, {{output}} output tokens, and {{ocr}} OCR pages/images.',
       draftingCreditsAfterRun: 'This step used {{credits}} credits. {{remaining}} credits remain available now.',
       draftingEstimateUnavailable: 'Usage estimate will appear here once the drafting context is ready.',
+      startAadhaarOcr: 'Start Aadhaar OCR',
+      replaceAadhaarFile: 'Replace Aadhaar file',
+      aadhaarAiGateTitle: 'Aadhaar OCR uses AI credits',
+      aadhaarAiGateBody: 'Aadhaar intake uses OCR and AI mapping credits. Start a trial, subscribe to AI Plus, or top up credits before you continue with camera or file upload.',
       premiumActivating: 'Activating your premium plan.',
       goToDummyPayment: 'Continue to dummy payment',
       backToDashboard: 'Back to dashboard',
