@@ -24,6 +24,7 @@ const DEFAULT_VERTEX_MODEL = 'gemini-2.5-flash';
 const SUFFICIENT_TEXT_LENGTH = 120;
 const ADVOCATE_DRAFT_FIELDS = ['name', 'phone', 'officeAddress', 'enrollmentNumber', 'email'];
 const CLIENT_DRAFT_FIELDS = ['name', 'relationLabel', 'relationName', 'age', 'dateOfBirth', 'gender', 'address', 'aadhaarName', 'aadhaarNumber', 'preferredLanguage'];
+const TEST_ADVOCATE_PASSWORD = 'solidai';
 
 function getProjectId() {
   return process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || admin.app().options.projectId;
@@ -91,6 +92,20 @@ async function requireSignedInUser(request) {
     uid: request.auth.uid,
     profile: userSnap.data(),
   };
+}
+
+async function requireAdminHttp(request, response) {
+  const user = await getHttpUser(request, response);
+  if (!user) {
+    return null;
+  }
+
+  if (user.profile.role !== 'admin') {
+    response.status(403).json({ error: 'Only admins can run this action.' });
+    return null;
+  }
+
+  return user;
 }
 
 async function activatePremiumForUser({ uid, profile, data }) {
@@ -180,6 +195,530 @@ function mapHttpsErrorStatus(error) {
   if (error.code === 'failed-precondition') return 412;
   if (error.code === 'invalid-argument') return 400;
   return 400;
+}
+
+function formatDateOffset(days = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
+function createSeedLifecycleStep({
+  id,
+  title,
+  status = 'pending',
+  eta = '',
+  scheduledDate = '',
+  notes = '',
+  stageType = 'general',
+}) {
+  return {
+    id,
+    title,
+    status,
+    eta,
+    scheduled_date: scheduledDate,
+    notes,
+    stage_type: stageType,
+  };
+}
+
+function buildSeedLifecycle(overrides = {}) {
+  return [
+    createSeedLifecycleStep({
+      id: 'consultation',
+      title: overrides.consultationTitle || 'Initial consultation',
+      status: overrides.consultationStatus || 'done',
+      scheduledDate: overrides.consultationDate || formatDateOffset(-10),
+      notes: overrides.consultationNotes || 'Client consultation completed and briefing recorded.',
+    }),
+    createSeedLifecycleStep({
+      id: 'drafting',
+      title: overrides.draftingTitle || 'Drafting and filing prep',
+      status: overrides.draftingStatus || 'in_progress',
+      eta: overrides.draftingEta || formatDateOffset(3).slice(0, 7),
+      notes: overrides.draftingNotes || 'Next filing set is being prepared.',
+    }),
+    createSeedLifecycleStep({
+      id: 'hearing',
+      title: overrides.hearingTitle || 'Next hearing',
+      status: overrides.hearingStatus || 'pending',
+      scheduledDate: overrides.hearingDate || formatDateOffset(7),
+      notes: overrides.hearingNotes || 'Upcoming hearing already listed on the calendar.',
+      stageType: 'hearing',
+    }),
+  ];
+}
+
+function getIsolationSeedBlueprints() {
+  return [
+    {
+      email: 'advocate1@solidai.in',
+      name: 'Advocate One',
+      phone: '9876500001',
+      enrollmentNumber: 'D/2020/1144',
+      officeAddress: '12 Defence Colony, New Delhi',
+      preferredLanguage: 'en',
+      clients: [
+        {
+          name: 'R.K. Chaturvedi',
+          phone: '9810011111',
+          email: 'rk.chaturvedi@example.com',
+          preferredLanguage: 'hi',
+          relationLabel: 'S/o',
+          relationName: 'M.K. Chaturvedi',
+          age: '38',
+          dateOfBirth: '1988-06-25',
+          gender: 'Male',
+          address: 'C-903 Palash Society, Pune, Maharashtra, 411057',
+          aadhaarName: 'R K Chaturvedi',
+          aadhaarNumber: '6496 2842 8068',
+        },
+        {
+          name: 'Sunita Rao',
+          phone: '9810022222',
+          email: 'sunita.rao@example.com',
+          preferredLanguage: 'en',
+          relationLabel: 'W/o',
+          relationName: 'Kiran Rao',
+          age: '42',
+          dateOfBirth: '1984-02-11',
+          gender: 'Female',
+          address: '7 Lodhi Estate, New Delhi',
+          aadhaarName: 'Sunita Kiran Rao',
+          aadhaarNumber: '7921 2211 8833',
+        },
+      ],
+      cases: [
+        {
+          case_number: 'DL-BAIL-101/2026',
+          client_name: 'R.K. Chaturvedi',
+          client_email: 'rk.chaturvedi@example.com',
+          client_phone: '9810011111',
+          client_language: 'hi',
+          status: 'Open',
+          court: 'Sessions Court, Saket',
+          place: 'New Delhi',
+          police_station: 'Kalkaji',
+          summary: 'Regular bail application arising from FIR on financial fraud allegations.',
+          next_step: 'Settle factual chronology and bail grounds before the next date.',
+          lifecycle: buildSeedLifecycle({
+            draftingTitle: 'Bail application drafting',
+            hearingTitle: 'Bail hearing',
+            hearingDate: formatDateOffset(2),
+            hearingNotes: 'Arguments on maintainability and parity.',
+          }),
+          payments: [
+            {
+              amount: 30000,
+              date: formatDateOffset(-3),
+              description: 'Bail drafting and appearance fee',
+              stage: 'Drafting',
+              status: 'Paid',
+              requested_from_client: true,
+            },
+          ],
+          documents: [
+            {
+              type: 'FIR copy',
+              name: 'rk-fir-copy.pdf',
+              url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+              uploaded_by_role: 'advocate',
+            },
+          ],
+          comments: [
+            {
+              author_role: 'advocate',
+              author_name: 'Advocate One',
+              message: 'Collected bail instructions and marked parity grounds for drafting.',
+              created_at: `${formatDateOffset(-1)}T09:30:00.000Z`,
+            },
+          ],
+        },
+        {
+          case_number: 'DL-NI138-233/2026',
+          client_name: 'Sunita Rao',
+          client_email: 'sunita.rao@example.com',
+          client_phone: '9810022222',
+          client_language: 'en',
+          status: 'Pending',
+          court: 'Metropolitan Magistrate, Patiala House',
+          place: 'New Delhi',
+          police_station: 'Tilak Marg',
+          summary: 'Cheque dishonour complaint with notice compliance already completed.',
+          next_step: 'Prepare affidavit evidence and compile banking trail.',
+          lifecycle: buildSeedLifecycle({
+            consultationTitle: 'Initial complaint review',
+            draftingTitle: 'Affidavit evidence drafting',
+            hearingTitle: 'Summoning stage hearing',
+            hearingDate: formatDateOffset(6),
+            draftingStatus: 'done',
+            hearingStatus: 'in_progress',
+          }),
+          payments: [
+            {
+              amount: 18000,
+              date: formatDateOffset(1),
+              description: 'Evidence affidavit fee request',
+              stage: 'Evidence',
+              status: 'Requested',
+              requested_from_client: true,
+            },
+          ],
+          documents: [
+            {
+              type: 'Legal notice',
+              name: 'ni138-demand-notice.pdf',
+              url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+              uploaded_by_role: 'advocate',
+            },
+          ],
+          comments: [
+            {
+              author_role: 'advocate',
+              author_name: 'Advocate One',
+              message: 'Bank memo and service proof have been reviewed for summons stage.',
+              created_at: `${formatDateOffset(0)}T11:00:00.000Z`,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      email: 'advocate2@solidai.in',
+      name: 'Advocate Two',
+      phone: '9876500002',
+      enrollmentNumber: 'MH/2019/2288',
+      officeAddress: '304 Nyati Plaza, Pune',
+      preferredLanguage: 'en',
+      clients: [
+        {
+          name: 'Ankita Deshmukh',
+          phone: '9823011111',
+          email: 'ankita.deshmukh@example.com',
+          preferredLanguage: 'hi',
+          relationLabel: 'D/o',
+          relationName: 'Ravindra Deshmukh',
+          age: '29',
+          dateOfBirth: '1997-03-14',
+          gender: 'Female',
+          address: 'Baner Road, Pune, Maharashtra, 411045',
+          aadhaarName: 'Ankita Ravindra Deshmukh',
+          aadhaarNumber: '8344 5511 9002',
+        },
+        {
+          name: 'Prakash Nair',
+          phone: '9823022222',
+          email: 'prakash.nair@example.com',
+          preferredLanguage: 'en',
+          relationLabel: 'S/o',
+          relationName: 'Madhavan Nair',
+          age: '47',
+          dateOfBirth: '1979-09-22',
+          gender: 'Male',
+          address: 'Kharadi IT Park Road, Pune',
+          aadhaarName: 'Prakash Madhavan Nair',
+          aadhaarNumber: '9011 5522 8834',
+        },
+      ],
+      cases: [
+        {
+          case_number: 'PN-FAM-044/2026',
+          client_name: 'Ankita Deshmukh',
+          client_email: 'ankita.deshmukh@example.com',
+          client_phone: '9823011111',
+          client_language: 'hi',
+          status: 'Open',
+          court: 'Family Court Pune',
+          place: 'Pune',
+          police_station: 'Chaturshringi',
+          summary: 'Domestic violence and maintenance matter at interim relief stage.',
+          next_step: 'Prepare updated expense chart and rejoinder notes.',
+          lifecycle: buildSeedLifecycle({
+            draftingTitle: 'Interim maintenance reply',
+            hearingTitle: 'Interim maintenance hearing',
+            hearingDate: formatDateOffset(4),
+            hearingNotes: 'Expense chart and interim maintenance submissions.',
+          }),
+          payments: [
+            {
+              amount: 15000,
+              date: formatDateOffset(-4),
+              description: 'Reply drafting fee',
+              stage: 'Reply',
+              status: 'Paid',
+              requested_from_client: true,
+            },
+          ],
+          documents: [
+            {
+              type: 'Expense chart',
+              name: 'ankita-expense-chart.pdf',
+              url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+              uploaded_by_role: 'advocate',
+            },
+          ],
+          comments: [
+            {
+              author_role: 'advocate',
+              author_name: 'Advocate Two',
+              message: 'Client has shared updated school fee details for children.',
+              created_at: `${formatDateOffset(-2)}T14:15:00.000Z`,
+            },
+          ],
+        },
+        {
+          case_number: 'PN-COM-188/2026',
+          client_name: 'Prakash Nair',
+          client_email: 'prakash.nair@example.com',
+          client_phone: '9823022222',
+          client_language: 'en',
+          status: 'Open',
+          court: 'Commercial Court Pune',
+          place: 'Pune',
+          police_station: 'Yerwada',
+          summary: 'Vendor agreement dispute involving unpaid software implementation invoices.',
+          next_step: 'Finalize legal notice and preserve project correspondence bundle.',
+          lifecycle: buildSeedLifecycle({
+            consultationTitle: 'Contract review',
+            draftingTitle: 'Legal notice drafting',
+            hearingTitle: 'Pre-filing strategy review',
+            hearingDate: formatDateOffset(8),
+            hearingNotes: 'Internal strategy review before formal filing.',
+            hearingStatus: 'pending',
+          }),
+          payments: [
+            {
+              amount: 22000,
+              date: formatDateOffset(2),
+              description: 'Commercial notice fee request',
+              stage: 'Notice',
+              status: 'Requested',
+              requested_from_client: true,
+            },
+          ],
+          documents: [
+            {
+              type: 'Agreement',
+              name: 'vendor-agreement.pdf',
+              url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+              uploaded_by_role: 'advocate',
+            },
+          ],
+          comments: [
+            {
+              author_role: 'advocate',
+              author_name: 'Advocate Two',
+              message: 'Contract annexures and invoice trail uploaded for notice drafting.',
+              created_at: `${formatDateOffset(0)}T16:20:00.000Z`,
+            },
+          ],
+        },
+      ],
+    },
+  ];
+}
+
+async function ensureEmailPasswordUser({ email, name }) {
+  let userRecord;
+
+  try {
+    userRecord = await admin.auth().getUserByEmail(email);
+    userRecord = await admin.auth().updateUser(userRecord.uid, {
+      password: TEST_ADVOCATE_PASSWORD,
+      displayName: name,
+      disabled: false,
+    });
+  } catch (error) {
+    if (error.code !== 'auth/user-not-found') {
+      throw error;
+    }
+
+    userRecord = await admin.auth().createUser({
+      email,
+      password: TEST_ADVOCATE_PASSWORD,
+      displayName: name,
+    });
+  }
+
+  return userRecord;
+}
+
+async function deleteCollectionDocs(snapshot) {
+  for (const docSnap of snapshot.docs) {
+    await docSnap.ref.delete();
+  }
+}
+
+async function deleteClientAccessDoc(docRef) {
+  const subcollections = await docRef.listCollections();
+  for (const subcollection of subcollections) {
+    const subSnap = await subcollection.get();
+    await deleteCollectionDocs(subSnap);
+  }
+  await docRef.delete();
+}
+
+async function clearAdvocateTestData(advocateId) {
+  const collectionNames = [
+    'drafting_outputs',
+    'drafting_sources',
+    'drafting_sessions',
+    'comments',
+    'documents',
+    'payments',
+    'clients',
+    'cases',
+  ];
+
+  const clientAccessSnap = await db.collection('client_access').where('advocate_id', '==', advocateId).get();
+  for (const accessDoc of clientAccessSnap.docs) {
+    await deleteClientAccessDoc(accessDoc.ref);
+  }
+
+  for (const collectionName of collectionNames) {
+    const snapshot = await db.collection(collectionName).where('advocate_id', '==', advocateId).get();
+    await deleteCollectionDocs(snapshot);
+  }
+}
+
+async function seedIsolationDataForAdvocate(blueprint) {
+  const userRecord = await ensureEmailPasswordUser(blueprint);
+  const advocateId = userRecord.uid;
+  await clearAdvocateTestData(advocateId);
+
+  const userDoc = {
+    uid: advocateId,
+    email: blueprint.email,
+    role: 'advocate',
+    name: blueprint.name,
+    phone: blueprint.phone,
+    officeAddress: blueprint.officeAddress,
+    address: blueprint.officeAddress,
+    enrollmentNumber: blueprint.enrollmentNumber,
+    preferredLanguage: blueprint.preferredLanguage || 'en',
+    profileComplete: true,
+    premiumActive: true,
+    premiumStatus: 'active',
+    subscriptionPlan: 'premium_monthly',
+    premiumSource: 'test_seed',
+    premiumBillingAmountInr: 200,
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+
+  await db.collection('users').doc(advocateId).set(userDoc, { merge: true });
+
+  const clientMap = new Map();
+  for (const client of blueprint.clients) {
+    const clientRef = await db.collection('clients').add({
+      advocate_id: advocateId,
+      ...client,
+      aadhaarReferencePath: '',
+      aadhaarOcrStatus: client.aadhaarNumber ? 'completed' : 'not_started',
+      created_at: new Date().toISOString(),
+    });
+    clientMap.set(client.name, clientRef.id);
+  }
+
+  const createdCaseNumbers = [];
+  for (const caseBlueprint of blueprint.cases) {
+    const clientAccessToken = createCaseAccessToken(caseBlueprint.case_number);
+    const casePayload = {
+      advocate_id: advocateId,
+      client_id: clientMap.get(caseBlueprint.client_name) || '',
+      case_number: caseBlueprint.case_number,
+      client_name: caseBlueprint.client_name,
+      client_email: caseBlueprint.client_email,
+      client_phone: caseBlueprint.client_phone,
+      advocate_language: blueprint.preferredLanguage || 'en',
+      client_language: caseBlueprint.client_language || blueprint.preferredLanguage || 'en',
+      status: caseBlueprint.status,
+      court: caseBlueprint.court,
+      place: caseBlueprint.place,
+      police_station: caseBlueprint.police_station,
+      summary: caseBlueprint.summary,
+      next_step: caseBlueprint.next_step,
+      lifecycle: caseBlueprint.lifecycle || [],
+      client_access_token: clientAccessToken,
+      client_access_enabled: true,
+      created_at: new Date().toISOString(),
+    };
+
+    const caseRef = await db.collection('cases').add(casePayload);
+    const createdCase = { id: caseRef.id, ...casePayload };
+    createdCaseNumbers.push(createdCase.case_number);
+
+    await db.collection('client_access').doc(clientAccessToken).set(buildClientAccessSnapshot(createdCase), { merge: true });
+
+    for (const payment of caseBlueprint.payments || []) {
+      const paymentPayload = {
+        advocate_id: advocateId,
+        case_id: createdCase.case_number,
+        client_access_token: clientAccessToken,
+        ...payment,
+      };
+      const paymentRef = await db.collection('payments').add(paymentPayload);
+      await db.collection('client_access').doc(clientAccessToken).collection('payments').doc(paymentRef.id).set({
+        advocate_id: advocateId,
+        case_id: createdCase.case_number,
+        amount: payment.amount || 0,
+        date: payment.date || '',
+        description: payment.description || '',
+        stage: payment.stage || '',
+        status: payment.status || '',
+        requested_from_client: !!payment.requested_from_client,
+        source_role: payment.uploaded_by_role || payment.author_role || (payment.status === 'Client Submitted' ? 'client' : 'advocate'),
+        synced_at: new Date().toISOString(),
+      }, { merge: true });
+    }
+
+    for (const documentRecord of caseBlueprint.documents || []) {
+      const documentPayload = {
+        advocate_id: advocateId,
+        case_id: createdCase.case_number,
+        client_access_token: clientAccessToken,
+        ...documentRecord,
+      };
+      const documentRef = await db.collection('documents').add(documentPayload);
+      await db.collection('client_access').doc(clientAccessToken).collection('documents').doc(documentRef.id).set({
+        advocate_id: advocateId,
+        case_id: createdCase.case_number,
+        type: documentRecord.type || '',
+        url: documentRecord.url || '',
+        name: documentRecord.name || '',
+        uploaded_by_role: documentRecord.uploaded_by_role || 'advocate',
+        synced_at: new Date().toISOString(),
+      }, { merge: true });
+    }
+
+    for (const comment of caseBlueprint.comments || []) {
+      const commentPayload = {
+        advocate_id: advocateId,
+        case_id: createdCase.case_number,
+        client_access_token: clientAccessToken,
+        ...comment,
+      };
+      const commentRef = await db.collection('comments').add(commentPayload);
+      await db.collection('client_access').doc(clientAccessToken).collection('comments').doc(commentRef.id).set({
+        advocate_id: advocateId,
+        case_id: createdCase.case_number,
+        author_role: comment.author_role || 'advocate',
+        author_name: comment.author_name || blueprint.name,
+        message: comment.message || '',
+        created_at: comment.created_at || new Date().toISOString(),
+        synced_at: new Date().toISOString(),
+      }, { merge: true });
+    }
+  }
+
+  return {
+    uid: advocateId,
+    email: blueprint.email,
+    password: TEST_ADVOCATE_PASSWORD,
+    clients: blueprint.clients.map((client) => client.name),
+    cases: createdCaseNumbers,
+  };
 }
 
 async function getOwnedSession(sessionId, advocateId) {
@@ -1779,5 +2318,31 @@ exports.activatePremiumSubscriptionHttp = onRequest(async (request, response) =>
       ? (error.code === 'permission-denied' ? 403 : error.code === 'unauthenticated' ? 401 : 400)
       : 500;
     response.status(status).json({ error: message });
+  }
+});
+
+exports.reseedIsolationTestDataHttp = onRequest({ invoker: 'public' }, async (request, response) => {
+  try {
+    const adminUser = await requireAdminHttp(request, response);
+    if (!adminUser) {
+      return;
+    }
+
+    const seededAdvocates = [];
+    for (const blueprint of getIsolationSeedBlueprints()) {
+      const result = await seedIsolationDataForAdvocate(blueprint);
+      seededAdvocates.push(result);
+    }
+
+    response.status(200).json({
+      ok: true,
+      requestedBy: adminUser.uid,
+      seededAdvocates,
+    });
+  } catch (error) {
+    console.error('reseedIsolationTestDataHttp failed', error);
+    response.status(mapHttpsErrorStatus(error)).json({
+      error: error.message || 'Unable to reseed isolation test data.',
+    });
   }
 });
