@@ -1735,6 +1735,10 @@ textarea {
     align-items: start;
   }
 
+  .auth-layout--profile .auth-card--profile {
+    max-width: none;
+  }
+
   .profile-editor__header,
   .profile-editor form {
     grid-column: 2;
