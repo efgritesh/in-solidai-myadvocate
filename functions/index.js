@@ -1376,6 +1376,26 @@ function getGsUriForPath(storagePath) {
   return `gs://${bucket.name}/${storagePath}`;
 }
 
+function buildDownloadUrl(storagePath, token) {
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+}
+
+function buildClientAccessDocumentPayload(documentRecord = {}) {
+  return {
+    advocate_id: documentRecord.advocate_id || '',
+    case_id: documentRecord.case_id || '',
+    type: documentRecord.type || '',
+    url: documentRecord.url || '',
+    name: documentRecord.name || '',
+    uploaded_by_role: documentRecord.uploaded_by_role || 'advocate',
+    storage_path: documentRecord.storage_path || '',
+    mime_type: documentRecord.mime_type || '',
+    source_drafting_output_id: documentRecord.source_drafting_output_id || '',
+    source_drafting_session_id: documentRecord.source_drafting_session_id || '',
+    synced_at: new Date().toISOString(),
+  };
+}
+
 async function bufferFromSource(source) {
   if (source.storage_path) {
     const [buffer] = await bucket.file(source.storage_path).download();
@@ -2669,28 +2689,68 @@ exports.publishDraftingOutput = onCall(async (request) => {
   const title = session.custom_draft_type?.trim() || session.draft_type || 'Legal draft';
   const document = buildDocxDocument(title, output.edited_text || output.generated_text || '', session, caseRecord);
   const buffer = await Packer.toBuffer(document);
-  const publishedPath = `documents/${advocate.uid}/${Date.now()}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.docx`;
+  let existingDocumentSnap = null;
+  if (output.published_document_id) {
+    existingDocumentSnap = await db.collection('documents').doc(output.published_document_id).get();
+  }
+  if (!existingDocumentSnap?.exists) {
+    const matchingDocs = await db
+      .collection('documents')
+      .where('source_drafting_output_id', '==', output.id)
+      .limit(1)
+      .get();
+    existingDocumentSnap = matchingDocs.docs[0] || null;
+  }
+
+  const publishedPath = existingDocumentSnap?.exists
+    ? existingDocumentSnap.data().storage_path
+    : `documents/${advocate.uid}/${Date.now()}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.docx`;
+  const downloadToken = crypto.randomUUID();
+  const downloadUrl = buildDownloadUrl(publishedPath, downloadToken);
 
   await bucket.file(publishedPath).save(buffer, {
     contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     resumable: false,
     metadata: {
       cacheControl: 'private, max-age=0',
+      metadata: {
+        firebaseStorageDownloadTokens: downloadToken,
+      },
     },
   });
 
-  const documentRef = await db.collection('documents').add({
+  const documentPayload = {
     advocate_id: advocate.uid,
     case_id: caseRecord.case_number || '',
     type: title,
     name: `${title}.docx`,
     storage_path: publishedPath,
-    url: '',
+    url: downloadUrl,
     uploaded_by_role: 'advocate',
-    client_access_token: '',
+    client_access_token: caseRecord.client_access_token || '',
     mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    source_drafting_output_id: output.id,
+    source_drafting_session_id: session.id,
     created_at: admin.firestore.FieldValue.serverTimestamp(),
-  });
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  let documentRef;
+  if (existingDocumentSnap?.exists) {
+    documentRef = existingDocumentSnap.ref;
+    await documentRef.set(documentPayload, { merge: true });
+  } else {
+    documentRef = await db.collection('documents').add(documentPayload);
+  }
+
+  if (caseRecord.client_access_token) {
+    await db
+      .collection('client_access')
+      .doc(caseRecord.client_access_token)
+      .collection('documents')
+      .doc(documentRef.id)
+      .set(buildClientAccessDocumentPayload(documentPayload), { merge: true });
+  }
 
   await outputSnap.ref.update({
     published_document_id: documentRef.id,
@@ -2700,6 +2760,7 @@ exports.publishDraftingOutput = onCall(async (request) => {
   return {
     documentId: documentRef.id,
     storagePath: publishedPath,
+    url: downloadUrl,
   };
 });
 
@@ -2732,26 +2793,68 @@ exports.publishDraftingOutputHttp = onRequest({ invoker: 'public' }, async (requ
     const title = session.custom_draft_type?.trim() || session.draft_type || 'Legal draft';
     const document = buildDocxDocument(title, output.edited_text || output.generated_text || '', session, caseRecord);
     const buffer = await Packer.toBuffer(document);
-    const publishedPath = `documents/${advocate.uid}/${Date.now()}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.docx`;
+    let existingDocumentSnap = null;
+    if (output.published_document_id) {
+      existingDocumentSnap = await db.collection('documents').doc(output.published_document_id).get();
+    }
+    if (!existingDocumentSnap?.exists) {
+      const matchingDocs = await db
+        .collection('documents')
+        .where('source_drafting_output_id', '==', output.id)
+        .limit(1)
+        .get();
+      existingDocumentSnap = matchingDocs.docs[0] || null;
+    }
+
+    const publishedPath = existingDocumentSnap?.exists
+      ? existingDocumentSnap.data().storage_path
+      : `documents/${advocate.uid}/${Date.now()}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.docx`;
+    const downloadToken = crypto.randomUUID();
+    const downloadUrl = buildDownloadUrl(publishedPath, downloadToken);
 
     await bucket.file(publishedPath).save(buffer, {
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       resumable: false,
-      metadata: { cacheControl: 'private, max-age=0' },
+      metadata: {
+        cacheControl: 'private, max-age=0',
+        metadata: {
+          firebaseStorageDownloadTokens: downloadToken,
+        },
+      },
     });
 
-    const documentRef = await db.collection('documents').add({
+    const documentPayload = {
       advocate_id: advocate.uid,
       case_id: caseRecord.case_number || '',
       type: title,
       name: `${title}.docx`,
       storage_path: publishedPath,
-      url: '',
+      url: downloadUrl,
       uploaded_by_role: 'advocate',
-      client_access_token: '',
+      client_access_token: caseRecord.client_access_token || '',
       mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      source_drafting_output_id: output.id,
+      source_drafting_session_id: session.id,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    let documentRef;
+    if (existingDocumentSnap?.exists) {
+      documentRef = existingDocumentSnap.ref;
+      await documentRef.set(documentPayload, { merge: true });
+    } else {
+      documentRef = await db.collection('documents').add(documentPayload);
+    }
+
+    if (caseRecord.client_access_token) {
+      await db
+        .collection('client_access')
+        .doc(caseRecord.client_access_token)
+        .collection('documents')
+        .doc(documentRef.id)
+        .set(buildClientAccessDocumentPayload(documentPayload), { merge: true });
+    }
 
     await outputSnap.ref.update({
       published_document_id: documentRef.id,
@@ -2761,6 +2864,7 @@ exports.publishDraftingOutputHttp = onRequest({ invoker: 'public' }, async (requ
     response.status(200).json({
       documentId: documentRef.id,
       storagePath: publishedPath,
+      url: downloadUrl,
     });
   } catch (error) {
     response.status(mapHttpsErrorStatus(error)).json({ error: error.message || 'Unable to publish draft.' });

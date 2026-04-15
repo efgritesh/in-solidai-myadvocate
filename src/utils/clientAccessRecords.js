@@ -64,6 +64,10 @@ export const syncCaseAccessDocument = async (token, documentRecord, id) => {
     url: documentRecord.url || '',
     name: documentRecord.name || '',
     uploaded_by_role: documentRecord.uploaded_by_role || 'advocate',
+    storage_path: documentRecord.storage_path || '',
+    mime_type: documentRecord.mime_type || '',
+    source_drafting_output_id: documentRecord.source_drafting_output_id || '',
+    source_drafting_session_id: documentRecord.source_drafting_session_id || '',
     synced_at: new Date().toISOString(),
   }, { merge: true });
 };

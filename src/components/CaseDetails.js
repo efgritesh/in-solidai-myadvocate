@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { getDownloadURL, ref } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth, db, storage } from '../firebase';
 import PageShell from './PageShell';
 import { buildCaseAccessLink } from '../utils/caseAccess';
 import {
@@ -75,6 +76,7 @@ const CaseDetails = () => {
   const [activePanel, setActivePanel] = useState('');
   const [expandedLifecycleStep, setExpandedLifecycleStep] = useState('');
   const [comments, setComments] = useState([]);
+  const [caseDocuments, setCaseDocuments] = useState([]);
   const [clientDocuments, setClientDocuments] = useState([]);
   const [commentDraft, setCommentDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -92,6 +94,8 @@ const CaseDetails = () => {
       if (!caseSnap.exists()) {
         setCaseRecord(null);
         setPayments([]);
+        setCaseDocuments([]);
+        setClientDocuments([]);
         return;
       }
 
@@ -133,10 +137,28 @@ const CaseDetails = () => {
           .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
           .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))
       );
+      const resolvedDocuments = await Promise.all(
+        documentsSnap.docs.map(async (docItem) => {
+          const documentItem = { id: docItem.id, ...docItem.data() };
+          if (!documentItem.url && documentItem.storage_path) {
+            try {
+              documentItem.url = await getDownloadURL(ref(storage, documentItem.storage_path));
+            } catch (error) {
+              documentItem.url = '';
+            }
+          }
+          return documentItem;
+        })
+      );
+      setCaseDocuments(
+        resolvedDocuments
+          .filter((item) => item.uploaded_by_role !== 'client')
+          .sort((left, right) => new Date(right.created_at || right.synced_at || 0) - new Date(left.created_at || left.synced_at || 0))
+      );
       setClientDocuments(
-        documentsSnap.docs
-          .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+        resolvedDocuments
           .filter((item) => item.uploaded_by_role === 'client')
+          .sort((left, right) => new Date(right.created_at || right.synced_at || 0) - new Date(left.created_at || left.synced_at || 0))
       );
     } finally {
       setLoading(false);
@@ -279,6 +301,11 @@ const CaseDetails = () => {
       }
       return next;
     });
+  };
+
+  const openDocument = (documentItem) => {
+    if (!documentItem?.url) return;
+    window.open(documentItem.url, '_blank', 'noopener,noreferrer');
   };
 
   if (loading) {
@@ -693,6 +720,58 @@ const CaseDetails = () => {
             <button type="submit" className="button">{t('saveCaseNote')}</button>
           </form>
         ) : null}
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">{t('documents')}</p>
+            <h2>{t('caseDocuments')}</h2>
+          </div>
+          <button
+            type="button"
+            className="icon-button icon-button--accent"
+            aria-label={activePanel === 'case-documents' ? t('collapseCaseDocuments') : t('expandCaseDocuments')}
+            title={activePanel === 'case-documents' ? t('collapseCaseDocuments') : t('expandCaseDocuments')}
+            onClick={() => togglePanel('case-documents')}
+          >
+            {activePanel === 'case-documents' ? <CloseIcon className="app-icon" /> : <PlusIcon className="app-icon" />}
+          </button>
+        </div>
+        {activePanel === 'case-documents' ? (
+          caseDocuments.length === 0 ? (
+            <p className="empty-state">{t('caseDocumentsEmpty')}</p>
+          ) : (
+            <div className="record-list">
+              {caseDocuments.map((documentItem) => (
+                <article key={documentItem.id} className="record-item">
+                  <div>
+                    <strong>{documentItem.name}</strong>
+                    <p>{documentItem.type || t('generalFile')}</p>
+                  </div>
+                  <div className="record-item__action">
+                    {documentItem.url ? (
+                      <button type="button" className="button button--secondary" onClick={() => openDocument(documentItem)}>
+                        {t('open')}
+                      </button>
+                    ) : null}
+                    {documentItem.source_drafting_session_id ? (
+                      <button
+                        type="button"
+                        className="button button--ghost"
+                        onClick={() => navigate(`/drafting?sessionId=${documentItem.source_drafting_session_id}`)}
+                      >
+                        {t('editInDrafting')}
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )
+        ) : (
+          <p className="empty-state">{t('caseDocumentsHint')}</p>
+        )}
       </section>
 
       <section className="panel">
