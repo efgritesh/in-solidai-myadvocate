@@ -51,12 +51,12 @@ export const getAiCreditHeadline = (summary = {}) => {
     return `${summary.trialCreditsRemaining} trial credits left`;
   }
   if ((Number(summary.includedCreditsRemaining) || 0) > 0) {
-    return `${summary.includedCreditsRemaining} included credits left`;
+    return `${summary.includedCreditsRemaining} credits left in this cycle`;
   }
   if ((Number(summary.walletCreditsRemaining) || 0) > 0) {
     return `${summary.walletCreditsRemaining} wallet credits left`;
   }
-  return 'No AI credits left';
+  return 'No credits left';
 };
 
 export const getAiPlanLabel = (summary = {}) => {

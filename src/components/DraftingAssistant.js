@@ -149,6 +149,7 @@ const DraftingAssistant = () => {
   const [aadhaarStatus, setAadhaarStatus] = useState(emptyAadhaarStatus);
   const [usageEstimate, setUsageEstimate] = useState(null);
   const [usageSummaryNote, setUsageSummaryNote] = useState('');
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const { summary: aiSummary, refresh: refreshAiSummary } = useAiAccessSummary();
 
   const currentSession = useMemo(
@@ -444,7 +445,7 @@ const DraftingAssistant = () => {
       return;
     }
     if (aiLocked) {
-      navigate('/premium?feature=drafting');
+      requestPremiumFeature();
       return;
     }
 
@@ -501,7 +502,7 @@ const DraftingAssistant = () => {
       setStatusMessage(t('draftingPromptReviewReady'));
     } catch (error) {
       if (/trial|subscribe|top up|credits/i.test(error.message || '')) {
-        navigate('/premium?feature=drafting');
+        requestPremiumFeature();
       }
       setStatusMessage(error.message);
       setProgress((current) => createProgressState({
@@ -520,6 +521,10 @@ const DraftingAssistant = () => {
   }, []);
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop, disabled: working });
+
+  const requestPremiumFeature = useCallback(() => {
+    setShowPremiumModal(true);
+  }, []);
 
   const handleCreateClient = async (event) => {
     event.preventDefault();
@@ -710,7 +715,7 @@ const DraftingAssistant = () => {
   const handleGenerateFromReview = async () => {
     if (!currentSession?.id) return;
     if (aiLocked) {
-      navigate('/premium?feature=drafting');
+      requestPremiumFeature();
       return;
     }
     setWorking(true);
@@ -756,7 +761,7 @@ const DraftingAssistant = () => {
       setProgress(createProgressState());
     } catch (error) {
       if (/trial|subscribe|top up|credits/i.test(error.message || '')) {
-        navigate('/premium?feature=drafting');
+        requestPremiumFeature();
       }
       setStatusMessage(error.message);
       setProgress((current) => createProgressState({
@@ -842,23 +847,6 @@ const DraftingAssistant = () => {
             <p className="helper-text">{activeCase?.case_number || t('standaloneDraft')}</p>
             <p className="helper-text">{draftForm.instructions || t('draftingInstructionsRequired')}</p>
           </div>
-          <div className="record-card">
-            <strong>{t('aiAccessTitle')}</strong>
-            <p className="helper-text">{aiSummary ? getAiCreditHeadline(aiSummary) : t('draftingEstimateUnavailable')}</p>
-            {usageEstimate ? (
-              <p className="helper-text">
-                {t('draftingEstimatedCredits', {
-                  credits: usageEstimate.estimatedCredits || 0,
-                  input: usageEstimate.inputTokens || 0,
-                  output: usageEstimate.outputTokens || 0,
-                  ocr: usageEstimate.ocrUnits || 0,
-                })}
-              </p>
-            ) : (
-              <p className="helper-text">{t('draftingEstimateUnavailable')}</p>
-            )}
-            {usageSummaryNote ? <p className="inline-feedback">{usageSummaryNote}</p> : null}
-          </div>
           <div className="record-list">
             {draftSources.length ? draftSources.map((source) => (
               <article key={source.id} className="record-card">
@@ -896,24 +884,9 @@ const DraftingAssistant = () => {
               {t('ocrFailureManualFallbackHint')}
             </p>
           ) : null}
-          {aiLocked ? (
-            <p className="inline-feedback inline-feedback--error">
-              {t('aiAccessLockedBody')}{' '}
-              <button
-                type="button"
-                className="text-link text-link--button"
-                onClick={() => navigate('/premium?feature=drafting')}
-              >
-                {t('manageAiAccess')}
-              </button>
-            </p>
-          ) : null}
           <div className="button-row top-space">
             <button type="button" className="button" onClick={handleGenerateFromReview} disabled={working || aiLocked}>
               {working ? t('generatingDraft') : t('sendToAiGenerateDraft')}
-            </button>
-            <button type="button" className="button button--secondary" onClick={() => navigate('/premium?feature=drafting')}>
-              {t('manageAiAccess')}
             </button>
           </div>
           {(working || progress.active) ? (
@@ -1209,7 +1182,17 @@ const DraftingAssistant = () => {
           <div><p className="eyebrow">{t('stepTwo')}</p><h2>{t('uploadSourceDocumentsOptional')}</h2></div>
           <DocumentsIcon className="app-icon section-icon" />
         </div>
-        <div className={`dropzone${working ? ' dropzone--disabled' : ''}`} {...getRootProps()}>
+        <div
+          className={`dropzone${working ? ' dropzone--disabled' : ''}`}
+          {...getRootProps({
+            onClick: aiLocked
+              ? (event) => {
+                  event.preventDefault();
+                  requestPremiumFeature();
+                }
+              : undefined,
+          })}
+        >
           <input {...getInputProps()} />
           <p>{t('draftingDropzoneTitle')}</p>
           <small>{t('optionalSourceUploadHint')}</small>
@@ -1236,14 +1219,12 @@ const DraftingAssistant = () => {
         </div>
         <div className="button-row top-space">
           <button type="button" className="button" onClick={startDrafting} disabled={working}>{working ? t('generatingDraft') : t('generateDraft')}</button>
-          <button type="button" className="button button--secondary" onClick={() => navigate('/premium?feature=drafting')}>
-            {t('manageAiAccess')}
-          </button>
         </div>
-        <div className="workflow-defaults top-space">
-          <span>{aiSummary ? getAiCreditHeadline(aiSummary) : t('draftingEstimateUnavailable')}</span>
-          {usageSummaryNote ? <span>{usageSummaryNote}</span> : null}
-        </div>
+        {usageSummaryNote ? (
+          <div className="workflow-defaults top-space">
+            <span>{usageSummaryNote}</span>
+          </div>
+        ) : null}
         {(working || progress.active) ? (
           <div className="record-card top-space">
             <strong>{progress.stageLabel || t('processingDraftingRequest')}</strong>
@@ -1285,6 +1266,37 @@ const DraftingAssistant = () => {
             </div>
           </div>
         </LoadingState>
+      ) : null}
+      {showPremiumModal ? (
+        <div className="app-modal">
+          <button type="button" className="app-modal__scrim" aria-label={t('closeNavigation')} onClick={() => setShowPremiumModal(false)} />
+          <div className="app-modal__surface">
+            <p className="eyebrow">{t('premiumAccessEyebrow')}</p>
+            <h2>{t('draftingPremiumGateTitle')}</h2>
+            <p>{t('draftingPremiumGateBody')}</p>
+            <div className="workflow-defaults">
+              <span>{aiSummary ? getAiCreditHeadline(aiSummary) : t('noAiCreditsLeft')}</span>
+              {usageEstimate ? (
+                <span>
+                  {t('draftingEstimatedCredits', {
+                    credits: usageEstimate.estimatedCredits || 0,
+                    input: usageEstimate.inputTokens || 0,
+                    output: usageEstimate.outputTokens || 0,
+                    ocr: usageEstimate.ocrUnits || 0,
+                  })}
+                </span>
+              ) : null}
+            </div>
+            <div className="button-row top-space">
+              <button type="button" className="button" onClick={() => navigate('/premium?feature=drafting')}>
+                {t('managePremiumAccess')}
+              </button>
+              <button type="button" className="button button--secondary" onClick={() => setShowPremiumModal(false)}>
+                {t('back')}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </PageShell>
   );
