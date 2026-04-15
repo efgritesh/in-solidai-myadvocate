@@ -359,7 +359,48 @@ const resources = {
       previewModeUploadHint: 'Uploads are disabled in preview mode.',
       preferredLocale: 'en-IN',
       about: 'About',
-      aboutSubtitle: 'Learn what iAdvocate does, how client access works, and the privacy and consent terms behind the product.',
+      aboutSubtitle: 'A quick guide for advocates on what iAdvocate supports and how to get started well.',
+      aboutOnboardingTitle: 'Set up your practice once, then work case by case',
+      aboutOnboardingBody:
+        'iAdvocate is built for advocates who want one mobile-first workspace for client intake, matter tracking, secure client updates, payments, documents, and AI-assisted drafting without juggling multiple tools.',
+      aboutFeatureDashboardsTitle: 'Dashboard and daily control',
+      aboutFeatureDashboardsBody:
+        'Use drill-in cards for active matters, clients, upcoming hearing stages, payments, premium drafting access, and invite flows from one dashboard.',
+      aboutFeatureClientsTitle: 'Client intake and drafting-ready profiles',
+      aboutFeatureClientsBody:
+        'Add clients manually or start with Aadhaar OCR, then maintain drafting-ready identity details, preferred language, contact info, and private reference records in one place.',
+      aboutFeatureCasesTitle: 'Case-led workflow',
+      aboutFeatureCasesBody:
+        'Create matters for existing clients, manage summaries, next steps, manual lifecycle stages, hearing dates, notes, and fee history from the case details screen.',
+      aboutFeatureClientAccessTitle: 'Secure client case sharing',
+      aboutFeatureClientAccessBody:
+        'Share one secure case link from case details so clients can view relevant updates, lifecycle progress, payments, comments, and shared documents without creating a login.',
+      aboutFeatureDraftingTitle: 'AI Legal Drafting Assistant',
+      aboutFeatureDraftingBody:
+        'Generate advocate-private first drafts from structured advocate and client profiles, case context, typed instructions, uploaded source files, OCR-reviewed text, and full-screen draft review.',
+      aboutFeatureDocumentsTitle: 'Documents, OCR, and publishing',
+      aboutFeatureDocumentsBody:
+        'Upload case files, read text from PDFs and images, publish approved AI drafts into case documents, and keep client-shared uploads visible in the right matter only.',
+      aboutFeaturePaymentsTitle: 'Payments and case notes',
+      aboutFeaturePaymentsBody:
+        'Track fee requests and receipts inside each matter, maintain dated case notes, and keep client updates visible to the advocate in case context.',
+      aboutFeatureSecurityTitle: 'Data isolation and privacy',
+      aboutFeatureSecurityBody:
+        'Advocate-owned data stays isolated by advocate account, client access is token-scoped per case, and admin access does not expose advocate-client business records.',
+      aboutGettingStartedEyebrow: 'Getting started',
+      aboutGettingStartedTitle: 'A good first setup for a new advocate',
+      aboutStepOneTitle: '1. Complete your profile',
+      aboutStepOneBody:
+        'Add your advocate name, enrollment number, office details, language preference, and optional photo so drafting and client-facing records start with the right identity.',
+      aboutStepTwoTitle: '2. Add clients properly',
+      aboutStepTwoBody:
+        'Create clients with full legal identity details. Aadhaar-first intake is supported, and cleaner client profiles make AI drafting and case communication much better.',
+      aboutStepThreeTitle: '3. Open matters from the case view',
+      aboutStepThreeBody:
+        'Create a case only after selecting an existing client, then add summary, next step, lifecycle stages, hearing dates, payments, notes, and documents in one place.',
+      aboutStepFourTitle: '4. Share and draft when ready',
+      aboutStepFourBody:
+        'Share client access only from case details, and use AI Legal Drafting when client and advocate profiles are ready so the first draft needs less manual cleanup.',
       aboutWhatItIs: 'What iAdvocate is',
       aboutDescription:
         'iAdvocate is a legal-practice workspace for advocates to manage matters, clients, hearings, documents, payment requests, and secure client case links from one mobile-first app.',

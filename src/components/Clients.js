@@ -192,36 +192,30 @@ const Clients = () => {
             </div>
             {showAddClientForm ? (
               <div className="workflow-section-stack">
-                <div>
-                  <p className="helper-text">{t('aadhaarIntakeChoiceSubtitle')}</p>
-                </div>
-                <div className="workflow-choice-row">
-                  <button
-                    type="button"
-                    className={`workflow-choice${intakeMode === 'aadhaar' ? ' workflow-choice--selected' : ''}`}
-                    onClick={() => setIntakeMode('aadhaar')}
-                  >
-                    <strong>{t('useAadhaarFlow')}</strong>
-                    <p>{t('aadhaarFlowHint')}</p>
-                  </button>
-                  <button
-                    type="button"
-                    className={`workflow-choice${intakeMode === 'manual' ? ' workflow-choice--selected' : ''}`}
-                    onClick={() => setIntakeMode('manual')}
-                  >
-                    <strong>{t('useManualFlow')}</strong>
-                    <p>{t('manualFlowHint')}</p>
-                  </button>
-                </div>
-
-                {intakeMode === 'aadhaar' && !shouldShowManualForm ? (
-                  <div className="workflow-helper-card">
-                    <strong>{t('aadhaarUploadPreferred')}</strong>
-                    <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
-                    <p>{t('aadhaarFlowHint')}</p>
-                    {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error">{aadhaarStatus.error}</p> : null}
+                <div className="workflow-helper-card">
+                  <strong>{t('aadhaarUploadPreferred')}</strong>
+                  <p>{t('aadhaarIntakeChoiceSubtitle')}</p>
+                  <input type="file" accept="image/*,application/pdf" onChange={(e) => handleAadhaarUpload(e.target.files?.[0] || null)} />
+                  <div className="workflow-choice-row">
+                    <button
+                      type="button"
+                      className={`workflow-choice${intakeMode === 'aadhaar' ? ' workflow-choice--selected' : ''}`}
+                      onClick={() => setIntakeMode('aadhaar')}
+                    >
+                      <strong>{t('useAadhaarFlow')}</strong>
+                      <p>{t('aadhaarFlowHint')}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className={`workflow-choice${intakeMode === 'manual' ? ' workflow-choice--selected' : ''}`}
+                      onClick={() => setIntakeMode('manual')}
+                    >
+                      <strong>{t('useManualFlow')}</strong>
+                      <p>{t('manualFlowHint')}</p>
+                    </button>
                   </div>
-                ) : null}
+                  {aadhaarStatus.error ? <p className="inline-feedback inline-feedback--error">{aadhaarStatus.error}</p> : null}
+                </div>
 
                 {shouldShowManualForm ? (
                   <form onSubmit={handleAddClient}>
