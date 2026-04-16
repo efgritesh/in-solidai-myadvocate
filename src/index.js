@@ -19,9 +19,32 @@ reportWebVitals();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    const notifyUpdateReady = (registration) => {
+      window.dispatchEvent(new CustomEvent('iadvocate-update-ready', { detail: { registration } }));
+    };
+
     navigator.serviceWorker
       .register('/sw.js')
-      .then((registration) => registration.update())
+      .then((registration) => {
+        if (registration.waiting) {
+          notifyUpdateReady(registration);
+        }
+
+        registration.addEventListener('updatefound', () => {
+          const installingWorker = registration.installing;
+          if (!installingWorker) {
+            return;
+          }
+
+          installingWorker.addEventListener('statechange', () => {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              notifyUpdateReady(registration);
+            }
+          });
+        });
+
+        return registration.update();
+      })
       .catch(() => {});
   });
 }

@@ -2,9 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getStoredLanguage } from '../utils/language';
-
-const isStandaloneMode = () =>
-  window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+import { hasInstalledAppFlag, isStandaloneMode, markInstalledApp } from '../utils/pwa';
 
 const isIosBrowser = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
 const isAndroidBrowser = () => /android/i.test(window.navigator.userAgent || '');
@@ -12,16 +10,18 @@ const isChromeBrowser = () => /chrome|crios/i.test(window.navigator.userAgent ||
 const isSafariBrowser = () => /safari/i.test(window.navigator.userAgent || '') && !/chrome|crios|fxios|edgios/i.test(window.navigator.userAgent || '');
 const isDesktopChromium = () => !isIosBrowser() && !isAndroidBrowser() && /chrome|edg/i.test(window.navigator.userAgent || '');
 
-const AppEntry = () => {
+const AppEntry = ({ browserLocked = false }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installReady, setInstallReady] = useState(isStandaloneMode());
   const [copied, setCopied] = useState(false);
+  const [installedFlag, setInstalledFlag] = useState(hasInstalledAppFlag());
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   const installMode = useMemo(() => {
     if (isStandaloneMode()) return 'standalone';
+    if (browserLocked || installedFlag) return 'open-installed-app';
     if (installPrompt) return 'prompt';
     if (isAndroidBrowser() && !isChromeBrowser()) return 'android-open-chrome';
     if (isAndroidBrowser()) return 'android-manual';
@@ -29,9 +29,14 @@ const AppEntry = () => {
     if (isIosBrowser()) return 'ios-safari';
     if (isDesktopChromium()) return 'desktop-manual';
     return 'desktop-open-chrome';
-  }, [installPrompt]);
+  }, [browserLocked, installPrompt, installedFlag]);
 
   useEffect(() => {
+    if (isStandaloneMode()) {
+      markInstalledApp();
+      setInstalledFlag(true);
+    }
+
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
       setInstallPrompt(event);
@@ -39,6 +44,8 @@ const AppEntry = () => {
     };
 
     const handleInstalled = () => {
+      markInstalledApp();
+      setInstalledFlag(true);
       setInstallPrompt(null);
       setInstallReady(true);
       const hasLanguage = Boolean(getStoredLanguage());
@@ -65,6 +72,8 @@ const AppEntry = () => {
     }
 
     if (installMode === 'standalone') {
+      markInstalledApp();
+      setInstalledFlag(true);
       const hasLanguage = Boolean(getStoredLanguage());
       navigate(hasLanguage ? '/login' : '/language', { replace: true });
     }
@@ -88,6 +97,11 @@ const AppEntry = () => {
   };
 
   const handleInstall = async () => {
+    if (installMode === 'open-installed-app') {
+      window.location.reload();
+      return;
+    }
+
     if (installMode === 'prompt' && installPrompt) {
       installPrompt.prompt();
       await installPrompt.userChoice.catch(() => null);
@@ -112,6 +126,13 @@ const AppEntry = () => {
 
   const installGuide = useMemo(() => {
     switch (installMode) {
+      case 'open-installed-app':
+        return {
+          title: t('openInstalledAppTitle'),
+          body: t('openInstalledAppBody'),
+          steps: [t('openInstalledAppStepOne'), t('openInstalledAppStepTwo')],
+          buttonLabel: t('openInstalledAppButton'),
+        };
       case 'prompt':
         return {
           title: t('installPromptReadyTitle'),
@@ -181,8 +202,8 @@ const AppEntry = () => {
         </section>
         <div className="auth-card auth-card--entry">
           <p className="eyebrow">{t('installAppEyebrow')}</p>
-          <h2>{t('installAppTitle')}</h2>
-          <p className="helper-text">{t('installAppSubtitle')}</p>
+          <h2>{browserLocked ? t('openInstalledAppTitle') : t('installAppTitle')}</h2>
+          <p className="helper-text">{browserLocked ? t('openInstalledAppSubtitle') : t('installAppSubtitle')}</p>
           <div className="install-card top-space">
             <strong>{installGuide.title}</strong>
             <p className="helper-text">{installGuide.body}</p>

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import './App.css';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LanguageSelection from './components/LanguageSelection';
 import AppEntry from './components/AppEntry';
@@ -22,17 +22,72 @@ import About from './components/About';
 import DraftingAssistant from './components/DraftingAssistant';
 import PremiumUpgrade from './components/PremiumUpgrade';
 import { ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards';
+import { shouldForceOpenInstalledApp } from './utils/pwa';
 
-function App() {
-  const { t, i18n } = useTranslation();
+const AppRoutes = () => {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const [updateRegistration, setUpdateRegistration] = React.useState(null);
+  const [updateReady, setUpdateReady] = React.useState(false);
 
   useEffect(() => {
-    document.title = t('appName');
-    document.documentElement.lang = i18n.language || 'en';
-  }, [i18n.language, t]);
+    const handleUpdateReady = (event) => {
+      if (event.detail?.registration) {
+        setUpdateRegistration(event.detail.registration);
+        setUpdateReady(true);
+      }
+    };
+
+    const handleControllerChange = () => {
+      window.location.reload();
+    };
+
+    window.addEventListener('iadvocate-update-ready', handleUpdateReady);
+    navigator.serviceWorker?.addEventListener('controllerchange', handleControllerChange);
+
+    return () => {
+      window.removeEventListener('iadvocate-update-ready', handleUpdateReady);
+      navigator.serviceWorker?.removeEventListener('controllerchange', handleControllerChange);
+    };
+  }, []);
+
+  const refreshToLatest = () => {
+    if (updateRegistration?.waiting) {
+      updateRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      return;
+    }
+    window.location.reload();
+  };
+
+  const browserLocked =
+    shouldForceOpenInstalledApp() &&
+    !location.pathname.startsWith('/case-access/') &&
+    location.pathname !== '/about';
+
+  if (browserLocked) {
+    return <AppEntry browserLocked />;
+  }
 
   return (
-    <Router>
+    <>
+      {updateReady ? (
+        <div className="app-modal">
+          <button type="button" className="app-modal__scrim" aria-label={t('closeNavigation')} onClick={() => setUpdateReady(false)} />
+          <div className="app-modal__surface">
+            <p className="eyebrow">{t('updateAvailableEyebrow')}</p>
+            <h2>{t('updateAvailableTitle')}</h2>
+            <p>{t('updateAvailableBody')}</p>
+            <div className="button-row top-space">
+              <button type="button" className="button" onClick={refreshToLatest}>
+                {t('updateNow')}
+              </button>
+              <button type="button" className="button button--secondary" onClick={() => setUpdateReady(false)}>
+                {t('later')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <Routes>
         <Route path="/" element={<PublicOnlyRoute><AppEntry /></PublicOnlyRoute>} />
         <Route path="/language" element={<PublicOnlyRoute><LanguageSelection /></PublicOnlyRoute>} />
@@ -62,6 +117,21 @@ function App() {
         <Route path="/invite" element={<ProtectedRoute allowedRoles={['advocate']}><Invite /></ProtectedRoute>} />
         <Route path="/about" element={<About />} />
       </Routes>
+    </>
+  );
+};
+
+function App() {
+  const { t, i18n } = useTranslation();
+
+  useEffect(() => {
+    document.title = t('appName');
+    document.documentElement.lang = i18n.language || 'en';
+  }, [i18n.language, t]);
+
+  return (
+    <Router>
+      <AppRoutes />
     </Router>
   );
 }
