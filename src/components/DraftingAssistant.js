@@ -51,11 +51,11 @@ const emptyClientForm = {
 const emptyAadhaarStatus = { loading: false, success: false, warnings: [], rawText: '', error: '' };
 
 const workflowLabels = {
-  draft: 'Ready to start',
-  extracting: 'Reading source files',
-  ready_for_review: 'Validate key facts',
-  generating: 'Preparing first draft',
-  completed: 'Draft ready',
+  draft: 'Ready',
+  extracting: 'Reading files',
+  ready_for_review: 'Review facts',
+  generating: 'Generating',
+  completed: 'Ready to review',
   failed: 'Needs attention',
 };
 

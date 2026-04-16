@@ -30,13 +30,6 @@ const firebaseConfig = {
   measurementId: "G-D3XLWK923E"
 };
 
-if (isBrowser) {
-  console.log('[firebase] init', {
-    hostname: window.location.hostname,
-    authDomain: resolvedAuthDomain,
-  });
-}
-
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {

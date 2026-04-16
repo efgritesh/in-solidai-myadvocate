@@ -7,25 +7,26 @@ import { auth, db, storage } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
 import { syncCaseAccessDocument } from '../utils/clientAccessRecords';
+import { useFirestoreCollection } from '../utils/firestoreCache';
 
 const Documents = () => {
   const { t } = useTranslation();
   const [documents, setDocuments] = useState([]);
   const [caseId, setCaseId] = useState('');
   const [type, setType] = useState('');
-  const [loading, setLoading] = useState(true);
+  const advocateId = auth.currentUser?.uid;
+  const documentsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'documents'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId || '', 'documents'],
+  });
 
-  const fetchDocuments = async () => {
-    const advocateId = auth.currentUser?.uid;
-    if (!advocateId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const querySnapshot = await getDocs(query(collection(db, 'documents'), where('advocate_id', '==', advocateId)));
+  useEffect(() => {
+    let active = true;
+    const resolveDocuments = async () => {
       const resolvedDocuments = await Promise.all(
-        querySnapshot.docs.map(async (docItem) => {
-          const record = { id: docItem.id, ...docItem.data() };
+        documentsState.data.map(async (docItem) => {
+          const record = { ...docItem };
           if (!record.url && record.storage_path) {
             try {
               record.url = await getDownloadURL(ref(storage, record.storage_path));
@@ -36,18 +37,18 @@ const Documents = () => {
           return record;
         })
       );
-      setDocuments(resolvedDocuments);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (active) {
+        setDocuments(resolvedDocuments);
+      }
+    };
 
-  useEffect(() => {
-    fetchDocuments();
-  }, []);
+    resolveDocuments();
+    return () => {
+      active = false;
+    };
+  }, [documentsState.data]);
 
   const onDrop = async (acceptedFiles) => {
-    const advocateId = auth.currentUser?.uid;
     if (!advocateId) return;
     if (!caseId || !type) {
       alert(t('documentsUploadGuard'));
@@ -86,9 +87,10 @@ const Documents = () => {
         }, documentRef.id);
       }
     }
-
-    await fetchDocuments();
   };
+
+  const loading = documentsState.loadingInitial;
+  const refreshing = documentsState.refreshing;
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
 
@@ -96,6 +98,7 @@ const Documents = () => {
     <PageShell title={t('documents')} subtitle={t('documentsSubtitle')} showBack>
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
       <>
+      {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
       <section className="panel">
         <div className="section-heading">
           <div>

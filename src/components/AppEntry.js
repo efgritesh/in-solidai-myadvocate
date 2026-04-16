@@ -8,17 +8,27 @@ const isStandaloneMode = () =>
 
 const isIosBrowser = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
 const isAndroidBrowser = () => /android/i.test(window.navigator.userAgent || '');
+const isChromeBrowser = () => /chrome|crios/i.test(window.navigator.userAgent || '');
+const isSafariBrowser = () => /safari/i.test(window.navigator.userAgent || '') && !/chrome|crios|fxios|edgios/i.test(window.navigator.userAgent || '');
+const isDesktopChromium = () => !isIosBrowser() && !isAndroidBrowser() && /chrome|edg/i.test(window.navigator.userAgent || '');
 
 const AppEntry = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installReady, setInstallReady] = useState(isStandaloneMode());
-  const [showManualInstallHelp, setShowManualInstallHelp] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  const shouldShowInstallFirst = useMemo(() => {
-    if (isStandaloneMode()) return false;
-    return Boolean(installPrompt) || isIosBrowser() || isAndroidBrowser();
+  const installMode = useMemo(() => {
+    if (isStandaloneMode()) return 'standalone';
+    if (installPrompt) return 'prompt';
+    if (isAndroidBrowser() && !isChromeBrowser()) return 'android-open-chrome';
+    if (isAndroidBrowser()) return 'android-manual';
+    if (isIosBrowser() && !isSafariBrowser()) return 'ios-open-safari';
+    if (isIosBrowser()) return 'ios-safari';
+    if (isDesktopChromium()) return 'desktop-manual';
+    return 'desktop-open-chrome';
   }, [installPrompt]);
 
   useEffect(() => {
@@ -40,7 +50,7 @@ const AppEntry = () => {
 
     const fallbackTimer = window.setTimeout(() => {
       setInstallReady(true);
-    }, 600);
+    }, 1400);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -50,25 +60,109 @@ const AppEntry = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (!installReady && !shouldShowInstallFirst) {
+    if (!installReady && installMode !== 'standalone') {
       return;
     }
 
-    if (!shouldShowInstallFirst) {
+    if (installMode === 'standalone') {
       const hasLanguage = Boolean(getStoredLanguage());
       navigate(hasLanguage ? '/login' : '/language', { replace: true });
     }
-  }, [installReady, navigate, shouldShowInstallFirst]);
+  }, [installMode, installReady, navigate]);
+
+  useEffect(() => {
+    if (!copied) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setCopied(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copyCurrentLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+    } catch (error) {
+      setCopied(false);
+    }
+  };
 
   const handleInstall = async () => {
-    if (!installPrompt) {
-      setShowManualInstallHelp(true);
+    if (installMode === 'prompt' && installPrompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(() => null);
       return;
     }
 
-    installPrompt.prompt();
-    await installPrompt.userChoice.catch(() => null);
+    if (installMode === 'ios-safari' && canShare) {
+      try {
+        await navigator.share({
+          title: t('appName'),
+          text: t('installSharePrompt'),
+          url: window.location.href,
+        });
+        return;
+      } catch (error) {
+        // User cancelled the share sheet or the browser rejected it.
+      }
+    }
+
+    await copyCurrentLink();
   };
+
+  const installGuide = useMemo(() => {
+    switch (installMode) {
+      case 'prompt':
+        return {
+          title: t('installPromptReadyTitle'),
+          body: t('installPromptReadyBody'),
+          steps: [t('installPromptReadyStep')],
+          buttonLabel: t('installPromptButton'),
+        };
+      case 'android-open-chrome':
+        return {
+          title: t('installAndroidChromeTitle'),
+          body: t('installAndroidChromeBody'),
+          steps: [t('installAndroidChromeStepOne'), t('installAndroidChromeStepTwo')],
+          buttonLabel: copied ? t('installLinkCopied') : t('copyLinkButton'),
+        };
+      case 'android-manual':
+        return {
+          title: t('installAndroidManualTitle'),
+          body: t('installAndroidManualBody'),
+          steps: [t('installAndroidManualStepOne'), t('installAndroidManualStepTwo')],
+          buttonLabel: copied ? t('installLinkCopied') : t('copyLinkButton'),
+        };
+      case 'ios-open-safari':
+        return {
+          title: t('installIosSafariTitle'),
+          body: t('installIosSafariBody'),
+          steps: [t('installIosSafariStepOne'), t('installIosSafariStepTwo')],
+          buttonLabel: copied ? t('installLinkCopied') : t('copyLinkButton'),
+        };
+      case 'ios-safari':
+        return {
+          title: t('installIosShareTitle'),
+          body: t('installIosShareBody'),
+          steps: [t('installIosShareStepOne'), t('installIosShareStepTwo')],
+          buttonLabel: canShare ? t('installIosShareButton') : copied ? t('installLinkCopied') : t('copyLinkButton'),
+        };
+      case 'desktop-manual':
+        return {
+          title: t('installDesktopTitle'),
+          body: t('installDesktopBody'),
+          steps: [t('installDesktopStepOne'), t('installDesktopStepTwo')],
+          buttonLabel: copied ? t('installLinkCopied') : t('copyLinkButton'),
+        };
+      default:
+        return {
+          title: t('installDesktopBrowserTitle'),
+          body: t('installDesktopBrowserBody'),
+          steps: [t('installDesktopBrowserStepOne'), t('installDesktopBrowserStepTwo')],
+          buttonLabel: copied ? t('installLinkCopied') : t('copyLinkButton'),
+        };
+    }
+  }, [canShare, copied, installMode, t]);
 
   return (
     <div className="auth-screen">
@@ -86,28 +180,21 @@ const AppEntry = () => {
           </div>
         </section>
         <div className="auth-card auth-card--entry">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">{t('installAppEyebrow')}</p>
-              <h2>{t('installAppTitle')}</h2>
-            </div>
-          </div>
+          <p className="eyebrow">{t('installAppEyebrow')}</p>
+          <h2>{t('installAppTitle')}</h2>
           <p className="helper-text">{t('installAppSubtitle')}</p>
-          {isIosBrowser() && !installPrompt ? (
-            <div className="record-card top-space">
-              <strong>{t('installAppIosTitle')}</strong>
-              <p className="helper-text">{t('installAppIosBody')}</p>
-            </div>
-          ) : null}
-          {showManualInstallHelp && isAndroidBrowser() && !installPrompt ? (
-            <div className="record-card top-space">
-              <strong>{t('installAppAndroidTitle')}</strong>
-              <p className="helper-text">{t('installAppAndroidBody')}</p>
-            </div>
-          ) : null}
+          <div className="install-card top-space">
+            <strong>{installGuide.title}</strong>
+            <p className="helper-text">{installGuide.body}</p>
+            <ol className="install-steps">
+              {installGuide.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
           <div className="button-row top-space">
             <button type="button" className="button" onClick={handleInstall}>
-              {t('installAppButton')}
+              {installGuide.buttonLabel}
             </button>
           </div>
         </div>

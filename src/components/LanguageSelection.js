@@ -34,12 +34,9 @@ const LanguageSelection = () => {
           <h1>{t('chooseLanguage')}</h1>
         </section>
         <div className="auth-card">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">{t('continueLabel')}</p>
-              <h2>{t('selectLanguage')}</h2>
-            </div>
-          </div>
+          <p className="eyebrow">{t('continueLabel')}</p>
+          <h2>{t('selectLanguage')}</h2>
+          <p className="helper-text">{t('languageSubtitle')}</p>
           <div className="auth-action-stack">
             <button className="button" onClick={() => handleLanguageSelect('en')}>
               {t('english')}

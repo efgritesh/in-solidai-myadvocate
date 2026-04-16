@@ -1,41 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { useFirestoreDocument } from './firestoreCache';
 
 const useCurrentUserProfile = () => {
-  const [state, setState] = useState({
-    profile: null,
-    loading: true,
-  });
+  const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setState({ profile: null, loading: false });
-        return;
-      }
-
-      setState((current) => ({ ...current, loading: true }));
-
-      try {
-        const snapshot = await getDoc(doc(db, 'users', user.uid));
-        setState({
-          profile: snapshot.exists() ? snapshot.data() : null,
-          loading: false,
-        });
-      } catch (error) {
-        console.error('Unable to load current user profile', error);
-        setState({ profile: null, loading: false });
-      }
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
     });
 
-    return () => {
-      unsubscribeAuth();
-    };
+    return () => unsubscribeAuth();
   }, []);
 
-  return state;
+  const profileState = useFirestoreDocument({
+    enabled: Boolean(currentUser?.uid),
+    docFactory: useMemo(
+      () => (currentUser?.uid ? () => doc(db, 'users', currentUser.uid) : null),
+      [currentUser?.uid]
+    ),
+    queryKey: [currentUser?.uid || ''],
+    mapDoc: (snapshot) => snapshot.data(),
+  });
+
+  return {
+    profile: profileState.data,
+    loading: currentUser ? profileState.loadingInitial : false,
+    refreshing: profileState.refreshing,
+    showingCached: profileState.showingCached,
+    syncFailed: profileState.syncFailed,
+  };
 };
 
 export default useCurrentUserProfile;

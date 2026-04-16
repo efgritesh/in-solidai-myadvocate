@@ -171,7 +171,6 @@ export const signupWithEmail = async ({ name, email, password, role }) => {
 };
 
 export const loginWithGoogle = async (roleHint = 'advocate', flowType = 'login') => {
-  console.log('[auth] loginWithGoogle:start', { roleHint, flowType });
   sessionStorage.setItem(GOOGLE_ROLE_KEY, roleHint);
   sessionStorage.setItem(GOOGLE_FLOW_KEY, flowType);
   localStorage.setItem(PERSISTED_GOOGLE_ROLE_KEY, roleHint);
@@ -185,31 +184,17 @@ export const loginWithGoogle = async (roleHint = 'advocate', flowType = 'login')
 };
 
 export const consumeGoogleRedirect = async () => {
-  console.log('[auth] consumeGoogleRedirect:start');
   const userCredential = await getRedirectResult(auth);
   if (!userCredential) {
-    console.log('[auth] consumeGoogleRedirect:none');
     return null;
   }
   const roleHint = getStoredGoogleRole();
   const flowType = getStoredGoogleFlow();
-  console.log('[auth] consumeGoogleRedirect:result', {
-    uid: userCredential.user?.uid || null,
-    email: userCredential.user?.email || null,
-    roleHint,
-    flowType,
-  });
   const profile = await ensureUserProfile(userCredential.user, roleHint, {
     role: roleHint,
     profileComplete: roleHint === 'admin' ? true : false,
   });
   clearPendingGoogleState();
-  console.log('[auth] consumeGoogleRedirect:profile', {
-    uid: userCredential.user?.uid || null,
-    role: profile?.role || null,
-    profileComplete: profile?.profileComplete || false,
-    preferredLanguage: profile?.preferredLanguage || null,
-  });
   return { user: userCredential.user, profile, flowType };
 };
 
@@ -224,22 +209,10 @@ export const resolveGoogleProfileFromStoredState = async (user) => {
 
   const roleHint = getStoredGoogleRole();
   const flowType = getStoredGoogleFlow();
-  console.log('[auth] resolveGoogleProfileFromStoredState:start', {
-    uid: user?.uid || null,
-    email: user?.email || null,
-    roleHint,
-    flowType,
-  });
 
   const profile = await ensureUserProfile(user, roleHint, {
     role: roleHint,
     profileComplete: roleHint === 'admin' ? true : false,
-  });
-
-  console.log('[auth] resolveGoogleProfileFromStoredState:profile', {
-    uid: user?.uid || null,
-    role: profile?.role || null,
-    profileComplete: profile?.profileComplete || false,
   });
 
   return { profile, roleHint, flowType };

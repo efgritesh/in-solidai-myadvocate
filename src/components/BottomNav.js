@@ -56,7 +56,9 @@ const BottomNav = ({ items }) => {
 
   const handleLogout = async () => {
     await signOut(auth);
-    navigate('/login');
+    setOpen(false);
+    navigate('/login', { replace: true });
+    window.location.replace('/login');
   };
 
   useEffect(() => {

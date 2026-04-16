@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
@@ -15,6 +15,7 @@ import {
 } from '../utils/draftingProfiles';
 import useAiAccessSummary from '../utils/useAiAccessSummary';
 import { canUseAiNow, getAiCreditHeadline } from '../utils/billing';
+import { useFirestoreCollection } from '../utils/firestoreCache';
 
 const emptyClientForm = {
   name: '',
@@ -39,16 +40,22 @@ const Clients = () => {
   const [clients, setClients] = useState([]);
   const [form, setForm] = useState(emptyClientForm);
   const [aadhaarFile, setAadhaarFile] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAddClientForm, setShowAddClientForm] = useState(false);
   const [intakeMode, setIntakeMode] = useState('aadhaar');
   const [aadhaarStatus, setAadhaarStatus] = useState(emptyAadhaarStatus);
   const [showAiAccessModal, setShowAiAccessModal] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [optimisticClients, setOptimisticClients] = useState([]);
   const advocateId = auth.currentUser?.uid || '';
   const { summary: aiSummary } = useAiAccessSummary();
   const aadhaarInputRef = useRef(null);
   const aadhaarReviewInputRef = useRef(null);
+  const clientsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'clients'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'clients'],
+  });
 
   const updateField = (key, value) => {
     setForm((current) => {
@@ -67,27 +74,23 @@ const Clients = () => {
     setIntakeMode('aadhaar');
   }, []);
 
-  const fetchClients = useCallback(async () => {
-    if (!advocateId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const querySnapshot = await getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId)));
-      setClients(querySnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-    } finally {
-      setLoading(false);
-    }
-  }, [advocateId]);
+  useEffect(() => {
+    setClients(clientsState.data);
+  }, [clientsState.data]);
 
   useEffect(() => {
-    fetchClients();
-  }, [fetchClients]);
+    setOptimisticClients((current) =>
+      current.filter((item) => !clientsState.data.some((serverClient) => serverClient.name === item.name && serverClient.phone === item.phone))
+    );
+  }, [clientsState.data]);
 
   const readyStats = useMemo(() => {
-    const readyCount = clients.filter((client) => isClientDraftReady(client)).length;
-    return { readyCount, totalCount: clients.length };
-  }, [clients]);
+    const visibleClients = [...optimisticClients, ...clients].filter(
+      (client, index, source) => source.findIndex((entry) => entry.id === client.id) === index
+    );
+    const readyCount = visibleClients.filter((client) => isClientDraftReady(client)).length;
+    return { readyCount, totalCount: visibleClients.length, visibleClients };
+  }, [clients, optimisticClients]);
 
   const shouldShowManualForm = intakeMode === 'manual' || aadhaarStatus.success || Boolean(aadhaarStatus.error) || Boolean(aadhaarStatus.rawText);
   const aiLocked = aiSummary && !canUseAiNow(aiSummary);
@@ -96,7 +99,20 @@ const Clients = () => {
     event.preventDefault();
     if (!advocateId) return;
 
+    const tempId = `client-temp-${Date.now()}`;
+    const optimisticClient = {
+      id: tempId,
+      advocate_id: advocateId,
+      ...form,
+      age: form.age || calculateAgeFromDateOfBirth(form.dateOfBirth),
+      draftReady: true,
+    };
+
     setSaving(true);
+    setSaveError('');
+    setOptimisticClients((current) => [optimisticClient, ...current]);
+    resetComposer();
+    setShowAddClientForm(false);
     try {
       await createClientProfile({
         advocateId,
@@ -108,10 +124,11 @@ const Clients = () => {
         },
         aadhaarFile,
       });
-
-      resetComposer();
-      setShowAddClientForm(false);
-      await fetchClients();
+      setOptimisticClients((current) => current.filter((client) => client.id !== tempId));
+    } catch (error) {
+      setOptimisticClients((current) => current.filter((client) => client.id !== tempId));
+      setSaveError(error.message || t('unableToSaveClient', { defaultValue: 'Unable to save client right now.' }));
+      setShowAddClientForm(true);
     } finally {
       setSaving(false);
     }
@@ -190,10 +207,16 @@ const Clients = () => {
     });
   };
 
+  const loading = clientsState.loadingInitial;
+  const refreshing = clientsState.refreshing;
+  const visibleClients = readyStats.visibleClients;
+
   return (
     <PageShell title={t('clients')} subtitle={t('clientsSubtitle')} showBack>
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
         <>
+          {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
+          {saveError ? <p className="inline-feedback inline-feedback--error">{saveError}</p> : null}
           <section className="panel">
             <div className="section-heading">
               <div>
@@ -355,14 +378,14 @@ const Clients = () => {
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">{t('directory')}</p>
-                  <h2>{clients.length} {t('clients').toLowerCase()}</h2>
+                  <h2>{visibleClients.length} {t('clients').toLowerCase()}</h2>
                 </div>
               </div>
-              {clients.length === 0 ? (
+              {visibleClients.length === 0 ? (
                 <p className="empty-state">{t('clientsEmpty')}</p>
               ) : (
                 <div className="record-list">
-                  {clients.map((client) => (
+                  {visibleClients.map((client) => (
                     <article
                       key={client.id}
                       className="record-item record-item--interactive"

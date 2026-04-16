@@ -1729,6 +1729,20 @@ textarea {
   background: #fafafa;
 }
 
+.install-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.install-steps li::marker {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

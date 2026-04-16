@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { auth, db } from '../firebase';
 import PageShell from './PageShell';
@@ -11,90 +11,88 @@ import { DraftingIcon } from './AppIcons';
 import useCurrentUserProfile from '../utils/useCurrentUserProfile';
 import useAiAccessSummary from '../utils/useAiAccessSummary';
 import { canUseAiNow, getAiCreditHeadline } from '../utils/billing';
+import { useFirestoreCollection } from '../utils/firestoreCache';
 
 const Dashboard = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { profile } = useCurrentUserProfile();
   const { summary: aiSummary } = useAiAccessSummary();
-  const [hearings, setHearings] = useState([]);
-  const [reminders, setReminders] = useState([]);
-  const [stats, setStats] = useState({
-    cases: 0,
-    clients: 0,
-    hearings: 0,
-    payments: 0,
-  });
-  const [loading, setLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState('');
+  const advocateId = auth.currentUser?.uid || '';
+
+  const casesState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'cases'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'dashboard-cases'],
+  });
+  const clientsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'clients'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'dashboard-clients'],
+  });
+  const paymentsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'payments'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'dashboard-payments'],
+  });
 
   useEffect(() => {
-    const buildDashboardState = (casesSnap, clientsSnap, paymentsSnap) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    if (!advocateId) {
+      return;
+    }
+    cleanupLegacyAdvocateDemoData(advocateId).catch((error) => {
+      console.error('Dashboard cleanup failed', error);
+    });
+  }, [advocateId]);
 
-      const nextSevenDays = new Date(today);
-      nextSevenDays.setDate(today.getDate() + 7);
+  useEffect(() => {
+    const firstError = casesState.error || clientsState.error || paymentsState.error;
+    setDashboardError(firstError?.message || '');
+  }, [casesState.error, clientsState.error, paymentsState.error]);
 
-      const caseRecords = casesSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
-      const hearingRecords = caseRecords
-        .flatMap((caseRecord) =>
-          (caseRecord.lifecycle || [])
-            .filter((step) => isHearingLifecycleStep(step) && step.scheduled_date)
-            .map((step) => ({
-              id: `${caseRecord.id}-${step.id}`,
-              case_id: caseRecord.case_number,
-              case_doc_id: caseRecord.id,
-              date: step.scheduled_date,
-              description: step.notes || step.title,
-              purpose: step.title,
-              status: step.status,
-            }))
-        )
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const { hearings, reminders, stats } = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-      const upcoming = hearingRecords.filter((hearing) => {
-        const hearingDate = new Date(hearing.date);
-        return hearingDate >= today && hearingDate <= nextSevenDays;
-      });
+    const nextSevenDays = new Date(today);
+    nextSevenDays.setDate(today.getDate() + 7);
 
-      setHearings(upcoming.slice(0, 4));
-      setReminders(upcoming.slice(0, 2));
-      setStats({
+    const hearingRecords = (casesState.data || [])
+      .flatMap((caseRecord) =>
+        (caseRecord.lifecycle || [])
+          .filter((step) => isHearingLifecycleStep(step) && step.scheduled_date)
+          .map((step) => ({
+            id: `${caseRecord.id}-${step.id}`,
+            case_id: caseRecord.case_number,
+            case_doc_id: caseRecord.id,
+            date: step.scheduled_date,
+            description: step.notes || step.title,
+            purpose: step.title,
+            status: step.status,
+          }))
+      )
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const upcoming = hearingRecords.filter((hearing) => {
+      const hearingDate = new Date(hearing.date);
+      return hearingDate >= today && hearingDate <= nextSevenDays;
+    });
+
+    return {
+      hearings: upcoming.slice(0, 4),
+      reminders: upcoming.slice(0, 2),
+      stats: {
         hearings: hearingRecords.length,
-        cases: caseRecords.length,
-        clients: clientsSnap.size,
-        payments: paymentsSnap.size,
-      });
+        cases: casesState.data.length,
+        clients: clientsState.data.length,
+        payments: paymentsState.data.length,
+      },
     };
+  }, [casesState.data, clientsState.data.length, paymentsState.data.length]);
 
-    const loadDashboard = async () => {
-      const advocateId = auth.currentUser?.uid;
-      if (!advocateId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        await cleanupLegacyAdvocateDemoData(advocateId);
-
-        const [casesSnap, clientsSnap, paymentsSnap] = await Promise.all([
-          getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
-          getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
-          getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
-        ]);
-        buildDashboardState(casesSnap, clientsSnap, paymentsSnap);
-        setDashboardError('');
-      } catch (error) {
-        console.error('Dashboard load failed', error);
-        setDashboardError(error.message || 'Unable to load the dashboard right now.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboard();
-  }, [t]);
+  const loading = casesState.loadingInitial || clientsState.loadingInitial || paymentsState.loadingInitial;
+  const refreshing = casesState.refreshing || clientsState.refreshing || paymentsState.refreshing;
 
   return (
     <PageShell
@@ -104,6 +102,7 @@ const Dashboard = () => {
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
       <>
       {dashboardError ? <p className="inline-feedback inline-feedback--error">{dashboardError}</p> : null}
+      {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
       <section className="hero-card">
         <div>
           <p className="eyebrow">{t('todayAtAGlance')}</p>

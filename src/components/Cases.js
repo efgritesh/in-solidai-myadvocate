@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import React, { useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
@@ -9,6 +9,7 @@ import LoadingState from './LoadingState';
 import { syncAdvocateClientAccess, syncCaseAccessRecord } from '../utils/clientAccessRecords';
 import { createCaseAccessToken } from '../utils/caseAccess';
 import { createLifecycleStep, formatLifecycleDate, getLifecycleDisplayDate, isHearingLifecycleStep } from '../utils/lifecycle';
+import { useFirestoreCollection } from '../utils/firestoreCache';
 
 const todayIso = () => new Date().toISOString().split('T')[0];
 
@@ -44,34 +45,46 @@ const Cases = () => {
   const [place, setPlace] = useState('');
   const [policeStation, setPoliceStation] = useState('');
   const [status, setStatus] = useState('Open');
-  const [loading, setLoading] = useState(true);
   const [showLifecycleComposer, setShowLifecycleComposer] = useState(false);
   const [lifecycleDraft, setLifecycleDraft] = useState(emptyLifecycleDraft);
   const [lifecycleSteps, setLifecycleSteps] = useState([]);
+  const [saveError, setSaveError] = useState('');
+  const [optimisticCases, setOptimisticCases] = useState([]);
 
   const advocateId = auth.currentUser?.uid;
+  const casesState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'cases'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId || '', 'cases'],
+  });
+  const clientsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'clients'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId || '', 'clients-for-cases'],
+  });
 
-  const fetchWorkspace = useCallback(async () => {
+  useEffect(() => {
     if (!advocateId) {
-      setLoading(false);
       return;
     }
-    try {
-      await syncAdvocateClientAccess(advocateId);
-      const [casesSnapshot, clientsSnapshot] = await Promise.all([
-        getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
-        getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId))),
-      ]);
-      setCases(casesSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-      setClients(clientsSnapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-    } finally {
-      setLoading(false);
-    }
+    syncAdvocateClientAccess(advocateId).catch((error) => {
+      console.error('Unable to sync case access records', error);
+    });
   }, [advocateId]);
 
   useEffect(() => {
-    fetchWorkspace();
-  }, [fetchWorkspace]);
+    setCases(casesState.data);
+  }, [casesState.data]);
+
+  useEffect(() => {
+    setClients(clientsState.data);
+  }, [clientsState.data]);
+
+  useEffect(() => {
+    setOptimisticCases((current) =>
+      current.filter((item) => !casesState.data.some((serverCase) => serverCase.case_number === item.case_number))
+    );
+  }, [casesState.data]);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) || null,
@@ -80,7 +93,7 @@ const Cases = () => {
 
   const caseSummaries = useMemo(
     () =>
-      cases.map((caseItem) => {
+      [...optimisticCases, ...cases].map((caseItem) => {
         const lifecycle = caseItem.lifecycle || [];
         const completedSteps = lifecycle.filter((step) => step.status === 'done').length;
         const activeMilestone = lifecycle.find((step) => step.status !== 'done') || lifecycle[lifecycle.length - 1];
@@ -93,7 +106,7 @@ const Cases = () => {
           nextHearing: lifecycle.find((step) => isHearingLifecycleStep(step) && step.scheduled_date && step.status !== 'done'),
         };
       }),
-    [cases]
+    [cases, optimisticCases]
   );
 
   const resetCaseForm = () => {
@@ -158,18 +171,32 @@ const Cases = () => {
       lifecycle,
     };
 
-    const caseDocRef = await addDoc(collection(db, 'cases'), payload);
-    await syncCaseAccessRecord({ id: caseDocRef.id, ...payload });
-
+    const tempId = `case-temp-${Date.now()}`;
+    setSaveError('');
+    setOptimisticCases((current) => [{ id: tempId, ...payload }, ...current]);
     resetCaseForm();
     setShowForm(false);
-    await fetchWorkspace();
+
+    try {
+      const caseDocRef = await addDoc(collection(db, 'cases'), payload);
+      await syncCaseAccessRecord({ id: caseDocRef.id, ...payload });
+      setOptimisticCases((current) => current.filter((caseRecord) => caseRecord.id !== tempId));
+    } catch (error) {
+      setOptimisticCases((current) => current.filter((caseRecord) => caseRecord.id !== tempId));
+      setSaveError(error.message || t('unableToSaveCase', { defaultValue: 'Unable to save case right now.' }));
+      setShowForm(true);
+    }
   };
+
+  const loading = casesState.loadingInitial || clientsState.loadingInitial;
+  const refreshing = casesState.refreshing || clientsState.refreshing;
 
   return (
     <PageShell title={t('cases')} subtitle={t('casesSubtitle')} showBack>
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
         <>
+          {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
+          {saveError ? <p className="inline-feedback inline-feedback--error">{saveError}</p> : null}
           <section className={`panel${showForm ? '' : ' panel--collapsed'}`}>
             <div className="section-heading">
               <div>
@@ -332,10 +359,10 @@ const Cases = () => {
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">{t('currentMatters')}</p>
-                  <h2>{cases.length} {t('caseBoard')}</h2>
+                  <h2>{caseSummaries.length} {t('caseBoard')}</h2>
                 </div>
               </div>
-              {cases.length === 0 ? (
+              {caseSummaries.length === 0 ? (
                 <p className="empty-state">{t('noCasesYet')}</p>
               ) : (
                 <div className="matter-board">

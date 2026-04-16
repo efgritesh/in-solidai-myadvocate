@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
+import { collection, query, where } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
@@ -15,6 +15,7 @@ import {
 } from '../utils/draftingProfiles';
 import useAiAccessSummary from '../utils/useAiAccessSummary';
 import { canUseAiNow, getAiCreditHeadline } from '../utils/billing';
+import { useFirestoreCollection } from '../utils/firestoreCache';
 
 const ClientDetails = () => {
   const { t } = useTranslation();
@@ -25,7 +26,6 @@ const ClientDetails = () => {
   const [relatedCases, setRelatedCases] = useState([]);
   const [relatedPayments, setRelatedPayments] = useState([]);
   const [relatedDocuments, setRelatedDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showEdit, setShowEdit] = useState(searchParams.get('edit') === '1');
   const [aadhaarFile, setAadhaarFile] = useState(null);
@@ -48,6 +48,27 @@ const ClientDetails = () => {
   const { summary: aiSummary } = useAiAccessSummary();
   const aadhaarInputRef = useRef(null);
   const aiLocked = aiSummary && !canUseAiNow(aiSummary);
+  const advocateId = auth.currentUser?.uid || '';
+  const clientsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'clients'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'client-details-client'],
+  });
+  const casesState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'cases'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'client-details-cases'],
+  });
+  const paymentsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'payments'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'client-details-payments'],
+  });
+  const documentsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'documents'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId, 'client-details-documents'],
+  });
 
   const updateField = (key, value) => {
     setForm((current) => {
@@ -67,47 +88,23 @@ const ClientDetails = () => {
     aadhaarInputRef.current?.click();
   };
 
-  const loadClientDetails = useCallback(async () => {
-    const advocateId = auth.currentUser?.uid;
-    if (!advocateId || !clientId) {
-      setLoading(false);
-      return;
-    }
+  useEffect(() => {
+    const nextClient = clientsState.data.find((clientRecord) => clientRecord.id === clientId) || null;
+    const nextCases = (casesState.data || []).filter(
+      (caseRecord) =>
+        caseRecord.client_id === nextClient?.id ||
+        caseRecord.client_name === nextClient?.name ||
+        (nextClient?.email && caseRecord.client_email === nextClient.email) ||
+        (nextClient?.phone && caseRecord.client_phone === nextClient.phone)
+    );
+    const caseNumbers = new Set(nextCases.map((caseRecord) => caseRecord.case_number));
 
-    setLoading(true);
-    try {
-      const clientsSnapshot = await getDocs(query(collection(db, 'clients'), where('advocate_id', '==', advocateId)));
-      const nextClient = clientsSnapshot.docs
-        .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-        .find((clientRecord) => clientRecord.id === clientId);
+    setClient(nextClient);
+    setRelatedCases(nextCases);
+    setRelatedPayments((paymentsState.data || []).filter((payment) => caseNumbers.has(payment.case_id)));
+    setRelatedDocuments((documentsState.data || []).filter((documentRecord) => caseNumbers.has(documentRecord.case_id)));
 
-      if (!nextClient) {
-        setClient(null);
-        setRelatedCases([]);
-        setRelatedPayments([]);
-        setRelatedDocuments([]);
-        return;
-      }
-
-      const [casesSnapshot, paymentsSnapshot, documentsSnapshot] = await Promise.all([
-        getDocs(query(collection(db, 'cases'), where('advocate_id', '==', advocateId))),
-        getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId))),
-        getDocs(query(collection(db, 'documents'), where('advocate_id', '==', advocateId))),
-      ]);
-
-      const nextCases = casesSnapshot.docs
-        .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-        .filter(
-          (caseRecord) =>
-            caseRecord.client_id === nextClient.id ||
-            caseRecord.client_name === nextClient.name ||
-            (nextClient.email && caseRecord.client_email === nextClient.email) ||
-            (nextClient.phone && caseRecord.client_phone === nextClient.phone)
-        );
-
-      const caseNumbers = new Set(nextCases.map((caseRecord) => caseRecord.case_number));
-
-      setClient(nextClient);
+    if (nextClient && !showEdit) {
       setForm({
         name: nextClient.name || '',
         phone: nextClient.phone || '',
@@ -122,25 +119,8 @@ const ClientDetails = () => {
         aadhaarName: nextClient.aadhaarName || '',
         aadhaarNumber: nextClient.aadhaarNumber || '',
       });
-      setRelatedCases(nextCases);
-      setRelatedPayments(
-        paymentsSnapshot.docs
-          .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-          .filter((payment) => caseNumbers.has(payment.case_id))
-      );
-      setRelatedDocuments(
-        documentsSnapshot.docs
-          .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-          .filter((documentRecord) => caseNumbers.has(documentRecord.case_id))
-      );
-    } finally {
-      setLoading(false);
     }
-  }, [clientId]);
-
-  useEffect(() => {
-    loadClientDetails();
-  }, [loadClientDetails]);
+  }, [casesState.data, clientId, clientsState.data, documentsState.data, paymentsState.data, showEdit]);
 
   useEffect(() => {
     setShowEdit(searchParams.get('edit') === '1');
@@ -168,7 +148,6 @@ const ClientDetails = () => {
         next.delete('edit');
         return next;
       });
-      await loadClientDetails();
     } finally {
       setSaving(false);
     }
@@ -216,6 +195,17 @@ const ClientDetails = () => {
     }
   };
 
+  const loading =
+    clientsState.loadingInitial ||
+    casesState.loadingInitial ||
+    paymentsState.loadingInitial ||
+    documentsState.loadingInitial;
+  const refreshing =
+    clientsState.refreshing ||
+    casesState.refreshing ||
+    paymentsState.refreshing ||
+    documentsState.refreshing;
+
   if (loading) {
     return (
       <PageShell title={t('clientDetails')} subtitle={t('loadingClientDetails')} showBack>
@@ -236,6 +226,7 @@ const ClientDetails = () => {
 
   return (
     <PageShell title={client.name} subtitle={t('clientDetailsSubtitle')} showBack>
+      {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
       <section className="hero-card case-hero">
         <div>
           <p className="eyebrow">{t('clientLabel')}</p>

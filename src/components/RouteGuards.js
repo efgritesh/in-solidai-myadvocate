@@ -20,31 +20,18 @@ const useAuthSession = () => {
   useEffect(() => {
     let active = true;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('[route-guard] onAuthStateChanged', {
-        uid: user?.uid || null,
-        email: user?.email || null,
-      });
       if (active) {
         setSession({ user, loading: false });
       }
     });
 
     consumeGoogleRedirect()
-      .then((result) => {
-        console.log('[route-guard] consumeGoogleRedirect:done', {
-          hasResult: Boolean(result),
-          uid: result?.user?.uid || null,
-          role: result?.profile?.role || null,
-          profileComplete: result?.profile?.profileComplete || false,
-          flowType: result?.flowType || null,
-        });
-      })
+      .then(() => {})
       .catch((error) => {
-        console.error('[route-guard] consumeGoogleRedirect:error', error);
+        console.error('Unable to consume Google redirect.', error);
       })
       .finally(() => {
         if (active) {
-          console.log('[route-guard] consumeGoogleRedirect:finally');
           setRedirectLoading(false);
         }
       });
@@ -79,10 +66,6 @@ const useResolvedProfile = (user, loading) => {
     }
 
     setState({ profile: null, loading: true });
-    console.log('[route-guard] ensureUserProfile:start', {
-      uid: user?.uid || null,
-      email: user?.email || null,
-    });
 
     ensureUserProfile(user)
       .then((profile) => {
@@ -91,30 +74,16 @@ const useResolvedProfile = (user, loading) => {
           if (storedGoogleResult?.flowType !== 'signup') {
             clearPendingGoogleState();
           }
-          console.log('[route-guard] ensureUserProfile:resolved', {
-            uid: user?.uid || null,
-            usedStoredGoogleState: Boolean(storedGoogleResult),
-            role: resolvedProfile?.role || null,
-            profileComplete: resolvedProfile?.profileComplete || false,
-          });
           return resolvedProfile;
         });
       })
       .then((profile) => {
-        console.log('[route-guard] ensureUserProfile:done', {
-          uid: user?.uid || null,
-          role: profile?.role || null,
-          profileComplete: profile?.profileComplete || false,
-        });
         if (active) {
           setState({ profile, loading: false });
         }
       })
       .catch((error) => {
-        console.error('[route-guard] ensureUserProfile:error', {
-          uid: user?.uid || null,
-          error,
-        });
+        console.error('Unable to resolve current user profile.', error);
         if (active) {
           setState({ profile: null, loading: false });
         }
@@ -139,17 +108,8 @@ export const PublicOnlyRoute = ({ children }) => {
   if (user && profile) {
     const forceProfileSetup = shouldForceGoogleProfileSetup();
     const target = forceProfileSetup ? '/profile-setup' : profile.profileComplete ? getRouteForRole(profile.role) : '/profile-setup';
-    console.log('[route-guard] PublicOnlyRoute:redirect', {
-      uid: user?.uid || null,
-      role: profile?.role || null,
-      profileComplete: profile?.profileComplete || false,
-      forceProfileSetup,
-      target,
-    });
     return <Navigate to={target} replace />;
   }
-
-  console.log('[route-guard] PublicOnlyRoute:show-children');
 
   return children;
 };

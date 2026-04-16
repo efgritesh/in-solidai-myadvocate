@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import React, { useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, doc, query, updateDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -19,6 +19,7 @@ import {
 import LoadingState from './LoadingState';
 import { syncCaseAccessComment, syncCaseAccessPayment, syncCaseAccessRecord } from '../utils/clientAccessRecords';
 import { createLifecycleStep, formatLifecycleDate, isHearingLifecycleStep, sortLifecycleForCase } from '../utils/lifecycle';
+import { useFirestoreCollection, useFirestoreDocument } from '../utils/firestoreCache';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -79,77 +80,81 @@ const CaseDetails = () => {
   const [caseDocuments, setCaseDocuments] = useState([]);
   const [clientDocuments, setClientDocuments] = useState([]);
   const [commentDraft, setCommentDraft] = useState('');
-  const [loading, setLoading] = useState(true);
   const locale = t('preferredLocale', { defaultValue: 'en-IN' });
   const paymentsPanelOpen = activePanel === 'payments' || activePanel === 'payments-add';
   const notesPanelOpen = activePanel === 'notes' || activePanel === 'notes-add';
+  const advocateId = auth.currentUser?.uid || '';
+  const caseState = useFirestoreDocument({
+    enabled: Boolean(caseId),
+    docFactory: () => doc(db, 'cases', caseId),
+    queryKey: [caseId || '', 'case-details'],
+  });
+  const paymentsState = useFirestoreCollection({
+    enabled: Boolean(caseState.data?.case_number),
+    queryFactory: () =>
+      caseState.data?.client_access_token
+        ? collection(db, 'client_access', caseState.data.client_access_token, 'payments')
+        : query(
+            collection(db, 'payments'),
+            where('advocate_id', '==', advocateId),
+            where('case_id', '==', caseState.data.case_number)
+          ),
+    queryKey: [advocateId, caseState.data?.client_access_token || '', caseState.data?.case_number || '', 'case-payments'],
+  });
+  const commentsState = useFirestoreCollection({
+    enabled: Boolean(caseState.data?.case_number),
+    queryFactory: () =>
+      caseState.data?.client_access_token
+        ? collection(db, 'client_access', caseState.data.client_access_token, 'comments')
+        : query(
+            collection(db, 'comments'),
+            where('advocate_id', '==', advocateId),
+            where('case_id', '==', caseState.data.case_number)
+          ),
+    queryKey: [advocateId, caseState.data?.client_access_token || '', caseState.data?.case_number || '', 'case-comments'],
+  });
+  const documentsState = useFirestoreCollection({
+    enabled: Boolean(caseState.data?.case_number),
+    queryFactory: () =>
+      caseState.data?.client_access_token
+        ? collection(db, 'client_access', caseState.data.client_access_token, 'documents')
+        : query(
+            collection(db, 'documents'),
+            where('advocate_id', '==', advocateId),
+            where('case_id', '==', caseState.data.case_number)
+          ),
+    queryKey: [advocateId, caseState.data?.client_access_token || '', caseState.data?.case_number || '', 'case-documents'],
+  });
 
-  const loadCase = useCallback(async () => {
-    if (!caseId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const caseSnap = await getDoc(doc(db, 'cases', caseId));
-      if (!caseSnap.exists()) {
-        setCaseRecord(null);
-        setPayments([]);
-        setCaseDocuments([]);
-        setClientDocuments([]);
-        return;
-      }
+  useEffect(() => {
+    setCaseRecord(caseState.data);
+    setPayments(paymentsState.data);
+    setComments(
+      commentsState.data
+        .slice()
+        .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))
+    );
+  }, [caseState.data, commentsState.data, paymentsState.data]);
 
-      const nextCase = { id: caseSnap.id, ...caseSnap.data() };
-      const [paymentSnap, commentSnap, documentsSnap] = nextCase.client_access_token
-        ? await Promise.all([
-            getDocs(collection(db, 'client_access', nextCase.client_access_token, 'payments')),
-            getDocs(collection(db, 'client_access', nextCase.client_access_token, 'comments')),
-            getDocs(collection(db, 'client_access', nextCase.client_access_token, 'documents')),
-          ])
-        : await Promise.all([
-            getDocs(
-              query(
-                collection(db, 'payments'),
-                where('advocate_id', '==', auth.currentUser?.uid || ''),
-                where('case_id', '==', nextCase.case_number)
-              )
-            ),
-            getDocs(
-              query(
-                collection(db, 'comments'),
-                where('advocate_id', '==', auth.currentUser?.uid || ''),
-                where('case_id', '==', nextCase.case_number)
-              )
-            ),
-            getDocs(
-              query(
-                collection(db, 'documents'),
-                where('advocate_id', '==', auth.currentUser?.uid || ''),
-                where('case_id', '==', nextCase.case_number)
-              )
-            ),
-          ]);
-
-      setCaseRecord(nextCase);
-      setPayments(paymentSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-      setComments(
-        commentSnap.docs
-          .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-          .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))
-      );
+  useEffect(() => {
+    let active = true;
+    const resolveDocuments = async () => {
       const resolvedDocuments = await Promise.all(
-        documentsSnap.docs.map(async (docItem) => {
-          const documentItem = { id: docItem.id, ...docItem.data() };
-          if (!documentItem.url && documentItem.storage_path) {
+        documentsState.data.map(async (documentItem) => {
+          const nextDocument = { ...documentItem };
+          if (!nextDocument.url && nextDocument.storage_path) {
             try {
-              documentItem.url = await getDownloadURL(ref(storage, documentItem.storage_path));
+              nextDocument.url = await getDownloadURL(ref(storage, nextDocument.storage_path));
             } catch (error) {
-              documentItem.url = '';
+              nextDocument.url = '';
             }
           }
-          return documentItem;
+          return nextDocument;
         })
       );
+      if (!active) {
+        return;
+      }
       setCaseDocuments(
         resolvedDocuments
           .filter((item) => item.uploaded_by_role !== 'client')
@@ -160,14 +165,13 @@ const CaseDetails = () => {
           .filter((item) => item.uploaded_by_role === 'client')
           .sort((left, right) => new Date(right.created_at || right.synced_at || 0) - new Date(left.created_at || left.synced_at || 0))
       );
-    } finally {
-      setLoading(false);
-    }
-  }, [caseId]);
+    };
 
-  useEffect(() => {
-    loadCase();
-  }, [loadCase]);
+    resolveDocuments();
+    return () => {
+      active = false;
+    };
+  }, [documentsState.data]);
 
   const progressLabel = useMemo(() => {
     const lifecycle = caseRecord?.lifecycle || [];
@@ -181,9 +185,9 @@ const CaseDetails = () => {
       step.id === stepId ? { ...step, status: nextStatus } : step
     );
     const sortedLifecycle = sortLifecycleForCase(lifecycle);
+    setCaseRecord((current) => ({ ...current, lifecycle: sortedLifecycle }));
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle: sortedLifecycle });
     await syncCaseAccessRecord({ ...caseRecord, lifecycle: sortedLifecycle });
-    await loadCase();
   };
 
   const updateLifecycleField = async (stepId, key, value) => {
@@ -191,9 +195,9 @@ const CaseDetails = () => {
     const lifecycle = (caseRecord.lifecycle || []).map((step) =>
       step.id === stepId ? { ...step, [key]: value } : step
     );
+    setCaseRecord((current) => ({ ...current, lifecycle }));
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
     await syncCaseAccessRecord({ ...caseRecord, lifecycle });
-    await loadCase();
   };
 
   const addLifecycleStep = async () => {
@@ -215,6 +219,7 @@ const CaseDetails = () => {
       nextStep,
       ...currentLifecycle.slice(insertAt),
     ];
+    setCaseRecord((current) => ({ ...current, lifecycle }));
     await updateDoc(doc(db, 'cases', caseRecord.id), { lifecycle });
     await syncCaseAccessRecord({ ...caseRecord, lifecycle });
     setSelectedLifecycleTitle('');
@@ -223,7 +228,6 @@ const CaseDetails = () => {
     setSelectedLifecycleNotes('');
     setExpandedLifecycleStep(nextStep.id);
     setActivePanel('');
-    await loadCase();
   };
 
   const toggleClientAccess = async () => {
@@ -235,7 +239,6 @@ const CaseDetails = () => {
       ...caseRecord,
       client_access_enabled: !caseRecord.client_access_enabled,
     });
-    await loadCase();
   };
 
   const handlePaymentSubmit = async (e) => {
@@ -259,7 +262,6 @@ const CaseDetails = () => {
 
     setPaymentForm(emptyPaymentForm);
     setActivePanel('');
-    await loadCase();
   };
 
   const handleCommentSubmit = async (e) => {
@@ -280,8 +282,18 @@ const CaseDetails = () => {
     await syncCaseAccessComment(caseRecord.client_access_token, payload, commentRef.id);
     setCommentDraft('');
     setActivePanel('');
-    await loadCase();
   };
+
+  const loading =
+    caseState.loadingInitial ||
+    paymentsState.loadingInitial ||
+    commentsState.loadingInitial ||
+    documentsState.loadingInitial;
+  const refreshing =
+    caseState.refreshing ||
+    paymentsState.refreshing ||
+    commentsState.refreshing ||
+    documentsState.refreshing;
 
   const toggleLifecycleStep = (stepId) => {
     setExpandedLifecycleStep((current) => {
@@ -382,6 +394,7 @@ const CaseDetails = () => {
         </div>
       }
     >
+      {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
       <section className="hero-card case-hero">
         <div>
           <p className="eyebrow">{t('clientLabel')}</p>

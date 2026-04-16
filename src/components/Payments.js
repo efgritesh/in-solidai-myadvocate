@@ -5,6 +5,7 @@ import { auth, db } from '../firebase';
 import PageShell from './PageShell';
 import LoadingState from './LoadingState';
 import { syncCaseAccessPayment } from '../utils/clientAccessRecords';
+import { useFirestoreCollection } from '../utils/firestoreCache';
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -21,29 +22,32 @@ const Payments = () => {
   const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
   const [requestedFromClient, setRequestedFromClient] = useState(true);
-  const [loading, setLoading] = useState(true);
-
-  const fetchPayments = async () => {
-    const advocateId = auth.currentUser?.uid;
-    if (!advocateId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const querySnapshot = await getDocs(query(collection(db, 'payments'), where('advocate_id', '==', advocateId)));
-      setPayments(querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [saveError, setSaveError] = useState('');
+  const [optimisticPayments, setOptimisticPayments] = useState([]);
+  const advocateId = auth.currentUser?.uid;
+  const paymentsState = useFirestoreCollection({
+    enabled: Boolean(advocateId),
+    queryFactory: () => query(collection(db, 'payments'), where('advocate_id', '==', advocateId)),
+    queryKey: [advocateId || '', 'payments'],
+  });
 
   useEffect(() => {
-    fetchPayments();
-  }, []);
+    setPayments(paymentsState.data);
+  }, [paymentsState.data]);
+
+  useEffect(() => {
+    setOptimisticPayments((current) =>
+      current.filter(
+        (item) =>
+          !paymentsState.data.some(
+            (serverPayment) => serverPayment.case_id === item.case_id && serverPayment.amount === item.amount && serverPayment.date === item.date
+          )
+      )
+    );
+  }, [paymentsState.data]);
 
   const handleAddPayment = async (e) => {
     e.preventDefault();
-    const advocateId = auth.currentUser?.uid;
     if (!advocateId) return;
     const caseSnapshot = await getDocs(
       query(collection(db, 'cases'), where('advocate_id', '==', advocateId), where('case_number', '==', caseId))
@@ -61,24 +65,38 @@ const Payments = () => {
       client_access_token: caseRecord?.client_access_token || '',
     };
 
-    const paymentRef = await addDoc(collection(db, 'payments'), paymentPayload);
-
-    if (caseRecord?.client_access_token) {
-      await syncCaseAccessPayment(caseRecord.client_access_token, paymentPayload, paymentRef.id);
-    }
-
+    const tempId = `payment-temp-${Date.now()}`;
+    setSaveError('');
+    setOptimisticPayments((current) => [{ id: tempId, ...paymentPayload }, ...current]);
     setCaseId('');
     setAmount('');
     setDate('');
     setDescription('');
     setRequestedFromClient(true);
-    await fetchPayments();
+
+    try {
+      const paymentRef = await addDoc(collection(db, 'payments'), paymentPayload);
+
+      if (caseRecord?.client_access_token) {
+        await syncCaseAccessPayment(caseRecord.client_access_token, paymentPayload, paymentRef.id);
+      }
+      setOptimisticPayments((current) => current.filter((payment) => payment.id !== tempId));
+    } catch (error) {
+      setOptimisticPayments((current) => current.filter((payment) => payment.id !== tempId));
+      setSaveError(error.message || t('unableToSavePayment', { defaultValue: 'Unable to save payment right now.' }));
+    }
   };
+
+  const loading = paymentsState.loadingInitial;
+  const refreshing = paymentsState.refreshing;
+  const visiblePayments = [...optimisticPayments, ...payments];
 
   return (
     <PageShell title={t('payments')} subtitle={t('paymentsSubtitle')} showBack>
       {loading ? <LoadingState label={t('loadingWorkspace')} /> : (
       <>
+      {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
+      {saveError ? <p className="inline-feedback inline-feedback--error">{saveError}</p> : null}
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -119,15 +137,15 @@ const Payments = () => {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">{t('collections')}</p>
-            <h2>{payments.length} {t('entries')}</h2>
+                <p className="eyebrow">{t('collections')}</p>
+            <h2>{visiblePayments.length} {t('entries')}</h2>
           </div>
         </div>
-        {payments.length === 0 ? (
+        {visiblePayments.length === 0 ? (
           <p className="empty-state">{t('paymentsEmpty')}</p>
         ) : (
           <div className="record-list">
-            {payments.map((payment) => (
+            {visiblePayments.map((payment) => (
               <article key={payment.id} className="record-item">
                 <div>
                   <strong>{payment.case_id}</strong>

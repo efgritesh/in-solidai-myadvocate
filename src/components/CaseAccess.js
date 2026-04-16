@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import React, { useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, doc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useTranslation } from 'react-i18next';
 import { useDropzone } from 'react-dropzone';
@@ -9,6 +9,7 @@ import LanguageSelector from './LanguageSelector';
 import { getStoredClientLanguage } from '../utils/language';
 import { DocumentsIcon, PaymentsIcon, ShareIcon } from './AppIcons';
 import { formatLifecycleDate, formatLifecycleMonth, getLifecycleDisplayDate, isHearingLifecycleStep } from '../utils/lifecycle';
+import { useFirestoreCollection, useFirestoreDocument } from '../utils/firestoreCache';
 
 const CaseAccess = () => {
   const { t, i18n } = useTranslation();
@@ -27,44 +28,55 @@ const CaseAccess = () => {
     [location.search]
   );
 
-  const loadCase = useCallback(async () => {
-    if (!token) return;
-    setErrorMessage('');
-
-    try {
-      const accessSnap = await getDoc(doc(db, 'client_access', token));
-      if (!accessSnap.exists()) {
-        setStatus('not_found');
-        return;
-      }
-
-      const nextCase = { id: accessSnap.id, ...accessSnap.data() };
-      if (!nextCase.enabled || nextCase.status === 'Closed') {
-        setCaseRecord(nextCase);
-        setStatus('closed');
-        return;
-      }
-
-      const [paymentsSnap, documentsSnap, commentsSnap] = await Promise.all([
-        getDocs(collection(db, 'client_access', token, 'payments')),
-        getDocs(collection(db, 'client_access', token, 'documents')),
-        getDocs(collection(db, 'client_access', token, 'comments')),
-      ]);
-
-      setCaseRecord(nextCase);
-      setPayments(paymentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-      setDocuments(documentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-      setComments(commentsSnap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
-      setStatus('ready');
-    } catch (error) {
-      setStatus('not_found');
-      setErrorMessage(error.message || t('invalidClientLink'));
-    }
-  }, [t, token]);
+  const caseState = useFirestoreDocument({
+    enabled: Boolean(token),
+    docFactory: () => doc(db, 'client_access', token),
+    queryKey: [token || '', 'client-access'],
+  });
+  const paymentsState = useFirestoreCollection({
+    enabled: Boolean(token),
+    queryFactory: () => collection(db, 'client_access', token, 'payments'),
+    queryKey: [token || '', 'client-access-payments'],
+  });
+  const documentsState = useFirestoreCollection({
+    enabled: Boolean(token),
+    queryFactory: () => collection(db, 'client_access', token, 'documents'),
+    queryKey: [token || '', 'client-access-documents'],
+  });
+  const commentsState = useFirestoreCollection({
+    enabled: Boolean(token),
+    queryFactory: () => collection(db, 'client_access', token, 'comments'),
+    queryKey: [token || '', 'client-access-comments'],
+  });
 
   useEffect(() => {
-    loadCase();
-  }, [loadCase]);
+    setErrorMessage(caseState.error?.message || '');
+    if (caseState.loadingInitial) {
+      setStatus('loading');
+      return;
+    }
+    if (!caseState.data) {
+      setStatus('not_found');
+      return;
+    }
+    if (!caseState.data.enabled || caseState.data.status === 'Closed') {
+      setCaseRecord(caseState.data);
+      setStatus('closed');
+      return;
+    }
+    setCaseRecord(caseState.data);
+    setPayments(paymentsState.data);
+    setDocuments(documentsState.data);
+    setComments(commentsState.data);
+    setStatus('ready');
+  }, [
+    caseState.data,
+    caseState.error?.message,
+    caseState.loadingInitial,
+    commentsState.data,
+    documentsState.data,
+    paymentsState.data,
+  ]);
 
   useEffect(() => {
     if (!caseRecord) return;
@@ -109,7 +121,6 @@ const CaseAccess = () => {
       });
     }
 
-    await loadCase();
   };
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop, disabled: previewMode });
@@ -129,7 +140,6 @@ const CaseAccess = () => {
     });
 
     setComment('');
-    await loadCase();
   };
 
   const handlePaymentSubmit = async (e) => {
@@ -149,8 +159,13 @@ const CaseAccess = () => {
     });
 
     setPaymentForm({ amount: '', description: '' });
-    await loadCase();
   };
+
+  const refreshing =
+    caseState.refreshing ||
+    paymentsState.refreshing ||
+    documentsState.refreshing ||
+    commentsState.refreshing;
 
   if (status === 'loading') {
     return (
@@ -213,6 +228,7 @@ const CaseAccess = () => {
         </header>
 
         <main className="stack">
+          {refreshing ? <p className="helper-text">{t('refreshingWorkspace', { defaultValue: 'Refreshing from your latest saved data...' })}</p> : null}
           <section className="hero-card case-hero case-hero--public">
             <div>
               <p className="eyebrow">{t('caseSummary')}</p>

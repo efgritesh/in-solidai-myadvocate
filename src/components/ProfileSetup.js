@@ -8,6 +8,7 @@ import { clearPendingGoogleState, getRouteForRole } from '../utils/auth';
 import { isAdvocateDraftReady } from '../utils/draftingProfiles';
 import LanguageSelector from './LanguageSelector';
 import { ArrowLeftIcon } from './AppIcons';
+import PageShell from './PageShell';
 
 const ProfileSetup = () => {
   const { t } = useTranslation();
@@ -120,11 +121,6 @@ const ProfileSetup = () => {
       const nextRole = userSnap.data()?.role || 'advocate';
       const target = nextRole === 'advocate' ? '/dashboard' : getRouteForRole(nextRole);
       clearPendingGoogleState();
-      console.log('[profile-setup] save:redirect', {
-        uid: user.uid,
-        nextRole,
-        target,
-      });
       navigate(target, { replace: true });
       window.setTimeout(() => {
         if (window.location.pathname !== target) {
@@ -139,6 +135,14 @@ const ProfileSetup = () => {
   };
 
   if (loading) {
+    if (isProfileReview) {
+      return (
+        <PageShell title={t('myProfile')} subtitle={t('profileSubtitle')} showBack backTo="/dashboard" backReplace>
+          <p className="helper-text">{t('loadingWorkspace')}</p>
+        </PageShell>
+      );
+    }
+
     return (
       <div className="auth-screen">
         <div className="auth-layout auth-layout--compact">
@@ -150,122 +154,136 @@ const ProfileSetup = () => {
     );
   }
 
+  const profileEditor = (
+    <div className="profile-editor">
+      <div className="profile-editor__header">
+        <div className="profile-editor__header-copy">
+          {isProfileReview ? (
+            <button
+              type="button"
+              className="icon-button ghost-button ghost-button--icon"
+              onClick={() => navigate('/dashboard', { replace: true })}
+              aria-label={t('back')}
+            >
+              <ArrowLeftIcon className="app-icon" />
+            </button>
+          ) : null}
+          <div>
+            <p className="eyebrow">{isProfileReview ? t('myProfile') : t('firstTimeSetup')}</p>
+            <h1>{profileTitle}</h1>
+          </div>
+        </div>
+        {!isProfileReview ? <LanguageSelector className="profile-language-selector" /> : null}
+      </div>
+      <div className="profile-avatar">
+        <div className="profile-avatar__frame">
+          {existingProfilePicUrl ? (
+            <img src={existingProfilePicUrl} alt={name || t('profilePic')} className="profile-avatar__image" />
+          ) : (
+            <span className="profile-avatar__initials">{initials}</span>
+          )}
+          <button
+            type="button"
+            className="profile-avatar__edit"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label={t('changePhoto')}
+          >
+            <svg viewBox="0 0 24 24" className="app-icon" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="m16.5 3.5 4 4L7 21H3v-4z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <form onSubmit={handleSubmit}>
+        <div className="form-grid">
+          <div className="form-group">
+            <label>{t('name')}:</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>{t('phone')}:</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>{t('enrollmentNumber')}:</label>
+            <input
+              type="text"
+              value={enrollmentNumber}
+              onChange={(e) => setEnrollmentNumber(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>{t('email')}:</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isGoogleManagedEmail}
+              readOnly={isGoogleManagedEmail}
+              required
+            />
+          </div>
+          <div className="form-group full-span">
+            <label>{t('officeAddress')}:</label>
+            <textarea
+              value={officeAddress}
+              onChange={(e) => setOfficeAddress(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="sr-only"
+        />
+        {profilePic ? <p className="helper-text top-space">{profilePic.name}</p> : null}
+        <button type="submit" className="button" disabled={saving}>
+          {saving ? t('saving') : t('save')}
+        </button>
+        {userRole === 'advocate' ? (
+          <button
+            type="button"
+            className="button button--secondary top-space"
+            onClick={() => navigate('/premium?feature=drafting&next=%2Fprofile')}
+          >
+            {t('managePremiumAccess')}
+          </button>
+        ) : null}
+        {error ? <p className="error-text">{error}</p> : null}
+      </form>
+    </div>
+  );
+
+  if (isProfileReview) {
+    return (
+      <PageShell title={t('myProfile')} subtitle={t('profileSubtitle')} showBack backTo="/dashboard" backReplace>
+        <section className="panel">
+          {profileEditor}
+        </section>
+      </PageShell>
+    );
+  }
+
   return (
     <div className="auth-screen">
       <div className="auth-layout auth-layout--compact auth-layout--profile">
         <div className="auth-card auth-card--profile">
-          <div className="profile-editor">
-            <div className="profile-editor__header">
-              <div className="profile-editor__header-copy">
-                {isProfileReview ? (
-                  <button
-                    type="button"
-                    className="icon-button ghost-button ghost-button--icon"
-                    onClick={() => navigate('/dashboard', { replace: true })}
-                    aria-label={t('back')}
-                  >
-                    <ArrowLeftIcon className="app-icon" />
-                  </button>
-                ) : null}
-                <div>
-                  <p className="eyebrow">{isProfileReview ? t('myProfile') : t('firstTimeSetup')}</p>
-                  <h1>{profileTitle}</h1>
-                </div>
-              </div>
-              <LanguageSelector className="profile-language-selector" />
-            </div>
-            <div className="profile-avatar">
-              <div className="profile-avatar__frame">
-                {existingProfilePicUrl ? (
-                  <img src={existingProfilePicUrl} alt={name || t('profilePic')} className="profile-avatar__image" />
-                ) : (
-                  <span className="profile-avatar__initials">{initials}</span>
-                )}
-                <button
-                  type="button"
-                  className="profile-avatar__edit"
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label={t('changePhoto')}
-                >
-                  <svg viewBox="0 0 24 24" className="app-icon" aria-hidden="true">
-                    <path d="M12 20h9" />
-                    <path d="m16.5 3.5 4 4L7 21H3v-4z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>{t('name')}:</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>{t('phone')}:</label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>{t('enrollmentNumber')}:</label>
-                  <input
-                    type="text"
-                    value={enrollmentNumber}
-                    onChange={(e) => setEnrollmentNumber(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>{t('email')}:</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isGoogleManagedEmail}
-                    readOnly={isGoogleManagedEmail}
-                    required
-                  />
-                </div>
-                <div className="form-group full-span">
-                  <label>{t('officeAddress')}:</label>
-                  <textarea
-                    value={officeAddress}
-                    onChange={(e) => setOfficeAddress(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="sr-only"
-              />
-              {profilePic ? <p className="helper-text top-space">{profilePic.name}</p> : null}
-              <button type="submit" className="button" disabled={saving}>
-                {saving ? t('saving') : t('save')}
-              </button>
-              {userRole === 'advocate' ? (
-                <button
-                  type="button"
-                  className="button button--secondary top-space"
-                  onClick={() => navigate('/premium?feature=drafting&next=%2Fprofile')}
-                >
-                  {t('managePremiumAccess')}
-                </button>
-              ) : null}
-              {error ? <p className="error-text">{error}</p> : null}
-            </form>
-          </div>
+          {profileEditor}
         </div>
       </div>
     </div>
