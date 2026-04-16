@@ -42,12 +42,45 @@ const AppRoutes = () => {
       window.location.reload();
     };
 
+    const checkForUpdate = async () => {
+      try {
+        const registration = await navigator.serviceWorker?.ready;
+        if (!registration) {
+          return;
+        }
+
+        await registration.update();
+
+        if (registration.waiting) {
+          setUpdateRegistration(registration);
+          setUpdateReady(true);
+        }
+      } catch (error) {
+        // Ignore update check failures and try again later.
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkForUpdate();
+      }
+    };
+
     window.addEventListener('iadvocate-update-ready', handleUpdateReady);
     navigator.serviceWorker?.addEventListener('controllerchange', handleControllerChange);
+    window.addEventListener('focus', checkForUpdate);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const initialTimer = window.setTimeout(checkForUpdate, 2500);
+    const interval = window.setInterval(checkForUpdate, 45000);
 
     return () => {
       window.removeEventListener('iadvocate-update-ready', handleUpdateReady);
       navigator.serviceWorker?.removeEventListener('controllerchange', handleControllerChange);
+      window.removeEventListener('focus', checkForUpdate);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearTimeout(initialTimer);
+      window.clearInterval(interval);
     };
   }, []);
 

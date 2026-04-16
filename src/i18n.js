@@ -645,7 +645,7 @@ const resources = {
       nextHearingLabel: 'Next hearing:',
       hearingOn: 'Hearing on',
       hearingStages: 'hearing stages',
-      copyrightLine: '© 2026 iAdvocate by SolidAI. All rights reserved.',
+      copyrightLine: '© iAdvocate by SolidAI @ 2026 {{version}}. All rights reserved.',
     },
   },
   hi: {
