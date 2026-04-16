@@ -142,7 +142,7 @@ const DraftingAssistant = () => {
   const [draftSources, setDraftSources] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [output, setOutput] = useState(null);
-  const [composeStep, setComposeStep] = useState(1);
+  const [composeStep, setComposeStep] = useState(0);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [newClientIntakeMode, setNewClientIntakeMode] = useState('aadhaar');
   const [validationFields, setValidationFields] = useState([]);
@@ -204,6 +204,15 @@ const DraftingAssistant = () => {
     setComposeStep(Math.min(3, Math.max(1, nextStep)));
   };
 
+  const startComposeFlow = () => {
+    if (aiLocked) {
+      requestPremiumFeature();
+      return;
+    }
+    setComposeStep(1);
+    setStatusMessage('');
+  };
+
   const fetchArtifacts = useCallback(async (sessionId, ownerId = auth.currentUser?.uid) => {
     if (!sessionId || !ownerId) return { nextSources: [], nextOutput: null };
     const [sourcesSnapshot, outputSnapshot] = await Promise.all([
@@ -253,7 +262,7 @@ const DraftingAssistant = () => {
         setOutput(nextOutput);
         setValidationFields(nextOutput?.fact_validation_fields || []);
       } else {
-        setComposeStep(1);
+        setComposeStep(0);
         const selectedCase = nextCases.find((caseRecord) => caseRecord.id === caseParam) || null;
         setDraftForm({
           clientId: findClientIdForCaseRecord(selectedCase, nextClients),
@@ -585,10 +594,13 @@ const DraftingAssistant = () => {
         }
 
         if (nextOutput) {
+          setComposeStep(0);
           next.set('view', nextOutput.fact_validation_required ? 'validate' : 'review');
         } else if (nextSources.length) {
+          setComposeStep(0);
           next.set('view', 'prepare');
         } else {
+          setComposeStep(1);
           next.delete('view');
         }
 
@@ -602,6 +614,7 @@ const DraftingAssistant = () => {
   };
 
   const clearSessionParams = () => {
+    setComposeStep(0);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('sessionId');
@@ -629,6 +642,7 @@ const DraftingAssistant = () => {
         setOutput(null);
         setDraftSources([]);
         setValidationFields([]);
+        setSelectedFiles([]);
       }
       await loadWorkspace();
       setStatusMessage('Drafting workflow discarded.');
@@ -1024,32 +1038,26 @@ const DraftingAssistant = () => {
       showBack
       actions={currentSession ? <button type="button" className="icon-button icon-button--danger" onClick={() => handleDiscardSession(currentSession.id)} disabled={working}><DeleteIcon className="app-icon" /></button> : null}
     >
+      {composeStep === 0 ? (
       <section className="panel panel--accent workflow-card">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">{currentSession ? t('resumeWorkflow') : t('startWorkflow')}</p>
-            <h2>{currentSession ? workflowLabels[currentSession.status] || t('activeSession') : t('singleFlowDrafting')}</h2>
+            <p className="eyebrow">{t('startWorkflow')}</p>
+            <h2>{t('singleFlowDrafting')}</h2>
           </div>
           <InfoIcon className="app-icon section-icon" />
         </div>
-        <div className="workflow-summary">
-          <div className="workflow-summary__main">
-            <strong>{activeClient?.name || t('selectClientBeforeDrafting')}</strong>
-            <p>{activeCase ? `${activeCase.case_number} | ${activeCase.summary || activeCase.next_step || ''}` : t('draftingContextSubtitle')}</p>
-          </div>
-          <div className="workflow-summary__meta">
-            <span className="workflow-summary__status">{currentSession ? workflowLabels[currentSession.status] || currentSession.status : t('readyToStart')}</span>
-          </div>
+        <p className="helper-text">{t('draftingContextSubtitle')}</p>
+        <div className="button-row top-space">
+          <button type="button" className="button" onClick={startComposeFlow}>
+            {t('start')}
+          </button>
         </div>
-        {!currentSession ? (
-          <div className="workflow-defaults">
-            <span>{t('draftingProgressStepLabel', { current: composeStep, total: 3 })}</span>
-          </div>
-        ) : null}
         {!working && statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
       </section>
+      ) : null}
 
-      {sessions.length ? (
+      {composeStep === 0 && sessions.length ? (
         <section className="panel workflow-card">
           <div className="section-heading">
             <div><p className="eyebrow">{t('savedWorkflows')}</p><h2>{t('resumeOrDiscard')}</h2></div>

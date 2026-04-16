@@ -254,6 +254,15 @@ const ProfileSetup = () => {
               <button type="submit" className="button" disabled={saving}>
                 {saving ? t('saving') : t('save')}
               </button>
+              {userRole === 'advocate' ? (
+                <button
+                  type="button"
+                  className="button button--secondary top-space"
+                  onClick={() => navigate('/premium?feature=drafting&next=%2Fprofile')}
+                >
+                  {t('managePremiumAccess')}
+                </button>
+              ) : null}
               {error ? <p className="error-text">{error}</p> : null}
             </form>
           </div>
