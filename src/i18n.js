@@ -92,7 +92,7 @@ const resources = {
       continueInBrowser: 'Continue in browser',
       updateAvailableEyebrow: 'Update ready',
       updateAvailableTitle: 'A new version is available',
-      updateAvailableBody: 'Refresh now to use the latest fixes and changes.',
+      updateAvailableBody: 'Refresh now to use the latest fixes and changes. This message confirms the update prompt is working.',
       updateNow: 'Refresh now',
       later: 'Later',
       languageSubtitle: 'A simple legal workspace for advocates, case updates, client links, and payments.',
