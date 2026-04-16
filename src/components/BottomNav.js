@@ -49,6 +49,11 @@ const BottomNav = ({ items }) => {
     [items, t]
   );
 
+  const desktopNavItems = useMemo(
+    () => navItems.filter((item) => item.to !== '/invite'),
+    [navItems]
+  );
+
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
@@ -99,7 +104,7 @@ const BottomNav = ({ items }) => {
           </button>
           <div className="top-nav__actions">
             <div className="top-nav__menu top-nav__menu--desktop">
-              {navItems.map((item) => {
+              {desktopNavItems.map((item) => {
                 const Icon = item.icon || defaultIcons[item.to] || DashboardIcon;
                 return (
                   <NavLink

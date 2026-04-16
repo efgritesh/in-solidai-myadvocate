@@ -142,6 +142,7 @@ const DraftingAssistant = () => {
   const [draftSources, setDraftSources] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [output, setOutput] = useState(null);
+  const [composeStep, setComposeStep] = useState(1);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [newClientIntakeMode, setNewClientIntakeMode] = useState('aadhaar');
   const [validationFields, setValidationFields] = useState([]);
@@ -197,6 +198,12 @@ const DraftingAssistant = () => {
     });
   }, [cases, clients, draftForm.clientId]);
 
+  const isActiveClientDraftReady = !activeClient || isClientDraftReady(activeClient);
+
+  const moveToComposeStep = (nextStep) => {
+    setComposeStep(Math.min(3, Math.max(1, nextStep)));
+  };
+
   const fetchArtifacts = useCallback(async (sessionId, ownerId = auth.currentUser?.uid) => {
     if (!sessionId || !ownerId) return { nextSources: [], nextOutput: null };
     const [sourcesSnapshot, outputSnapshot] = await Promise.all([
@@ -235,6 +242,7 @@ const DraftingAssistant = () => {
 
       const selectedSession = targetSessionId ? nextSessions.find((session) => session.id === targetSessionId) || null : null;
       if (selectedSession) {
+        setComposeStep(1);
         setDraftForm({
           clientId: selectedSession.client_id || findClientIdForCaseRecord(nextCases.find((caseRecord) => caseRecord.id === selectedSession.case_id) || null, nextClients),
           caseId: selectedSession.case_id || '',
@@ -245,6 +253,7 @@ const DraftingAssistant = () => {
         setOutput(nextOutput);
         setValidationFields(nextOutput?.fact_validation_fields || []);
       } else {
+        setComposeStep(1);
         const selectedCase = nextCases.find((caseRecord) => caseRecord.id === caseParam) || null;
         setDraftForm({
           clientId: findClientIdForCaseRecord(selectedCase, nextClients),
@@ -352,7 +361,7 @@ const DraftingAssistant = () => {
       next.set('sessionId', created.sessionId);
       if (draftForm.caseId) next.set('caseId', draftForm.caseId);
       return next;
-    });
+    }, { replace: true });
 
     return created.sessionId;
   }, [buildSessionPatch, draftForm.caseId, draftForm.clientId, draftForm.instructions, sessionParam, setSearchParams]);
@@ -498,7 +507,7 @@ const DraftingAssistant = () => {
         next.set('sessionId', sessionId);
         next.set('view', 'prepare');
         return next;
-      });
+      }, { replace: true });
       setStatusMessage(t('draftingPromptReviewReady'));
     } catch (error) {
       if (/trial|subscribe|top up|credits/i.test(error.message || '')) {
@@ -548,6 +557,7 @@ const DraftingAssistant = () => {
       setShowNewClientForm(false);
       await loadWorkspace();
       setDraftForm((current) => ({ ...current, clientId }));
+      setComposeStep(2);
       setStatusMessage(t('clientAddedForDrafting'));
     } catch (error) {
       setStatusMessage(error.message);
@@ -583,7 +593,7 @@ const DraftingAssistant = () => {
         }
 
         return next;
-      });
+      }, { replace: true });
     } catch (error) {
       setStatusMessage(error.message || 'Unable to resume this drafting workflow.');
     } finally {
@@ -597,7 +607,7 @@ const DraftingAssistant = () => {
       next.delete('sessionId');
       next.delete('view');
       return next;
-    });
+    }, { replace: true });
   };
 
   const handleDiscardSession = async (sessionId) => {
@@ -704,7 +714,7 @@ const DraftingAssistant = () => {
         const next = new URLSearchParams(current);
         next.set('view', 'review');
         return next;
-      });
+      }, { replace: true });
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
@@ -757,7 +767,7 @@ const DraftingAssistant = () => {
         const next = new URLSearchParams(current);
         next.set('view', generation.requiresValidation ? 'validate' : 'review');
         return next;
-      });
+      }, { replace: true });
       setProgress(createProgressState());
     } catch (error) {
       if (/trial|subscribe|top up|credits/i.test(error.message || '')) {
@@ -832,6 +842,8 @@ const DraftingAssistant = () => {
         title={t('reviewAiContext')}
         subtitle={currentSession.case_number || activeClient?.name || t('aiDraftingSubtitle')}
         showBack
+        backTo="/drafting"
+        backReplace
       >
         <section className="panel workflow-card">
           <div className="section-heading">
@@ -925,6 +937,8 @@ const DraftingAssistant = () => {
         title={t('validateDraftFacts')}
         subtitle={currentSession.case_number || activeClient?.name || t('aiDraftingSubtitle')}
         showBack
+        backTo="/drafting"
+        backReplace
       >
         <section className="panel workflow-card">
           <div className="section-heading">
@@ -952,7 +966,7 @@ const DraftingAssistant = () => {
           )}
           <div className="button-row top-space">
             <button type="button" className="button" onClick={handleFactValidation} disabled={working}>{working ? t('generatingDraft') : t('applyFactsAndContinue')}</button>
-            <button type="button" className="button button--secondary" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', 'review'); return next; })}>{t('skipToDraftReview')}</button>
+            <button type="button" className="button button--secondary" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', 'review'); return next; }, { replace: true })}>{t('skipToDraftReview')}</button>
           </div>
           {statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
         </section>
@@ -973,6 +987,8 @@ const DraftingAssistant = () => {
         title={t('firstDraft')}
         subtitle={currentSession?.case_number || activeClient?.name || t('aiDraftingSubtitle')}
         showBack
+        backTo="/drafting"
+        backReplace
         actions={activeCase ? <button type="button" className="icon-button" onClick={() => navigate(`/cases/${activeCase.id}`)}><CasesIcon className="app-icon" /></button> : null}
       >
         <section className="panel draft-review-shell">
@@ -1025,6 +1041,11 @@ const DraftingAssistant = () => {
             <span className="workflow-summary__status">{currentSession ? workflowLabels[currentSession.status] || currentSession.status : t('readyToStart')}</span>
           </div>
         </div>
+        {!currentSession ? (
+          <div className="workflow-defaults">
+            <span>{t('draftingProgressStepLabel', { current: composeStep, total: 3 })}</span>
+          </div>
+        ) : null}
         {!working && statusMessage ? <p className="inline-feedback">{statusMessage}</p> : null}
       </section>
 
@@ -1050,6 +1071,7 @@ const DraftingAssistant = () => {
         </section>
       ) : null}
 
+      {composeStep === 1 ? (
       <section className="panel workflow-card">
         <div className="section-heading">
           <div><p className="eyebrow">{t('stepOne')}</p><h2>{t('chooseClientAndCase')}</h2></div>
@@ -1107,6 +1129,16 @@ const DraftingAssistant = () => {
                 {t('clientProfileIncompleteForDrafting')} <button type="button" className="text-link text-link--button" onClick={() => navigate(`/clients/${activeClient.id}?edit=1`)}>{t('openClientProfile')}</button>
               </p>
             ) : null}
+            <div className="button-row top-space">
+              <button
+                type="button"
+                className="button"
+                disabled={!draftForm.clientId || !isActiveClientDraftReady}
+                onClick={() => moveToComposeStep(2)}
+              >
+                {t('continueLabel')}
+              </button>
+            </div>
           </>
         ) : null}
         {showNewClientForm ? (
@@ -1176,7 +1208,9 @@ const DraftingAssistant = () => {
           </form>
         ) : null}
       </section>
+      ) : null}
 
+      {composeStep === 2 ? (
       <section className="panel workflow-card">
         <div className="section-heading">
           <div><p className="eyebrow">{t('stepTwo')}</p><h2>{t('uploadSourceDocumentsOptional')}</h2></div>
@@ -1202,8 +1236,18 @@ const DraftingAssistant = () => {
             {selectedFiles.map((file) => <span key={`${file.name}-${file.size}`}>{file.name}</span>)}
           </div>
         ) : null}
+        <div className="button-row top-space">
+          <button type="button" className="button button--secondary" onClick={() => moveToComposeStep(1)}>
+            {t('back')}
+          </button>
+          <button type="button" className="button" onClick={() => moveToComposeStep(3)}>
+            {t('continueLabel')}
+          </button>
+        </div>
       </section>
+      ) : null}
 
+      {composeStep === 3 ? (
       <section className="panel workflow-card">
         <div className="section-heading">
           <div><p className="eyebrow">{t('stepThree')}</p><h2>{t('advocateInstructions')}</h2></div>
@@ -1218,6 +1262,9 @@ const DraftingAssistant = () => {
           />
         </div>
         <div className="button-row top-space">
+          <button type="button" className="button button--secondary" onClick={() => moveToComposeStep(2)}>
+            {t('back')}
+          </button>
           <button type="button" className="button" onClick={startDrafting} disabled={working}>{working ? t('generatingDraft') : t('generateDraft')}</button>
         </div>
         {usageSummaryNote ? (
@@ -1238,6 +1285,7 @@ const DraftingAssistant = () => {
           </div>
         ) : null}
       </section>
+      ) : null}
 
       {output ? (
         <section className="panel workflow-card">
@@ -1248,7 +1296,7 @@ const DraftingAssistant = () => {
             <strong>{activeClient?.name || t('generatedDraft')}</strong>
             <p>{(output.edited_text || output.generated_text || '').slice(0, 320)}...</p>
             <div className="button-row">
-              <button type="button" className="button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', output.fact_validation_required ? 'validate' : 'review'); return next; })}>
+              <button type="button" className="button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', output.fact_validation_required ? 'validate' : 'review'); return next; }, { replace: true })}>
                 {output.fact_validation_required ? t('validateKeyFacts') : t('openFullScreenReview')}
               </button>
             </div>

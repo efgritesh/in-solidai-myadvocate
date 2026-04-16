@@ -4,8 +4,16 @@ import BottomNav from './BottomNav';
 import FooterBar from './FooterBar';
 import { ArrowLeftIcon } from './AppIcons';
 
-const PageShell = ({ title, subtitle, actions, children, showBack = false, navItems, showNav = true }) => {
+const PageShell = ({ title, subtitle, actions, children, showBack = false, backTo = null, backReplace = false, navItems, showNav = true }) => {
   const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (backTo) {
+      navigate(backTo, { replace: backReplace });
+      return;
+    }
+    navigate(-1);
+  };
 
   return (
     <div className="app-shell">
@@ -14,7 +22,7 @@ const PageShell = ({ title, subtitle, actions, children, showBack = false, navIt
         <header className="screen-header">
           <div className="screen-header__content">
             {showBack ? (
-              <button type="button" className="icon-button ghost-button ghost-button--icon" onClick={() => navigate(-1)}>
+              <button type="button" className="icon-button ghost-button ghost-button--icon" onClick={handleBack}>
                 <ArrowLeftIcon className="app-icon" />
               </button>
             ) : null}

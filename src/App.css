@@ -1021,6 +1021,12 @@ textarea {
   align-items: start;
 }
 
+.profile-editor__header-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .profile-avatar {
   display: grid;
   justify-items: center;

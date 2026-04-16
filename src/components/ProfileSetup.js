@@ -7,6 +7,7 @@ import { auth, db, storage } from '../firebase';
 import { clearPendingGoogleState, getRouteForRole } from '../utils/auth';
 import { isAdvocateDraftReady } from '../utils/draftingProfiles';
 import LanguageSelector from './LanguageSelector';
+import { ArrowLeftIcon } from './AppIcons';
 
 const ProfileSetup = () => {
   const { t } = useTranslation();
@@ -27,6 +28,10 @@ const ProfileSetup = () => {
 
   const isProfileReview = location.pathname === '/profile';
   const profileTitle = isProfileReview ? t('myProfile') : t('profileSetup');
+  const isGoogleManagedEmail = useMemo(
+    () => auth.currentUser?.providerData?.some((provider) => provider.providerId === 'google.com') || false,
+    []
+  );
   const initials = useMemo(() => {
     const trimmed = (name || '').trim();
     if (!trimmed) return 'IA';
@@ -151,9 +156,21 @@ const ProfileSetup = () => {
         <div className="auth-card auth-card--profile">
           <div className="profile-editor">
             <div className="profile-editor__header">
-              <div>
-                <p className="eyebrow">{isProfileReview ? t('myProfile') : t('firstTimeSetup')}</p>
-                <h1>{profileTitle}</h1>
+              <div className="profile-editor__header-copy">
+                {isProfileReview ? (
+                  <button
+                    type="button"
+                    className="icon-button ghost-button ghost-button--icon"
+                    onClick={() => navigate('/dashboard', { replace: true })}
+                    aria-label={t('back')}
+                  >
+                    <ArrowLeftIcon className="app-icon" />
+                  </button>
+                ) : null}
+                <div>
+                  <p className="eyebrow">{isProfileReview ? t('myProfile') : t('firstTimeSetup')}</p>
+                  <h1>{profileTitle}</h1>
+                </div>
               </div>
               <LanguageSelector className="profile-language-selector" />
             </div>
@@ -212,6 +229,8 @@ const ProfileSetup = () => {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    disabled={isGoogleManagedEmail}
+                    readOnly={isGoogleManagedEmail}
                     required
                   />
                 </div>
