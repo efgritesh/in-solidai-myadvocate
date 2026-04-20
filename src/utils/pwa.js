@@ -1,5 +1,8 @@
 const INSTALL_FLAG_KEY = 'iadvocate-installed';
 
+const isMobileDevice = () => /android|iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
+const isCompactViewport = () => window.matchMedia?.('(max-width: 960px)').matches;
+
 export const isStandaloneMode = () =>
   window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
@@ -19,4 +22,7 @@ export const hasInstalledAppFlag = () => {
   }
 };
 
-export const shouldForceOpenInstalledApp = () => hasInstalledAppFlag() && !isStandaloneMode();
+export const shouldForceOpenInstalledApp = () =>
+  hasInstalledAppFlag() &&
+  !isStandaloneMode() &&
+  (isMobileDevice() || isCompactViewport());

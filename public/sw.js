@@ -1,4 +1,5 @@
-const CACHE_NAME = 'iadvocate-shell-v5';
+// Keep this cache version in sync with the visible app version when shipping changes.
+const CACHE_NAME = 'iadvocate-shell-v1-10';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/favicon.ico'];
 
 self.addEventListener('install', (event) => {

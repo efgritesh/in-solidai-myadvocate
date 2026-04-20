@@ -22,6 +22,7 @@ import About from './components/About';
 import DraftingAssistant from './components/DraftingAssistant';
 import PremiumUpgrade from './components/PremiumUpgrade';
 import { ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards';
+import { APP_VERSION } from './config/appMeta';
 import { shouldForceOpenInstalledApp } from './utils/pwa';
 
 const AppRoutes = () => {
@@ -108,8 +109,8 @@ const AppRoutes = () => {
           <button type="button" className="app-modal__scrim" aria-label={t('closeNavigation')} onClick={() => setUpdateReady(false)} />
           <div className="app-modal__surface">
             <p className="eyebrow">{t('updateAvailableEyebrow')}</p>
-            <h2>{t('updateAvailableTitle')}</h2>
-            <p>{t('updateAvailableBody')}</p>
+            <h2>{t('updateAvailableTitle', { version: APP_VERSION })}</h2>
+            <p>{t('updateAvailableBody', { version: APP_VERSION })}</p>
             <div className="button-row top-space">
               <button type="button" className="button" onClick={refreshToLatest}>
                 {t('updateNow')}

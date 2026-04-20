@@ -1,7 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-
-const APP_VERSION = 'v1.9';
+import { APP_VERSION } from '../config/appMeta';
 
 const FooterBar = () => {
   const { t } = useTranslation();
