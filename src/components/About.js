@@ -81,7 +81,12 @@ const About = () => {
           </div>
         </div>
         <p className="empty-state">{t('consentBody')}</p>
-        <p className="helper-text top-space">{t('supportEmailLabel')} <a className="text-link" href="mailto:ritesh.chaturvedi@solidai.in">ritesh.chaturvedi@solidai.in</a></p>
+        <p className="helper-text top-space">
+          {t('supportEmailLabel')} <a className="text-link" href="mailto:contactus@solidai.in">contactus@solidai.in</a>
+        </p>
+        <p className="helper-text">
+          Sales: <a className="text-link" href="mailto:sales@solidai.in">sales@solidai.in</a>
+        </p>
       </section>
     </PageShell>
   );

@@ -143,7 +143,10 @@ const SignUp = () => {
             <Link className="text-link" to="/about#consent">{t('consent')}</Link>
           </p>
           <p className="helper-text auth-footer">
-            {t('supportEmailLabel')} <a className="text-link" href="mailto:ritesh.chaturvedi@solidai.in">ritesh.chaturvedi@solidai.in</a>
+            {t('supportEmailLabel')} <a className="text-link" href="mailto:contactus@solidai.in">contactus@solidai.in</a>
+          </p>
+          <p className="helper-text auth-footer">
+            Sales: <a className="text-link" href="mailto:sales@solidai.in">sales@solidai.in</a>
           </p>
           {error ? <p className="error-text">{error}</p> : null}
         </div>
